@@ -78,5 +78,11 @@ pip + subtle fill. The active pip is the ONLY marigold on screen.
 
 ## Stop condition
 
+Before showing anything: run `npm run dev` from the repo root and verify in the browser
+at localhost:3000 — all three sidebar states (expanded / rail / hover-peek), the `⌘\`
+toggle, persistence across reload, and the `/design` additions. Fix what you find; do
+not present unverified work.
+
 When the shell renders with all three sidebar states working (and `/design` updated),
 STOP and show the founder. Do not start Screen 1.5 (Home), do not batch-build screens.
+Commit as one commit ("Screen 1: app shell") only after the founder approves.
