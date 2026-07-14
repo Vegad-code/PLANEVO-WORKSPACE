@@ -1,0 +1,12 @@
+---
+description: Planevo project steering — always apply
+alwaysApply: true
+---
+
+The authoritative steering for this repo is `AGENTS.md` at the project root. Read it
+first and follow it. It is the single source of truth shared across Codex, Cursor, and
+Claude Code.
+
+Do not restate or fork those rules here. In particular, before any design work, obey the
+#1 rule in `AGENTS.md`: workspace-first IA, never agent-first — the reference screenshot
+is a craft reference only, not a layout to clone.
