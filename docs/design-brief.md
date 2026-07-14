@@ -105,8 +105,17 @@ Sentence case everywhere. Never Title Case, never ALL CAPS (except the label sty
   = 14–16 · pills/tabs = full. Never round a single-sided border.
 - **Borders:** 1px `--color-border` default. **No shadows for elevation** — use the border
   plus `--color-surface-raised`. Flat, always. No gradients, no glow.
-- **Sidebar width:** 210px. (Open question: collapse-to-icons in V1 or post-V1 — decide
-  before the shell locks.)
+- **Sidebar width:** 210px expanded. **DECIDED (2026-07-14): collapsible in V1**, Wispr
+  Flow-style, three states:
+  1. **Expanded** — 210px, in the layout grid.
+  2. **Icon rail** — ~56px column of section icons.
+  3. **Hover-peek** — hovering (or keyboard-focusing) the rail floats the full sidebar
+     *over* the canvas as a fixed overlay with its own scroll; dismissed on mouse-leave /
+     Esc; pin control expands it back into the layout.
+  ~200ms hover-intent delay so the peek doesn't flicker; `⌘\` toggles expanded/rail;
+  state persists per user; canvas never reflows during a peek; honor reduced-motion.
+  Sidebar footer reserves a slot for the plan/credit card (Plus/Pro see the meter, Free
+  sees nothing).
 
 ---
 
@@ -171,7 +180,17 @@ layer, and keep it current — a component that isn't in `/design` doesn't exist
 Everything inherits the app shell, so it goes first. Full per-screen detail and prompts
 live in `docs/design-build-sheet.md`.
 
-1. **App shell** — sidebar + top bar + open canvas.
+1. **App shell** — sidebar (3-state collapse, see §3) + top bar + open canvas.
+1.5. **Home (command center)** — the default route. DECIDED 2026-07-14, adapted from the
+   Acme AI reference (craft kept, agent-first IA rejected): greeting (no "assign your
+   task" subline) · ActionCard grid hero — New task / Connect calendar / New workspace /
+   Upload a file / Browse templates / Open Planevo AI (slate, the only AI presence; may
+   be cut after browser review) · Recent / continue-where-you-left-off row · bottom
+   **quick-capture bar** (NL parse to records with a propose→confirm chip — NOT chat;
+   quiet slate "Ask Planevo AI" handoff inside). Adaptive: first-run the cards are the
+   hero; as content grows, recents rise and cards compress to a smaller row — never
+   removed. Quick-capture bar and the ⌘K command bar are the SAME component + parser
+   mounted in two places.
 2. **Page / editor view** — BlockNote surface; the block↔record relationship.
 3–6. **Database views** — table → board → calendar → list.
 7–9. **Sidebar destinations** — Tasks · Calendar (workspace-wide + GCal) · Files.

@@ -56,8 +56,19 @@ Components: `Sidebar`, `NavItem`, `TopBar`. Route: the app layout.
 > switcher at top; nav group Workspace / Tasks / Calendar / Files; Pages tree below; AI
 > group pushed to the bottom with Planevo AI in slate and Agents; account/settings
 > footer), a top bar (breadcrumb left; a quiet slate "Ask Planevo AI" pill and avatar
-> right), and a canvas slot. Active nav = a single marigold pip. Flat, paper + ink, no
-> shadows. Then stop and show me.
+> right), and a canvas slot. The sidebar implements the 3-state collapse from design-brief
+> §3 (expanded / icon rail / hover-peek overlay, ⌘\ toggle, persisted). Active nav = a
+> single marigold pip. Flat, paper + ink, no shadows. Then stop and show me.
+
+### 1.5. Home (command center)
+The default route. Spec: design-brief §7 item 1.5 — Acme AI craft, workspace-first IA.
+
+> Screen 1.5 — Home. Build the home route: greeting, the six-ActionCard grid (New task /
+> Connect calendar / New workspace / Upload a file / Browse templates / Open Planevo AI
+> in slate), a Recent row, and the bottom quick-capture bar (NL capture with a
+> propose→confirm chip, placeholder "Add a task, note, or event…", quiet slate "Ask
+> Planevo AI" handoff — not a chat input). Include both layout states: first-run (cards
+> as hero) and lived-in (recents first, cards compressed). Then stop and show me.
 
 ### 2. Page / editor view
 The BlockNote surface. Where retroactive structure lives (block↔record).
@@ -218,6 +229,8 @@ Persona → Knowledge → Workflows/triggers → Visibility.
 
 ### 20. Command bar
 The propose→confirm→execute overlay. Global quick action + NL quick capture.
+Same component + parser as the home quick-capture bar (Screen 1.5) — one implementation,
+two mounts.
 
 > Screen 20 — Command bar. Build the command bar as a centered overlay: one state mid-
 > interaction proposing an action with an explicit confirm step, and a second state showing

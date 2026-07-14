@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/*
+ * Planevo token layer — design-brief §1–§3. ALL values PROVISIONAL until reviewed
+ * in /design. Components use themed utilities (bg-paper, text-ink, border-border,
+ * text-h1) — never a raw hex, font name, or arbitrary pixel value.
+ * Display font (Sentient/Gambetta) is landing-only and intentionally absent here.
+ */
+@theme {
+  /* Core palette */
+  --color-paper: #f5f3ed;
+  --color-ink: #1a1915;
+  --color-marigold: #e4a62f; /* once per view, max */
+  --color-brick: #d14b32;
+  --color-meadow: #5e8a54;
+  --color-slate: #93a9bb; /* the AI layer only */
+
+  /* Derived neutrals */
+  --color-sidebar: #eeebe2;
+  --color-surface-raised: #fbfaf6;
+  --color-border: #e4e0d6;
+  --color-border-strong: #c3bdaf;
+  --color-text-secondary: #57534a;
+  --color-text-muted: #8a8578;
+
+  /* Status pill tints */
+  --color-marigold-tint: #f7e7c9;
+  --color-meadow-tint: #dbe8d7;
+  --color-brick-tint: #f5dad3;
+  --color-slate-tint: #dee6ec;
+
+  /* Fonts (loaded via next/font in app/layout.tsx) */
+  --font-sans: var(--font-general-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Type scale — pair label with `uppercase` in markup */
+  --text-h1: 27px;
+  --text-h1--line-height: 1.2;
+  --text-h1--font-weight: 500;
+  --text-h2: 20px;
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 500;
+  --text-h3: 16px;
+  --text-h3--line-height: 1.4;
+  --text-h3--font-weight: 500;
+  --text-body: 14.5px;
+  --text-body--line-height: 1.6;
+  --text-small: 13px;
+  --text-small--line-height: 1.5;
+  --text-label: 11.5px;
+  --text-label--line-height: 1.3;
+  --text-label--font-weight: 500;
+  --text-label--letter-spacing: 0.04em;
+  --text-mono: 13px;
+  --text-mono--line-height: 1.5;
+
+  /* Radii: controls = rounded-lg (8) · inline cards = rounded-xl (12) ·
+     action cards = rounded-card (14) · pills = rounded-full */
+  --radius-card: 14px;
+
+  /* Layout */
+  --spacing-sidebar: 210px;
+  --spacing-rail: 56px;
+}
+
+/* Minimal mode (design-brief §1): mutes marigold/brick/meadow toward neutral;
+   slate and ink stay. Toggled via data-minimal on <html>. */
+[data-minimal] {
+  --color-marigold: #b3ab99;
+  --color-brick: #a9998f;
+  --color-meadow: #9aa093;
+  --color-marigold-tint: #ece9e0;
+  --color-brick-tint: #eae5dd;
+  --color-meadow-tint: #e6e7df;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
