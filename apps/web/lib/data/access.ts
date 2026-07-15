@@ -47,7 +47,15 @@ async function resolveDevOwner(createIfMissing: boolean): Promise<DataAccess | n
     email_confirm: true,
     user_metadata: { [DEV_OWNER_ALIAS_KEY]: alias },
   });
-  if (error) throw error;
+  if (error) {
+    // Concurrent first mutations can race on the deterministic email. Resolve the
+    // winner by alias before surfacing the provider error.
+    const concurrentlyCreated = await findDevOwnerByAlias(client, alias);
+    if (concurrentlyCreated) {
+      return { client, ownerId: concurrentlyCreated.id, mode: "dev" };
+    }
+    throw error;
+  }
 
   return { client, ownerId: data.user.id, mode: "dev" };
 }
@@ -55,7 +63,11 @@ async function resolveDevOwner(createIfMissing: boolean): Promise<DataAccess | n
 export async function getDataAccess(): Promise<DataAccess | null> {
   if (isDevDataAccessEnabled()) {
     // Reads may resolve an existing explicit dev identity, but never create one.
-    return resolveDevOwner(false);
+    try {
+      return await resolveDevOwner(false);
+    } catch {
+      return null;
+    }
   }
 
   const supabase = await createClient();
