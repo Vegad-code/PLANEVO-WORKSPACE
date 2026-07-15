@@ -381,9 +381,89 @@ export interface Database {
         };
         Relationships: [];
       };
+      user_preferences: {
+        Row: { user_id: string; theme: string; minimal: boolean; settings_json: Json; created_at: string; updated_at: string };
+        Insert: { user_id: string; theme?: string; minimal?: boolean; settings_json?: Json; created_at?: string; updated_at?: string };
+        Update: { user_id?: string; theme?: string; minimal?: boolean; settings_json?: Json; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      recent_items: {
+        Row: { id: string; user_id: string; workspace_id: string; target_type: string; target_id: string; last_opened_at: string };
+        Insert: { id?: string; user_id: string; workspace_id: string; target_type: string; target_id: string; last_opened_at?: string };
+        Update: { id?: string; user_id?: string; workspace_id?: string; target_type?: string; target_id?: string; last_opened_at?: string };
+        Relationships: [];
+      };
+      onboarding_progress: {
+        Row: { user_id: string; workspace_id: string | null; organizing: string | null; current_step: number; completed_steps_json: Json; completed_at: string | null; created_at: string; updated_at: string };
+        Insert: { user_id: string; workspace_id?: string | null; organizing?: string | null; current_step?: number; completed_steps_json?: Json; completed_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { user_id?: string; workspace_id?: string | null; organizing?: string | null; current_step?: number; completed_steps_json?: Json; completed_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      file_sources: {
+        Row: { id: string; workspace_id: string; page_id: string | null; created_by: string; storage_path: string; name: string; mime_type: string | null; size_bytes: number | null; ingestion_status: string; metadata_json: Json; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; page_id?: string | null; created_by: string; storage_path: string; name: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; storage_path?: string; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      integration_connections: {
+        Row: { id: string; user_id: string; workspace_id: string | null; provider: string; external_account_id: string; status: string; config_json: Json; connected_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; workspace_id?: string | null; provider: string; external_account_id?: string; status?: string; config_json?: Json; connected_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; user_id?: string; workspace_id?: string | null; provider?: string; external_account_id?: string; status?: string; config_json?: Json; connected_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      ai_conversations: {
+        Row: { id: string; workspace_id: string; user_id: string; title: string; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; user_id: string; title?: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; user_id?: string; title?: string; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      ai_messages: {
+        Row: { id: string; conversation_id: string; role: string; content_json: Json; model_used: string | null; usage_json: Json; created_at: string };
+        Insert: { id?: string; conversation_id: string; role: string; content_json?: Json; model_used?: string | null; usage_json?: Json; created_at?: string };
+        Update: { id?: string; conversation_id?: string; role?: string; content_json?: Json; model_used?: string | null; usage_json?: Json; created_at?: string };
+        Relationships: [];
+      };
+      source_chunks: {
+        Row: { id: string; file_source_id: string; position: number; content: string; token_count: number | null; metadata_json: Json; created_at: string };
+        Insert: { id?: string; file_source_id: string; position: number; content: string; token_count?: number | null; metadata_json?: Json; created_at?: string };
+        Update: { id?: string; file_source_id?: string; position?: number; content?: string; token_count?: number | null; metadata_json?: Json; created_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      create_planevo_workspace: {
+        Args: { p_owner_id: string; p_name: string; p_icon?: string | null };
+        Returns: Json;
+      };
+      create_task_database_with_views: {
+        Args: { p_owner_id: string; p_workspace_id: string; p_name?: string };
+        Returns: Json;
+      };
+      create_calendar_database_with_views: {
+        Args: { p_owner_id: string; p_workspace_id: string; p_name?: string };
+        Returns: Json;
+      };
+      create_document_page: {
+        Args: { p_owner_id: string; p_workspace_id: string; p_title?: string };
+        Returns: Json;
+      };
+      create_task_with_required_foundation: {
+        Args: {
+          p_owner_id: string;
+          p_workspace_id?: string | null;
+          p_title?: string | null;
+          p_description?: string | null;
+          p_status?: string | null;
+          p_priority?: string | null;
+          p_due_date?: string | null;
+          p_estimate_minutes?: number | null;
+          p_tags?: Json;
+          p_attachments?: Json;
+        };
+        Returns: Json;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

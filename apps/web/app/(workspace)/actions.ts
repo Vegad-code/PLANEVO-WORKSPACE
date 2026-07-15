@@ -1,107 +1,107 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDataAccess } from "@/lib/data/access";
-import type { Database, WorkspaceRow } from "@/lib/database.types";
+import { requireMutationDataAccess } from "@/lib/data/access";
+import type { Database } from "@/lib/database.types";
+import {
+  createCalendarDatabaseWithViews as createCalendarFoundation,
+  createDocumentPage as createDocumentFoundation,
+  createTaskWithRequiredFoundation as createTaskFoundation,
+  createWorkspace as createWorkspaceFoundation,
+  type CreateTaskWithRequiredFoundationInput,
+  type DatabaseFoundationResult,
+  type DocumentCreationResult,
+  type TaskCreationResult,
+  type WorkspaceCreationResult,
+} from "@/lib/mutations/create-foundations";
 import { listPagesForWorkspace } from "@/lib/queries/workspace-shell";
 
 type ActionResult<T = void> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-async function requireDataAccess() {
-  const access = await getDataAccess();
-  if (!access) {
-    return null;
+function errorMessage(cause: unknown, fallback: string): string {
+  return cause instanceof Error ? cause.message : fallback;
+}
+
+async function runFoundationAction<T>(
+  operation: () => Promise<T>,
+  fallback: string,
+): Promise<ActionResult<T>> {
+  try {
+    const data = await operation();
+    revalidatePath("/", "layout");
+    return { success: true, data };
+  } catch (cause) {
+    return { success: false, error: errorMessage(cause, fallback) };
   }
-  return access;
 }
 
-async function getOrCreateDefaultWorkspace(
-  access: NonNullable<Awaited<ReturnType<typeof getDataAccess>>>,
-): Promise<WorkspaceRow> {
-  const { data: workspaces, error: selectError } = await access.client
-    .from("workspaces")
-    .select("*")
-    .eq("owner_id", access.ownerId)
-    .order("created_at", { ascending: true })
-    .limit(1);
-
-  if (selectError) throw selectError;
-  if (workspaces?.[0]) return workspaces[0];
-
-  const { data: workspace, error: insertError } = await access.client
-    .from("workspaces")
-    .insert({ owner_id: access.ownerId, name: "My workspace" })
-    .select("*")
-    .single();
-
-  if (insertError) throw insertError;
-  return workspace;
-}
-
-export async function bootstrapWorkspace(): Promise<
-  ActionResult<Database["public"]["Tables"]["workspaces"]["Row"]>
-> {
-  const access = await requireDataAccess();
-  if (!access) {
+export async function bootstrapWorkspace(): Promise<ActionResult<WorkspaceCreationResult>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const { data, error } = await access.client
+      .from("workspaces")
+      .select("id")
+      .eq("owner_id", access.ownerId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return { success: true, data: { workspaceId: data.id } };
+  } catch (cause) {
     return {
       success: false,
-      error:
-        "No data access. Add PLANEVO_DEV_OWNER_ID and a server secret key (SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY) to .env.local.",
+      error: errorMessage(cause, "Failed to inspect the current workspace."),
     };
   }
 
-  try {
-    const workspace = await getOrCreateDefaultWorkspace(access);
-    revalidatePath("/", "layout");
-    return { success: true, data: workspace };
-  } catch (cause) {
-    const message =
-      cause instanceof Error ? cause.message : "Failed to bootstrap workspace";
-    return { success: false, error: message };
-  }
+  return createWorkspace({ name: "My workspace" });
 }
 
 export async function createInitialWorkspace(): Promise<void> {
   const result = await bootstrapWorkspace();
-  if (!result.success) {
-    throw new Error(result.error);
-  }
+  if (!result.success) throw new Error(result.error);
+  revalidatePath("/", "layout");
 }
 
 export async function createWorkspace(input: {
   name: string;
   icon?: string | null;
-}): Promise<ActionResult<Database["public"]["Tables"]["workspaces"]["Row"]>> {
-  const access = await requireDataAccess();
-  if (!access) {
-    return { success: false, error: "No data access configured." };
-  }
+}): Promise<ActionResult<WorkspaceCreationResult>> {
+  return runFoundationAction(
+    () => createWorkspaceFoundation(input),
+    "Failed to create the workspace.",
+  );
+}
 
-  const name = input.name.trim();
-  if (!name) {
-    return { success: false, error: "Workspace name is required" };
-  }
+export async function createCalendarDatabaseWithViews(input: {
+  workspaceId: string;
+  name?: string;
+}): Promise<ActionResult<DatabaseFoundationResult>> {
+  return runFoundationAction(
+    () => createCalendarFoundation(input),
+    "Failed to create the calendar.",
+  );
+}
 
-  const payload: Database["public"]["Tables"]["workspaces"]["Insert"] = {
-    owner_id: access.ownerId,
-    name,
-    icon: input.icon ?? null,
-  };
+export async function createDocumentPage(input: {
+  workspaceId: string;
+  title?: string;
+}): Promise<ActionResult<DocumentCreationResult>> {
+  return runFoundationAction(
+    () => createDocumentFoundation(input),
+    "Failed to create the document.",
+  );
+}
 
-  const { data, error } = await access.client
-    .from("workspaces")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  revalidatePath("/", "layout");
-  return { success: true, data };
+export async function createTaskWithRequiredFoundation(
+  input: CreateTaskWithRequiredFoundationInput,
+): Promise<ActionResult<TaskCreationResult>> {
+  return runFoundationAction(
+    () => createTaskFoundation(input),
+    "Failed to create the task.",
+  );
 }
 
 export async function updateWorkspace(input: {
@@ -109,33 +109,30 @@ export async function updateWorkspace(input: {
   name?: string;
   icon?: string | null;
 }): Promise<ActionResult<Database["public"]["Tables"]["workspaces"]["Row"]>> {
-  const access = await requireDataAccess();
-  if (!access) {
-    return { success: false, error: "No data access configured." };
+  try {
+    const access = await requireMutationDataAccess();
+    const updates: Database["public"]["Tables"]["workspaces"]["Update"] = {};
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (!name) return { success: false, error: "Workspace name is required" };
+      updates.name = name;
+    }
+    if (input.icon !== undefined) updates.icon = input.icon;
+
+    const { data, error } = await access.client
+      .from("workspaces")
+      .update(updates)
+      .eq("id", input.workspaceId)
+      .eq("owner_id", access.ownerId)
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    revalidatePath("/", "layout");
+    return { success: true, data };
+  } catch (cause) {
+    return { success: false, error: errorMessage(cause, "Failed to update workspace") };
   }
-
-  const updates: Database["public"]["Tables"]["workspaces"]["Update"] = {};
-  if (input.name !== undefined) {
-    const name = input.name.trim();
-    if (!name) return { success: false, error: "Workspace name is required" };
-    updates.name = name;
-  }
-  if (input.icon !== undefined) updates.icon = input.icon;
-
-  const { data, error } = await access.client
-    .from("workspaces")
-    .update(updates)
-    .eq("id", input.workspaceId)
-    .eq("owner_id", access.ownerId)
-    .select("*")
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  revalidatePath("/", "layout");
-  return { success: true, data };
 }
 
 export async function createPage(input: {
@@ -143,34 +140,29 @@ export async function createPage(input: {
   title: string;
   parentPageId?: string | null;
 }): Promise<ActionResult<Database["public"]["Tables"]["pages"]["Row"]>> {
-  const access = await requireDataAccess();
-  if (!access) {
-    return { success: false, error: "No data access configured." };
+  try {
+    const access = await requireMutationDataAccess();
+    const siblings = await listPagesForWorkspace(access.client, input.workspaceId);
+    const siblingCount = siblings.filter(
+      (page) => page.parent_page_id === (input.parentPageId ?? null),
+    ).length;
+    const payload: Database["public"]["Tables"]["pages"]["Insert"] = {
+      workspace_id: input.workspaceId,
+      parent_page_id: input.parentPageId ?? null,
+      title: input.title.trim() || "Untitled",
+      position: siblingCount,
+    };
+
+    const { data, error } = await access.client
+      .from("pages")
+      .insert(payload)
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    revalidatePath("/", "layout");
+    return { success: true, data };
+  } catch (cause) {
+    return { success: false, error: errorMessage(cause, "Failed to create page") };
   }
-
-  const title = input.title.trim() || "Untitled";
-  const siblings = await listPagesForWorkspace(access.client, input.workspaceId);
-  const siblingCount = siblings.filter(
-    (page) => page.parent_page_id === (input.parentPageId ?? null),
-  ).length;
-
-  const payload: Database["public"]["Tables"]["pages"]["Insert"] = {
-    workspace_id: input.workspaceId,
-    parent_page_id: input.parentPageId ?? null,
-    title,
-    position: siblingCount,
-  };
-
-  const { data, error } = await access.client
-    .from("pages")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  revalidatePath("/", "layout");
-  return { success: true, data };
 }
