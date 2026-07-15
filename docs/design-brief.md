@@ -105,17 +105,19 @@ Sentence case everywhere. Never Title Case, never ALL CAPS (except the label sty
   = 14–16 · pills/tabs = full. Never round a single-sided border.
 - **Borders:** 1px `--color-border` default. **No shadows for elevation** — use the border
   plus `--color-surface-raised`. Flat, always. No gradients, no glow.
-- **Sidebar width:** 210px expanded. **DECIDED (2026-07-14): collapsible in V1**, Wispr
-  Flow-style, three states:
-  1. **Expanded** — 210px, in the layout grid.
-  2. **Icon rail** — ~56px column of section icons.
-  3. **Hover-peek** — hovering (or keyboard-focusing) the rail floats the full sidebar
-     *over* the canvas as a fixed overlay with its own scroll; dismissed on mouse-leave /
-     Esc; pin control expands it back into the layout.
-  ~200ms hover-intent delay so the peek doesn't flicker; `⌘\` toggles expanded/rail;
-  state persists per user; canvas never reflows during a peek; honor reduced-motion.
-  Sidebar footer reserves a slot for the plan/credit card (Plus/Pro see the meter, Free
-  sees nothing).
+- **Sidebar width:** default 210px, **draggable** between 200–400px (persisted). **DECIDED
+  (2026-07-15):** Notion-style full-hide collapse (replaces the 2026-07-14 icon rail):
+  1. **Expanded** — persisted width in the layout grid; drag the right edge to resize;
+     click the resize handle (without dragging) or `<<` to hide.
+  2. **Hidden** — 0px spacer; canvas is full-width. An invisible left-edge zone (~12px)
+     reveals the sidebar on hover.
+  3. **Hover-peek** — floating overlay at the persisted width; dismissed on mouse-leave /
+     Esc; lock/pin control expands it back into the layout.
+  ~200ms hover-intent delay so the peek doesn't flicker; `⌘\` toggles expanded/hidden;
+  preference + width persist per user; canvas never reflows during a peek; honor
+  reduced-motion. Sidebar footer reserves a slot for the plan/credit card (Plus/Pro see
+  the meter, Free sees nothing). Workspace menu carries Settings / Invite / Upgrade /
+  Log out (Notion-style).
 
 ---
 
@@ -138,9 +140,9 @@ Sentence case everywhere. Never Title Case, never ALL CAPS (except the label sty
 Build as React components in `apps/web`. Every one lands in `/design` with all its states
 before it gets used in a screen.
 
-- **Sidebar** — workspace switcher (top) · nav group (Workspace / Tasks / Calendar /
-  Files) · Pages tree (dnd-kit, nestable) · AI group pushed to bottom (Planevo AI in
-  slate, Agents) · account/settings footer.
+- **Sidebar** — workspace switcher (Notion-style menu) · Home · quick actions (Search /
+  Inbox) · nav group (Tasks / Calendar / Files) · collapsible Pinned / Pages / Private ·
+  AI group pushed to bottom (Planevo AI in slate) · plan meter slot in footer.
 - **NavItem** — states: default / hover / active / AI. Active = marigold pip + subtle fill.
 - **TopBar** — breadcrumb (left) · quiet slate "Ask Planevo AI" pill + avatar (right).
   A pill, not a glowing button — the present-not-pushy rule made visual.

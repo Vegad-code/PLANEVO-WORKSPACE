@@ -11,57 +11,75 @@ async function loadStateModule() {
   }
 }
 
-test("normalizes only persisted sidebar preferences", async () => {
+test("normalizes persisted preferences and migrates rail to hidden", async () => {
   const { normalizeSidebarPreference } = await loadStateModule();
 
   assert.equal(normalizeSidebarPreference("expanded"), "expanded");
-  assert.equal(normalizeSidebarPreference("rail"), "rail");
+  assert.equal(normalizeSidebarPreference("hidden"), "hidden");
+  assert.equal(normalizeSidebarPreference("rail"), "hidden");
   assert.equal(normalizeSidebarPreference("peek"), "expanded");
   assert.equal(normalizeSidebarPreference(null), "expanded");
 });
 
-test("toggles between expanded and rail without persisting peek", async () => {
+test("clamps and normalizes sidebar width", async () => {
+  const {
+    clampSidebarWidth,
+    normalizeSidebarWidth,
+    SIDEBAR_DEFAULT_WIDTH,
+    SIDEBAR_MIN_WIDTH,
+    SIDEBAR_MAX_WIDTH,
+  } = await loadStateModule();
+
+  assert.equal(clampSidebarWidth(100), SIDEBAR_MIN_WIDTH);
+  assert.equal(clampSidebarWidth(500), SIDEBAR_MAX_WIDTH);
+  assert.equal(clampSidebarWidth(280.6), 281);
+  assert.equal(normalizeSidebarWidth(null), SIDEBAR_DEFAULT_WIDTH);
+  assert.equal(normalizeSidebarWidth("abc"), SIDEBAR_DEFAULT_WIDTH);
+  assert.equal(normalizeSidebarWidth("320"), 320);
+});
+
+test("toggles between expanded and hidden without persisting peek", async () => {
   const { reduceSidebarState } = await loadStateModule();
 
   assert.deepEqual(
     reduceSidebarState(
-      { preference: "expanded", peeked: false },
+      { preference: "expanded", peeked: false, width: 210 },
       { type: "toggle" },
     ),
-    { preference: "rail", peeked: false },
+    { preference: "hidden", peeked: false, width: 210 },
   );
   assert.deepEqual(
     reduceSidebarState(
-      { preference: "rail", peeked: true },
+      { preference: "hidden", peeked: true, width: 240 },
       { type: "toggle" },
     ),
-    { preference: "expanded", peeked: false },
+    { preference: "expanded", peeked: false, width: 240 },
   );
 });
 
-test("opens peek only from rail and dismisses without changing preference", async () => {
+test("opens peek only from hidden and dismisses without changing preference", async () => {
   const { reduceSidebarState } = await loadStateModule();
 
   assert.deepEqual(
     reduceSidebarState(
-      { preference: "rail", peeked: false },
+      { preference: "hidden", peeked: false, width: 210 },
       { type: "peek" },
     ),
-    { preference: "rail", peeked: true },
+    { preference: "hidden", peeked: true, width: 210 },
   );
   assert.deepEqual(
     reduceSidebarState(
-      { preference: "rail", peeked: true },
+      { preference: "hidden", peeked: true, width: 210 },
       { type: "dismiss-peek" },
     ),
-    { preference: "rail", peeked: false },
+    { preference: "hidden", peeked: false, width: 210 },
   );
   assert.deepEqual(
     reduceSidebarState(
-      { preference: "expanded", peeked: false },
+      { preference: "expanded", peeked: false, width: 210 },
       { type: "peek" },
     ),
-    { preference: "expanded", peeked: false },
+    { preference: "expanded", peeked: false, width: 210 },
   );
 });
 
@@ -70,10 +88,30 @@ test("pinning a peek expands the sidebar in the layout", async () => {
 
   assert.deepEqual(
     reduceSidebarState(
-      { preference: "rail", peeked: true },
+      { preference: "hidden", peeked: true, width: 260 },
       { type: "pin" },
     ),
-    { preference: "expanded", peeked: false },
+    { preference: "expanded", peeked: false, width: 260 },
+  );
+});
+
+test("set-width clamps the persisted sidebar width", async () => {
+  const { reduceSidebarState, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } =
+    await loadStateModule();
+
+  assert.deepEqual(
+    reduceSidebarState(
+      { preference: "expanded", peeked: false, width: 210 },
+      { type: "set-width", width: 150 },
+    ),
+    { preference: "expanded", peeked: false, width: SIDEBAR_MIN_WIDTH },
+  );
+  assert.deepEqual(
+    reduceSidebarState(
+      { preference: "expanded", peeked: false, width: 210 },
+      { type: "set-width", width: 480 },
+    ),
+    { preference: "expanded", peeked: false, width: SIDEBAR_MAX_WIDTH },
   );
 });
 
@@ -112,7 +150,7 @@ test("matches the command-backslash shortcut exactly", async () => {
   );
 });
 
-test("keeps the rail spacer while hover-peek floats above the canvas", async () => {
+test("keeps the hidden spacer while hover-peek floats above the canvas", async () => {
   const stateModule = await loadStateModule();
   assert.equal(
     typeof stateModule.getSidebarPresentation,
@@ -121,12 +159,20 @@ test("keeps the rail spacer while hover-peek floats above the canvas", async () 
   );
 
   assert.deepEqual(
-    stateModule.getSidebarPresentation({ preference: "rail", peeked: true }),
-    { view: "peek", spacer: "rail" },
+    stateModule.getSidebarPresentation({
+      preference: "hidden",
+      peeked: true,
+      width: 240,
+    }),
+    { view: "peek", spacer: "hidden", width: 240 },
   );
   assert.deepEqual(
-    stateModule.getSidebarPresentation({ preference: "expanded", peeked: false }),
-    { view: "expanded", spacer: "expanded" },
+    stateModule.getSidebarPresentation({
+      preference: "expanded",
+      peeked: false,
+      width: 280,
+    }),
+    { view: "expanded", spacer: "expanded", width: 280 },
   );
 });
 

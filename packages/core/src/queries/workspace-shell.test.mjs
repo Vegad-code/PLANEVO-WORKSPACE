@@ -43,6 +43,8 @@ test("returns unavailable without data access", async () => {
     pages: [],
     userDisplayName: null,
     userInitials: null,
+    userEmail: null,
+    memberCount: 0,
   });
 });
 
@@ -97,6 +99,8 @@ test("dev mode skips session user lookup and returns a null identity", async () 
   assert.deepEqual(result.pages, []);
   assert.equal(result.userDisplayName, null);
   assert.equal(result.userInitials, null);
+  assert.equal(result.userEmail, null);
+  assert.equal(result.memberCount, 1);
   assert.deepEqual(calls, [
     ["listWorkspaces", "owner-1"],
     ["listPages", "workspace-1"],
@@ -141,6 +145,8 @@ test("auth mode returns real rows with nested depth and user identity", async ()
   ]);
   assert.equal(result.userDisplayName, "Morgan Lee");
   assert.equal(result.userInitials, "ML");
+  assert.equal(result.userEmail, "owner@example.com");
+  assert.equal(result.memberCount, 1);
   assert.deepEqual(calls, [
     ["listWorkspaces", "owner-1"],
     ["listPages", "workspace-1"],

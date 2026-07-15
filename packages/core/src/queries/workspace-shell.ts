@@ -19,6 +19,9 @@ export type WorkspaceShellData = {
   pages: PageTreeItem[];
   userDisplayName: string | null;
   userInitials: string | null;
+  userEmail: string | null;
+  /** Owner-only V1 workspaces report a single member until team seats ship. */
+  memberCount: number;
 };
 
 export type WorkspaceShellRepository = {
@@ -149,6 +152,8 @@ export async function loadWorkspaceShellData(
       pages: [],
       userDisplayName: null,
       userInitials: null,
+      userEmail: null,
+      memberCount: 0,
     };
   }
 
@@ -165,12 +170,15 @@ export async function loadWorkspaceShellData(
       pages: [],
       userDisplayName: null,
       userInitials: null,
+      userEmail: null,
+      memberCount: 0,
     };
   }
 
   const pageRows = await repository.listPages(workspace.id);
   const user = access.mode === "auth" ? await repository.getUser() : null;
   const userDisplayName = user ? displayNameFromUser(user) : null;
+  const userEmail = user?.email?.trim() || null;
 
   return {
     status: "ready",
@@ -179,5 +187,7 @@ export async function loadWorkspaceShellData(
     pages: buildPageTree(pageRows),
     userDisplayName,
     userInitials: userDisplayName ? initialsFromName(userDisplayName) : null,
+    userEmail,
+    memberCount: 1,
   };
 }

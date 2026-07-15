@@ -1,4 +1,6 @@
 import {
+  ArrowUpCircle,
+  Bell,
   Calendar,
   ChatBubble,
   Check,
@@ -6,6 +8,8 @@ import {
   EmptyPage,
   Folder,
   Home,
+  LogOut,
+  Mail,
   Menu,
   NavArrowLeft,
   NavArrowDown,
@@ -19,6 +23,7 @@ import {
   SidebarExpand,
   TaskList,
   Upload,
+  UserPlus,
   WarningTriangle,
   Xmark,
 } from "iconoir-react";
@@ -38,6 +43,7 @@ export type IconName =
   | "panel-open"
   | "pin"
   | "search"
+  | "inbox"
   | "menu"
   | "close"
   | "arrow-left"
@@ -45,7 +51,11 @@ export type IconName =
   | "upload"
   | "document"
   | "import"
-  | "warning";
+  | "warning"
+  | "invite"
+  | "upgrade"
+  | "logout"
+  | "mail";
 
 const ICONS = {
   workspace: Home,
@@ -62,6 +72,7 @@ const ICONS = {
   "panel-open": SidebarExpand,
   pin: Pin,
   search: Search,
+  inbox: Bell,
   menu: Menu,
   close: Xmark,
   "arrow-left": NavArrowLeft,
@@ -70,6 +81,10 @@ const ICONS = {
   document: EmptyPage,
   import: CloudDownload,
   warning: WarningTriangle,
+  invite: UserPlus,
+  upgrade: ArrowUpCircle,
+  logout: LogOut,
+  mail: Mail,
 } satisfies Record<IconName, typeof Home>;
 
 export function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {

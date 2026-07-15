@@ -19,6 +19,7 @@ import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 import type { DisplayRecord } from "@planevo/core/queries/record-display";
 import { RecordBoard, RecordList } from "@/features/database/record-board";
 import { MonthGrid } from "@/features/database/month-grid";
+import { DeleteControlsPreview } from "./delete-controls-preview";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
@@ -45,6 +46,8 @@ const DESIGN_PREVIEW_SHELL: WorkspaceShellData = {
   ],
   userDisplayName: "Anthony",
   userInitials: "AP",
+  userEmail: "anthony@example.com",
+  memberCount: 1,
 };
 
 const DESIGN_RECORDS: DisplayRecord[] = [
@@ -260,25 +263,40 @@ export default function DesignPage() {
         </div>
       </Section>
 
-      <Section title="Sidebar — expanded / icon rail / hover-peek">
+      <Section title="Sidebar — expanded / hidden / hover-peek">
         <div className="flex flex-wrap items-start gap-8">
           <div>
-            <p className="mb-2 font-mono text-mono text-text-muted">Expanded · w-sidebar</p>
+            <p className="mb-2 font-mono text-mono text-text-muted">Expanded · resizable</p>
             <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
-              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="expanded" preview />
+              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="expanded" width={210} preview />
             </div>
           </div>
           <div>
-            <p className="mb-2 font-mono text-mono text-text-muted">Rail · w-rail</p>
-            <div className="relative h-128 w-rail overflow-hidden border-y border-l border-border">
-              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="rail" preview />
+            <p className="mb-2 font-mono text-mono text-text-muted">Hidden · edge trigger</p>
+            <div className="relative h-128 w-64 overflow-hidden border border-border bg-paper">
+              <div
+                data-testid="design-edge-trigger"
+                className="absolute inset-y-0 left-0 w-3 bg-border/60"
+                title="Left-edge hover zone"
+              />
+              <p className="absolute left-6 top-4 text-small text-text-muted">
+                Canvas fills the frame. Hover the left edge to peek.
+              </p>
             </div>
           </div>
           <div>
             <p className="mb-2 font-mono text-mono text-text-muted">Hover-peek · overlay</p>
-            <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
-              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="peek" preview />
+            <div className="relative h-128 w-72 overflow-hidden border border-border bg-paper">
+              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="peek" width={240} preview />
             </div>
+          </div>
+        </div>
+        <div className="mt-8">
+          <p className="mb-2 font-mono text-mono text-text-muted">
+            Collapsible sections · Pinned / Pages / Private
+          </p>
+          <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
+            <Sidebar shell={DESIGN_PREVIEW_SHELL} view="expanded" width={210} preview />
           </div>
         </div>
       </Section>
@@ -409,6 +427,10 @@ export default function DesignPage() {
         <div className="rounded-xl border border-border bg-paper">
           <FileEntry workspaceId="design-workspace" />
         </div>
+      </Section>
+
+      <Section title="Delete controls — confirm dialog and destructive actions">
+        <DeleteControlsPreview />
       </Section>
 
       <Section title="Home command center — first run">

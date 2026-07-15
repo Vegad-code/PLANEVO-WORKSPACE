@@ -60,7 +60,8 @@
 
   /* Layout */
   --spacing-sidebar: 210px;
-  --spacing-rail: 56px;
+  --sidebar-width: var(--spacing-sidebar);
+  --spacing-rail: 56px; /* retired icon-rail; kept for any residual utilities */
 }
 
 /* Minimal mode (design-brief §1): mutes marigold/brick/meadow toward neutral;
