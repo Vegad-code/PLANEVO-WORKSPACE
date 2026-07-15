@@ -60,10 +60,6 @@ export async function loadFilesData(): Promise<FilesData> {
   };
 }
 
-export const getFilesData = cache(async (): Promise<FilesData> => {
-  try {
-    return await loadFilesData();
-  } catch {
-    return { status: "unavailable", workspaceId: null, files: [] };
-  }
-});
+// Errors intentionally propagate to the route error boundary — a failed load
+// must never render as an empty library. "unavailable" = unauthenticated only.
+export const getFilesData = cache(loadFilesData);

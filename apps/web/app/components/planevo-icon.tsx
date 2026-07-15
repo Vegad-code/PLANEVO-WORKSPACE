@@ -19,6 +19,7 @@ import {
   SidebarExpand,
   TaskList,
   Upload,
+  WarningTriangle,
   Xmark,
 } from "iconoir-react";
 
@@ -44,7 +45,8 @@ export type IconName =
   | "arrow-right"
   | "upload"
   | "document"
-  | "import";
+  | "import"
+  | "warning";
 
 const ICONS = {
   workspace: Home,
@@ -69,6 +71,7 @@ const ICONS = {
   upload: Upload,
   document: EmptyPage,
   import: CloudDownload,
+  warning: WarningTriangle,
 } satisfies Record<IconName, typeof Home>;
 
 export function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {

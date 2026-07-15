@@ -121,10 +121,6 @@ export async function loadTasksData(): Promise<TasksData> {
   };
 }
 
-export const getTasksData = cache(async (): Promise<TasksData> => {
-  try {
-    return await loadTasksData();
-  } catch {
-    return { status: "unavailable", workspaceId: null, databaseId: null, tasks: [] };
-  }
-});
+// Errors intentionally propagate to the route error boundary — a failed load
+// must never render as an empty workspace. "unavailable" = unauthenticated only.
+export const getTasksData = cache(loadTasksData);

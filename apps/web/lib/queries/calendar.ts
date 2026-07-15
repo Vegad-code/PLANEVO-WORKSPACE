@@ -116,10 +116,6 @@ export async function loadCalendarData(): Promise<CalendarData> {
   };
 }
 
-export const getCalendarData = cache(async (): Promise<CalendarData> => {
-  try {
-    return await loadCalendarData();
-  } catch {
-    return { status: "unavailable", workspaceId: null, hasCalendarDatabase: false, items: [] };
-  }
-});
+// Errors intentionally propagate to the route error boundary — a failed load
+// must never render as an empty calendar. "unavailable" = unauthenticated only.
+export const getCalendarData = cache(loadCalendarData);

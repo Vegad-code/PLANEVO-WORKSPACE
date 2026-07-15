@@ -83,16 +83,6 @@ export async function loadHomeData(shell: WorkspaceShellData): Promise<HomeData>
   return { ...base, state: recents.length > 0 ? "lived-in" : base.state, recents };
 }
 
-export const getHomeData = cache(async (shell: WorkspaceShellData): Promise<HomeData> => {
-  try {
-    return await loadHomeData(shell);
-  } catch {
-    return {
-      state: shell.workspace ? "lived-in" : "first-run",
-      workspaceId: shell.workspace?.id ?? null,
-      workspaceName: shell.workspace?.name ?? null,
-      userName: shell.userDisplayName,
-      recents: [],
-    };
-  }
-});
+// Errors intentionally propagate to the route error boundary — a failed load
+// must never render as a first-run home.
+export const getHomeData = cache(loadHomeData);

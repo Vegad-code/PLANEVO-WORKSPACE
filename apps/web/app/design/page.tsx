@@ -4,6 +4,7 @@ import { MobileSidebar } from "../components/mobile-sidebar";
 import { Sidebar } from "../components/sidebar";
 import { TopBar } from "../components/top-bar";
 import { EmptyState } from "../components/empty-state";
+import { ErrorState } from "../components/error-state";
 import { TaskComposer } from "../components/task-composer";
 import { CalendarView } from "../components/calendar-view";
 import { FileEntry } from "../components/file-entry";
@@ -310,6 +311,22 @@ export default function DesignPage() {
           <SettingsPanel
             shell={DESIGN_PREVIEW_SHELL}
             initialSection="appearance"
+          />
+        </div>
+      </Section>
+
+      <Section title="Error state — load failure / not found">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ErrorState
+            action={
+              <button type="button" className="h-9 rounded-lg bg-ink px-4 text-small font-medium text-paper">
+                Try again
+              </button>
+            }
+          />
+          <ErrorState
+            title="Not found"
+            description="This page doesn't exist or isn't part of your workspace."
           />
         </div>
       </Section>
