@@ -3,19 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireMutationDataAccess } from "@/lib/data/access";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { createWorkspace } from "@/lib/mutations/create-foundations";
 
 async function currentWorkspaceId(): Promise<{ workspaceId: string; ownerId: string }> {
+  const current = await getCurrentWorkspace();
+  if (current) {
+    return { workspaceId: current.workspace.id, ownerId: current.access.ownerId };
+  }
   const access = await requireMutationDataAccess();
-  const { data, error } = await access.client
-    .from("workspaces")
-    .select("id")
-    .eq("owner_id", access.ownerId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  const workspaceId = data?.id ?? (await createWorkspace({ name: "My workspace" })).workspaceId;
+  const { workspaceId } = await createWorkspace({ name: "My workspace" });
   return { workspaceId, ownerId: access.ownerId };
 }
 

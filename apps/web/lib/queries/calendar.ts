@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { getDataAccess } from "@/lib/data/access";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import type { Json } from "@/lib/database.types";
 
 export type CalendarItem = {
@@ -21,22 +21,11 @@ function stringValue(value: Json | undefined): string | null {
 }
 
 export async function loadCalendarData(): Promise<CalendarData> {
-  const access = await getDataAccess();
-  if (!access) {
+  const current = await getCurrentWorkspace();
+  if (!current) {
     return { status: "unavailable", workspaceId: null, hasCalendarDatabase: false, items: [] };
   }
-
-  const { data: workspace, error: workspaceError } = await access.client
-    .from("workspaces")
-    .select("id")
-    .eq("owner_id", access.ownerId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (workspaceError) throw workspaceError;
-  if (!workspace) {
-    return { status: "empty", workspaceId: null, hasCalendarDatabase: false, items: [] };
-  }
+  const { access, workspace } = current;
 
   const { data: databases, error: databaseError } = await access.client
     .from("databases")

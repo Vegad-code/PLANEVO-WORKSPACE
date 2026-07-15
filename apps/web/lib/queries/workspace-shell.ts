@@ -11,9 +11,12 @@ export type PageTreeItem = {
 
 export type WorkspaceShellStatus = "ready" | "empty" | "unavailable";
 
+export type WorkspaceSummary = Pick<WorkspaceRow, "id" | "name" | "icon">;
+
 export type WorkspaceShellData = {
   status: WorkspaceShellStatus;
   workspace: WorkspaceRow | null;
+  workspaces: WorkspaceSummary[];
   pages: PageTreeItem[];
   userDisplayName: string | null;
   userInitials: string | null;
@@ -137,22 +140,29 @@ function createWorkspaceShellRepository(
 export async function loadWorkspaceShellData(
   access: DataAccess | null,
   repository: WorkspaceShellRepository | null,
+  preferredWorkspaceId: string | null = null,
 ): Promise<WorkspaceShellData> {
   if (!access || !repository) {
     return {
       status: "unavailable",
       workspace: null,
+      workspaces: [],
       pages: [],
       userDisplayName: null,
       userInitials: null,
     };
   }
 
-  const [workspace] = await repository.listWorkspaces(access.ownerId);
+  const allWorkspaces = await repository.listWorkspaces(access.ownerId);
+  const workspace =
+    allWorkspaces.find((candidate) => candidate.id === preferredWorkspaceId) ??
+    allWorkspaces[0];
+  const workspaces = allWorkspaces.map(({ id, name, icon }) => ({ id, name, icon }));
   if (!workspace) {
     return {
       status: "empty",
       workspace: null,
+      workspaces: [],
       pages: [],
       userDisplayName: null,
       userInitials: null,
@@ -166,6 +176,7 @@ export async function loadWorkspaceShellData(
   return {
     status: "ready",
     workspace,
+    workspaces,
     pages: buildPageTree(pageRows),
     userDisplayName,
     userInitials: userDisplayName ? initialsFromName(userDisplayName) : null,
@@ -174,10 +185,15 @@ export async function loadWorkspaceShellData(
 
 export const getWorkspaceShellData = cache(async (): Promise<WorkspaceShellData> => {
   const { getDataAccess } = await import("@/lib/data/access");
+  const { getPreferredWorkspaceId } = await import("@/lib/data/current-workspace");
   const access = await getDataAccess();
   const repository = access
     ? createWorkspaceShellRepository(access.client)
     : null;
 
-  return loadWorkspaceShellData(access, repository);
+  return loadWorkspaceShellData(
+    access,
+    repository,
+    access ? await getPreferredWorkspaceId() : null,
+  );
 });

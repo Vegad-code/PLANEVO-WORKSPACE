@@ -31,6 +31,7 @@ const DESIGN_PREVIEW_SHELL: WorkspaceShellData = {
     icon: null,
     created_at: "2026-07-14T00:00:00.000Z",
   },
+  workspaces: [{ id: "design-workspace", name: "Anthony's workspace", icon: null }],
   pages: [
     { id: "design-physics", label: "Physics 2400", depth: 0 },
     { id: "design-lab", label: "Lab notes", depth: 1 },

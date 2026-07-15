@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { createTaskWithRequiredFoundation } from "../actions";
 
 export type TaskFormState =
@@ -20,7 +21,8 @@ export async function submitTask(
   const title = optionalString(formData, "title");
   if (!title) return { status: "error", message: "Add a task title to continue." };
 
-  const workspaceId = optionalString(formData, "workspaceId") ?? null;
+  // Resolved server-side — the form's workspace id is never trusted.
+  const workspaceId = (await getCurrentWorkspace())?.workspace.id ?? null;
   const dueDateValue = optionalString(formData, "dueDate");
   const estimateValue = optionalString(formData, "estimateMinutes");
   const tags = (optionalString(formData, "tags") ?? "")

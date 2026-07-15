@@ -39,6 +39,7 @@ test("returns unavailable without data access", async () => {
   assert.deepEqual(await loadWorkspaceShellData(null, null), {
     status: "unavailable",
     workspace: null,
+    workspaces: [],
     pages: [],
     userDisplayName: null,
     userInitials: null,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getDataAccess } from "@/lib/data/access";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { Icon } from "@/app/components/planevo-icon";
 
 type Result = { id: string; title: string; kind: "Page" | "Database" | "File"; href: string };
@@ -7,24 +7,21 @@ type Result = { id: string; title: string; kind: "Page" | "Database" | "File"; h
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;
   const query = q.trim();
-  const access = await getDataAccess();
+  const current = await getCurrentWorkspace();
   let results: Result[] = [];
 
-  if (access && query) {
-    const { data: workspaces } = await access.client.from("workspaces").select("id").eq("owner_id", access.ownerId);
-    const workspaceIds = (workspaces ?? []).map((workspace) => workspace.id);
-    if (workspaceIds.length) {
-      const [{ data: pages }, { data: databases }, { data: files }] = await Promise.all([
-        access.client.from("pages").select("id,title").in("workspace_id", workspaceIds).eq("is_archived", false).ilike("title", `%${query}%`).limit(8),
-        access.client.from("databases").select("id,name").in("workspace_id", workspaceIds).ilike("name", `%${query}%`).limit(8),
-        access.client.from("file_sources").select("id,name,page_id").in("workspace_id", workspaceIds).ilike("name", `%${query}%`).limit(8),
-      ]);
-      results = [
-        ...(pages ?? []).map((page) => ({ id: page.id, title: page.title, kind: "Page" as const, href: `/pages/${page.id}` })),
-        ...(databases ?? []).map((database) => ({ id: database.id, title: database.name, kind: "Database" as const, href: `/databases/${database.id}` })),
-        ...(files ?? []).map((file) => ({ id: file.id, title: file.name, kind: "File" as const, href: file.page_id ? `/pages/${file.page_id}` : "/files" })),
-      ];
-    }
+  if (current && query) {
+    const { access, workspace } = current;
+    const [{ data: pages }, { data: databases }, { data: files }] = await Promise.all([
+      access.client.from("pages").select("id,title").eq("workspace_id", workspace.id).eq("is_archived", false).ilike("title", `%${query}%`).limit(8),
+      access.client.from("databases").select("id,name").eq("workspace_id", workspace.id).ilike("name", `%${query}%`).limit(8),
+      access.client.from("file_sources").select("id,name,page_id").eq("workspace_id", workspace.id).ilike("name", `%${query}%`).limit(8),
+    ]);
+    results = [
+      ...(pages ?? []).map((page) => ({ id: page.id, title: page.title, kind: "Page" as const, href: `/pages/${page.id}` })),
+      ...(databases ?? []).map((database) => ({ id: database.id, title: database.name, kind: "Database" as const, href: `/databases/${database.id}` })),
+      ...(files ?? []).map((file) => ({ id: file.id, title: file.name, kind: "File" as const, href: file.page_id ? `/pages/${file.page_id}` : "/files" })),
+    ];
   }
 
   return (

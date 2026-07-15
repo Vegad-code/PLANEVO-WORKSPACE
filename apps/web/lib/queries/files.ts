@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { getDataAccess } from "@/lib/data/access";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 
 export type FileSourceItem = {
   id: string;
@@ -19,18 +19,9 @@ export type FilesData = {
 };
 
 export async function loadFilesData(): Promise<FilesData> {
-  const access = await getDataAccess();
-  if (!access) return { status: "unavailable", workspaceId: null, files: [] };
-
-  const { data: workspace, error: workspaceError } = await access.client
-    .from("workspaces")
-    .select("id")
-    .eq("owner_id", access.ownerId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (workspaceError) throw workspaceError;
-  if (!workspace) return { status: "empty", workspaceId: null, files: [] };
+  const current = await getCurrentWorkspace();
+  if (!current) return { status: "unavailable", workspaceId: null, files: [] };
+  const { access, workspace } = current;
 
   const { data: rows, error } = await access.client
     .from("file_sources")

@@ -1,6 +1,7 @@
 import {
   Calendar,
   ChatBubble,
+  Check,
   CloudDownload,
   EmptyPage,
   Folder,
@@ -30,6 +31,7 @@ export type IconName =
   | "ai"
   | "agents"
   | "settings"
+  | "check"
   | "chevron-down"
   | "panel-close"
   | "panel-open"
@@ -53,6 +55,7 @@ const ICONS = {
   ai: ChatBubble,
   agents: Network,
   settings: Settings,
+  check: Check,
   "chevron-down": NavArrowDown,
   "panel-close": SidebarCollapse,
   "panel-open": SidebarExpand,

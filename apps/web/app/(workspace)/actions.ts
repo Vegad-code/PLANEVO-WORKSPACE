@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireMutationDataAccess } from "@/lib/data/access";
+import { cookies } from "next/headers";
+import { requireDataAccess, requireMutationDataAccess } from "@/lib/data/access";
+import { WORKSPACE_COOKIE } from "@/lib/data/current-workspace";
 import type { Database } from "@/lib/database.types";
 import {
   createCalendarDatabaseWithViews as createCalendarFoundation,
@@ -57,6 +59,26 @@ export async function bootstrapWorkspace(): Promise<ActionResult<WorkspaceCreati
   }
 
   return createWorkspace({ name: "My workspace" });
+}
+
+export async function setCurrentWorkspace(workspaceId: string): Promise<void> {
+  const access = await requireDataAccess();
+  const { data, error } = await access.client
+    .from("workspaces")
+    .select("id")
+    .eq("id", workspaceId)
+    .eq("owner_id", access.ownerId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Workspace not found.");
+
+  const store = await cookies();
+  store.set(WORKSPACE_COOKIE, workspaceId, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  revalidatePath("/", "layout");
 }
 
 export async function createInitialWorkspace(): Promise<void> {

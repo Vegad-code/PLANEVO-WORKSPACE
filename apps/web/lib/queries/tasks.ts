@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { getDataAccess } from "@/lib/data/access";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import type { Json } from "@/lib/database.types";
 
 export type TaskItem = {
@@ -35,23 +35,11 @@ function stringList(value: Json | undefined): string[] {
 }
 
 export async function loadTasksData(): Promise<TasksData> {
-  const access = await getDataAccess();
-  if (!access) {
+  const current = await getCurrentWorkspace();
+  if (!current) {
     return { status: "unavailable", workspaceId: null, databaseId: null, tasks: [] };
   }
-
-  const { data: workspace, error: workspaceError } = await access.client
-    .from("workspaces")
-    .select("id")
-    .eq("owner_id", access.ownerId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (workspaceError) throw workspaceError;
-  if (!workspace) {
-    return { status: "empty", workspaceId: null, databaseId: null, tasks: [] };
-  }
+  const { access, workspace } = current;
 
   const { data: taskDatabase, error: databaseError } = await access.client
     .from("databases")

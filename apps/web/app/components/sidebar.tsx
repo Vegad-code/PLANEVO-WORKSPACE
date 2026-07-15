@@ -3,6 +3,7 @@ import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 import { Icon } from "./planevo-icon";
 import { NavItem } from "./nav-item";
 import type { SidebarView } from "./sidebar-state";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 type SidebarProps = {
   shell: WorkspaceShellData;
@@ -69,26 +70,13 @@ export function Sidebar({
       }`}
     >
       <div className={`flex h-14 shrink-0 items-center border-b border-border ${compact ? "justify-center" : "gap-2 px-2"}`}>
-        <button
-          type="button"
-          aria-label={shell.workspace ? "Switch workspace" : "Planevo"}
-          title={compact ? workspaceName : undefined}
-          className={`flex min-w-0 items-center rounded-lg outline-none transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
-            compact ? "size-9 justify-center" : "h-9 flex-1 gap-2 px-2"
-          }`}
-        >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-surface-raised text-label font-medium text-ink">
-            {workspaceInitial}
-          </span>
-          {!compact && (
-            <>
-              <span className="min-w-0 flex-1 truncate text-left text-small font-medium">
-                {workspaceName}
-              </span>
-              <Icon name="chevron-down" className="size-4 shrink-0 text-text-muted" />
-            </>
-          )}
-        </button>
+        <WorkspaceSwitcher
+          workspaces={shell.workspaces}
+          activeWorkspaceId={shell.workspace?.id ?? null}
+          compact={compact}
+          workspaceName={workspaceName}
+          workspaceInitial={workspaceInitial}
+        />
 
         {!compact && (
           <button

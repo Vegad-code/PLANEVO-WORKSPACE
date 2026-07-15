@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireMutationDataAccess } from "@/lib/data/access";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import {
   createDocumentPage,
   createWorkspace,
@@ -16,20 +17,10 @@ function cleanFileName(name: string): string {
   return cleaned || "upload";
 }
 
-async function resolveWorkspaceId(value: FormDataEntryValue | null): Promise<string> {
-  const requested = typeof value === "string" ? value.trim() : "";
-  if (requested) return requested;
-
-  const access = await requireMutationDataAccess();
-  const { data, error } = await access.client
-    .from("workspaces")
-    .select("id")
-    .eq("owner_id", access.ownerId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  if (data) return data.id;
+// Resolved server-side only — a client-supplied workspace id is never trusted.
+async function resolveWorkspaceId(): Promise<string> {
+  const current = await getCurrentWorkspace();
+  if (current) return current.workspace.id;
   return (await createWorkspace({ name: "My workspace" })).workspaceId;
 }
 
@@ -38,7 +29,7 @@ export async function uploadWorkspaceFile(formData: FormData): Promise<void> {
   if (!(file instanceof File) || file.size === 0) throw new Error("Choose a file to upload.");
   if (file.size > MAX_UPLOAD_BYTES) throw new Error("Files must be 25 MB or smaller.");
 
-  const workspaceId = await resolveWorkspaceId(formData.get("workspaceId"));
+  const workspaceId = await resolveWorkspaceId();
   const access = await requireMutationDataAccess();
   const storagePath = `${workspaceId}/${randomUUID()}-${cleanFileName(file.name)}`;
   const payload = new Uint8Array(await file.arrayBuffer());
@@ -66,7 +57,7 @@ export async function uploadWorkspaceFile(formData: FormData): Promise<void> {
 }
 
 export async function createPlanevoDocument(formData: FormData): Promise<void> {
-  const workspaceId = await resolveWorkspaceId(formData.get("workspaceId"));
+  const workspaceId = await resolveWorkspaceId();
   const titleValue = formData.get("title");
   const title = typeof titleValue === "string" && titleValue.trim() ? titleValue.trim() : "Untitled";
   const access = await requireMutationDataAccess();
