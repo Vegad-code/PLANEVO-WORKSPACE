@@ -53,6 +53,41 @@ export async function savePageContent(
   }
 }
 
+/**
+ * Retroactive structure v1 (PRD §5.3 #1, checklist slice): promote written
+ * list items into real task records in the workspace's default task database.
+ */
+export async function promoteItemsToTasks(
+  pageId: string,
+  titles: string[],
+): Promise<{ ok: boolean; created: number; error?: string }> {
+  const cleaned = titles.map((title) => title.trim()).filter(Boolean).slice(0, 50);
+  if (cleaned.length === 0) {
+    return { ok: false, created: 0, error: "Select bullet or checklist items first." };
+  }
+
+  try {
+    await requireOwnedPage(pageId);
+    const { createTaskWithRequiredFoundation } = await import(
+      "@/lib/mutations/create-foundations"
+    );
+    // ponytail: one RPC per item — selections are small; batch RPC if bulk
+    // promotion ever exceeds dozens of items.
+    for (const title of cleaned) {
+      await createTaskWithRequiredFoundation({ title });
+    }
+    revalidatePath("/tasks");
+    revalidatePath("/", "layout");
+    return { ok: true, created: cleaned.length };
+  } catch (cause) {
+    return {
+      ok: false,
+      created: 0,
+      error: cause instanceof Error ? cause.message : "Failed to create tasks.",
+    };
+  }
+}
+
 export async function updatePageTitle(pageId: string, title: string): Promise<void> {
   const { access } = await requireOwnedPage(pageId);
   const { error } = await access.client
