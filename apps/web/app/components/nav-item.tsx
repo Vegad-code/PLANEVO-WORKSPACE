@@ -1,16 +1,21 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "./planevo-icon";
+import { isNavItemActive } from "./navigation-state";
 
 export type NavItemState = "default" | "hover" | "active" | "ai";
 
 type NavItemProps = {
-  href?: string;
+  href: string;
   icon: IconName;
   label: string;
-  active?: boolean;
   variant?: "default" | "ai";
   state?: NavItemState;
   compact?: boolean;
   depth?: number;
+  onNavigate?: () => void;
 };
 
 const depthClasses = ["", "pl-5", "pl-8"] as const;
@@ -22,15 +27,17 @@ function clampDepth(depth: number): 0 | 1 | 2 {
 }
 
 export function NavItem({
-  href = "#",
+  href,
   icon,
   label,
-  active = false,
   variant = "default",
   state,
   compact = false,
   depth = 0,
+  onNavigate,
 }: NavItemProps) {
+  const pathname = usePathname();
+  const active = isNavItemActive(pathname, href);
   const resolvedState = state ?? (active ? "active" : variant === "ai" ? "ai" : "default");
   const raised = resolvedState === "hover" || resolvedState === "active";
   const ai = resolvedState === "ai" || variant === "ai";
@@ -38,8 +45,9 @@ export function NavItem({
   const nestedDepth = clampDepth(depth);
 
   return (
-    <a
+    <Link
       href={href}
+      onNavigate={onNavigate}
       aria-current={resolvedState === "active" ? "page" : undefined}
       aria-label={compact ? label : undefined}
       title={compact ? label : undefined}
@@ -59,6 +67,6 @@ export function NavItem({
       )}
       <Icon name={icon} className={`size-4 shrink-0 ${ai ? "text-slate" : "text-current"}`} />
       {!compact && <span className="min-w-0 truncate">{label}</span>}
-    </a>
+    </Link>
   );
 }

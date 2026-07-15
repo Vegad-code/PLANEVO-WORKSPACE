@@ -7,12 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings --experimental-strip-types --test app/components/sidebar-state.test.mjs app/components/top-bar-state.test.mjs lib/queries/workspace-home.test.mjs lib/queries/workspace-shell.test.mjs"
+    "test": "node --no-warnings --experimental-strip-types --test app/components/app-preferences.test.mjs app/components/navigation-state.test.mjs app/components/sidebar-state.test.mjs app/components/top-bar-state.test.mjs lib/queries/workspace-home.test.mjs lib/queries/workspace-shell.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.5",
     "geist": "^1.7.2",
+    "iconoir-react": "7.11.1",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",

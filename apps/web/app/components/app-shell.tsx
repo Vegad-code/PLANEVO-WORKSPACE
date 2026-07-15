@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
+import { MobileSidebar } from "./mobile-sidebar";
+import {
+  reduceMobileNavigation,
+  type MobileNavigationEvent,
+} from "./navigation-state";
 import { Sidebar } from "./sidebar";
 import {
   getSidebarPresentation,
@@ -28,7 +33,12 @@ export function AppShell({
     peeked: false,
   });
   const [restored, setRestored] = useState(false);
+  const [mobileNavigation, dispatchMobileNavigation] = useReducer(
+    reduceMobileNavigation,
+    { open: false },
+  );
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileMenuTrigger = useRef<HTMLButtonElement>(null);
 
   const dispatch = useCallback((event: SidebarEvent) => {
     setSidebarState((state) => reduceSidebarState(state, event));
@@ -40,6 +50,13 @@ export function AppShell({
       peekTimer.current = null;
     }
   }, []);
+
+  const dismissMobileNavigation = useCallback(
+    (type: Exclude<MobileNavigationEvent["type"], "open">) => {
+      dispatchMobileNavigation({ type });
+    },
+    [],
+  );
 
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
@@ -98,7 +115,7 @@ export function AppShell({
       <div
         data-testid="sidebar-spacer"
         data-sidebar-preference={sidebarState.preference}
-        className={`relative shrink-0 transition-all duration-200 motion-reduce:transition-none ${
+        className={`relative hidden shrink-0 transition-all duration-200 motion-reduce:transition-none md:block ${
           sidebarPresentation.spacer === "expanded" ? "w-sidebar" : "w-rail"
         }`}
       >
@@ -123,11 +140,21 @@ export function AppShell({
         <TopBar
           userDisplayName={shell.userDisplayName}
           userInitials={shell.userInitials}
+          menuButtonRef={mobileMenuTrigger}
+          onOpenNavigation={() => dispatchMobileNavigation({ type: "open" })}
+          navigationOpen={mobileNavigation.open}
         />
         <main aria-label="Workspace canvas" className="min-h-0 flex-1 overflow-auto bg-paper">
           {children}
         </main>
       </div>
+
+      <MobileSidebar
+        open={mobileNavigation.open}
+        shell={shell}
+        onDismiss={dismissMobileNavigation}
+        triggerRef={mobileMenuTrigger}
+      />
     </div>
   );
 }

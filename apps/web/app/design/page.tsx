@@ -1,5 +1,6 @@
 import { MinimalToggle } from "./minimal-toggle";
 import { NavItem } from "../components/nav-item";
+import { MobileSidebar } from "../components/mobile-sidebar";
 import { Sidebar } from "../components/sidebar";
 import { TopBar } from "../components/top-bar";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
@@ -94,6 +95,33 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function AppearancePreview({
+  label,
+  theme,
+  minimal,
+}: {
+  label: string;
+  theme: "light" | "dark";
+  minimal: boolean;
+}) {
+  return (
+    <div
+      data-theme={theme}
+      data-minimal={minimal ? "" : undefined}
+      className="w-48 rounded-xl border border-border bg-paper p-4 text-ink"
+    >
+      <p className="text-small font-medium">{label}</p>
+      <p className="mt-1 text-small text-text-secondary">Paper, ink, and independent accents.</p>
+      <div className="mt-4 flex gap-2">
+        <span className="size-5 rounded-full bg-marigold" aria-label="Marigold" />
+        <span className="size-5 rounded-full bg-brick" aria-label="Brick" />
+        <span className="size-5 rounded-full bg-meadow" aria-label="Meadow" />
+        <span className="size-5 rounded-full bg-slate" aria-label="Slate" />
+      </div>
+    </div>
+  );
+}
+
 export default function DesignPage() {
   return (
     <main className="mx-auto max-w-4xl px-8 py-12">
@@ -110,6 +138,15 @@ export default function DesignPage() {
       <Section title="Core palette">
         <div className="flex flex-wrap gap-6">
           {CORE.map((s) => <Swatch key={s.name} {...s} />)}
+        </div>
+      </Section>
+
+      <Section title="Appearance — light / dark / minimal-light / minimal-dark">
+        <div className="flex flex-wrap gap-4">
+          <AppearancePreview label="Light" theme="light" minimal={false} />
+          <AppearancePreview label="Dark" theme="dark" minimal={false} />
+          <AppearancePreview label="Minimal light" theme="light" minimal />
+          <AppearancePreview label="Minimal dark" theme="dark" minimal />
         </div>
       </Section>
 
@@ -176,10 +213,10 @@ export default function DesignPage() {
 
       <Section title="NavItem — default / hover / active / AI">
         <div className="w-sidebar space-y-1 border border-border bg-sidebar py-2">
-          <NavItem label="Workspace" icon="workspace" state="default" />
-          <NavItem label="Tasks" icon="tasks" state="hover" />
-          <NavItem label="Calendar" icon="calendar" state="active" />
-          <NavItem label="Planevo AI" icon="ai" state="ai" />
+          <NavItem href="/" label="Home" icon="workspace" state="default" />
+          <NavItem href="/tasks" label="Tasks" icon="tasks" state="hover" />
+          <NavItem href="/calendar" label="Calendar" icon="calendar" state="active" />
+          <NavItem href="/ai" label="Planevo AI" icon="ai" state="ai" />
         </div>
       </Section>
 
@@ -217,6 +254,16 @@ export default function DesignPage() {
               <Sidebar shell={DESIGN_PREVIEW_SHELL} view="peek" preview />
             </div>
           </div>
+        </div>
+      </Section>
+
+      <Section title="Mobile navigation — open drawer">
+        <div className="relative h-128 max-w-xl overflow-hidden rounded-xl border border-border bg-paper">
+          <MobileSidebar
+            open
+            shell={DESIGN_PREVIEW_SHELL}
+            preview
+          />
         </div>
       </Section>
     </main>
