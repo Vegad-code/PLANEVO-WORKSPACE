@@ -10,6 +10,9 @@
     "test": "node --no-warnings --experimental-strip-types --test lib/queries/workspace-home.test.mjs"
   },
   "dependencies": {
+    "@blocknote/core": "^0.51.4",
+    "@blocknote/mantine": "^0.51.4",
+    "@blocknote/react": "^0.51.4",
     "@planevo/api": "*",
     "@planevo/core": "*",
     "@supabase/ssr": "^0.12.3",

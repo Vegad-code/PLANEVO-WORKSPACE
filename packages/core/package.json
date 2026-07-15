@@ -7,7 +7,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "test": "node --no-warnings --experimental-strip-types --test src/state/app-preferences.test.mjs src/state/navigation-state.test.mjs src/state/settings-state.test.mjs src/state/sidebar-state.test.mjs src/state/top-bar-state.test.mjs src/mutations/create-foundations.test.mjs src/queries/workspace-shell.test.mjs"
+    "test": "node --no-warnings --experimental-strip-types --test src/state/app-preferences.test.mjs src/state/editor-state.test.mjs src/state/navigation-state.test.mjs src/state/settings-state.test.mjs src/state/sidebar-state.test.mjs src/state/top-bar-state.test.mjs src/mutations/create-foundations.test.mjs src/queries/workspace-shell.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.5"

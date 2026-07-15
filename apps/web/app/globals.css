@@ -109,3 +109,24 @@ body {
   font-size: var(--text-body);
   line-height: var(--text-body--line-height);
 }
+
+/* BlockNote inherits the token layer — never its own palette or fonts. */
+.planevo-editor .bn-container {
+  --bn-colors-editor-background: var(--color-paper);
+  --bn-colors-editor-text: var(--color-ink);
+  --bn-colors-menu-background: var(--color-surface-raised);
+  --bn-colors-menu-text: var(--color-ink);
+  --bn-colors-tooltip-background: var(--color-surface-raised);
+  --bn-colors-tooltip-text: var(--color-text-secondary);
+  --bn-colors-hovered-background: var(--color-sidebar);
+  --bn-colors-hovered-text: var(--color-ink);
+  --bn-colors-selected-background: var(--color-ink);
+  --bn-colors-selected-text: var(--color-paper);
+  --bn-colors-disabled-background: var(--color-sidebar);
+  --bn-colors-disabled-text: var(--color-text-muted);
+  --bn-colors-shadow: var(--color-border);
+  --bn-colors-border: var(--color-border);
+  --bn-colors-side-menu: var(--color-text-muted);
+  --bn-font-family: var(--font-sans);
+  --bn-border-radius: 8px;
+}

@@ -463,6 +463,20 @@ export interface Database {
         };
         Returns: Json;
       };
+      get_database_records: {
+        Args: { p_database_id: string; p_limit?: number; p_offset?: number };
+        Returns: {
+          record_id: string;
+          record_position: number;
+          created_at: string;
+          updated_at: string;
+          values_json: Json;
+        }[];
+      };
+      duplicate_database_structure: {
+        Args: { p_owner_id: string; p_database_id: string; p_name?: string | null };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -471,3 +485,7 @@ export interface Database {
 
 export type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 export type PageRow = Database["public"]["Tables"]["pages"]["Row"];
+export type DatabaseRow = Database["public"]["Tables"]["databases"]["Row"];
+export type DatabasePropertyRow =
+  Database["public"]["Tables"]["database_properties"]["Row"];
+export type ViewRow = Database["public"]["Tables"]["views"]["Row"];
