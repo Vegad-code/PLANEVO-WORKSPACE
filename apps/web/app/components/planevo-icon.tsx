@@ -4,7 +4,9 @@ import {
   Folder,
   Home,
   Menu,
+  NavArrowLeft,
   NavArrowDown,
+  NavArrowRight,
   Network,
   Page,
   Pin,
@@ -32,7 +34,9 @@ export type IconName =
   | "ask"
   | "search"
   | "menu"
-  | "close";
+  | "close"
+  | "arrow-left"
+  | "arrow-right";
 
 const ICONS = {
   workspace: Home,
@@ -51,6 +55,8 @@ const ICONS = {
   search: Search,
   menu: Menu,
   close: Xmark,
+  "arrow-left": NavArrowLeft,
+  "arrow-right": NavArrowRight,
 } satisfies Record<IconName, typeof Home>;
 
 export function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {

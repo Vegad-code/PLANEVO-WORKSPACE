@@ -5,6 +5,7 @@ import { Sidebar } from "../components/sidebar";
 import { TopBar } from "../components/top-bar";
 import { EmptyState } from "../components/empty-state";
 import { TaskComposer } from "../components/task-composer";
+import { CalendarView } from "../components/calendar-view";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 
 /*
@@ -287,6 +288,19 @@ export default function DesignPage() {
           <div className="mt-4">
             <TaskComposer workspaceId={null} buttonLabel="Open task composer" />
           </div>
+        </div>
+      </Section>
+
+      <Section title="Workspace calendar — true empty state">
+        <div className="h-screen overflow-auto rounded-xl border border-border">
+          <CalendarView
+            data={{
+              status: "ready",
+              workspaceId: "design-workspace",
+              hasCalendarDatabase: true,
+              items: [],
+            }}
+          />
         </div>
       </Section>
     </main>
