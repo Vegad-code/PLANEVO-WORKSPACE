@@ -7,6 +7,7 @@ import { EmptyState } from "../components/empty-state";
 import { TaskComposer } from "../components/task-composer";
 import { CalendarView } from "../components/calendar-view";
 import { FileEntry } from "../components/file-entry";
+import { HomeCommandCenter } from "../components/home-command-center";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 
 /*
@@ -308,6 +309,12 @@ export default function DesignPage() {
       <Section title="File entry — document / upload / import">
         <div className="rounded-xl border border-border bg-paper">
           <FileEntry workspaceId="design-workspace" />
+        </div>
+      </Section>
+
+      <Section title="Home command center — first run">
+        <div className="rounded-xl border border-border bg-paper">
+          <HomeCommandCenter data={{ state: "first-run", workspaceId: null, workspaceName: null, userName: "Anthony", recents: [] }} />
         </div>
       </Section>
     </main>

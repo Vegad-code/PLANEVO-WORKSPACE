@@ -7,19 +7,9 @@ const pageSource = readFileSync(
   "utf8",
 );
 
-test("the empty workspace create entry submits only through an explicit server action", () => {
-  const emptyBranchStart = pageSource.indexOf('if (shell.status === "empty")');
-  const readyBranchStart = pageSource.indexOf(
-    '  return (\n    <div className="flex min-h-full flex-col gap-2 p-8">',
-    emptyBranchStart,
-  );
-  const emptyBranch = pageSource.slice(emptyBranchStart, readyBranchStart);
-
-  assert.notEqual(emptyBranchStart, -1, "the empty shell branch must exist");
-  assert.match(
-    pageSource,
-    /import \{ createInitialWorkspace \} from "\.\/actions";/,
-  );
-  assert.match(emptyBranch, /<form action=\{createInitialWorkspace\}>/);
-  assert.match(emptyBranch, /<button\s+type="submit"/);
+test("Home is composed from live shell data without an automatic write path", () => {
+  assert.match(pageSource, /const shell = await getWorkspaceShellData\(\);/);
+  assert.match(pageSource, /const home = await getHomeData\(shell\);/);
+  assert.match(pageSource, /return <HomeCommandCenter data=\{home\} \/>;/);
+  assert.doesNotMatch(pageSource, /createInitialWorkspace|bootstrapWorkspace|FIXTURE_/);
 });

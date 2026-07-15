@@ -22,9 +22,11 @@ function SubmitButton() {
 export function TaskComposer({
   workspaceId,
   buttonLabel = "New task",
+  appearance = "primary",
 }: {
   workspaceId: string | null;
   buttonLabel?: string;
+  appearance?: "primary" | "quiet";
 }) {
   const [open, setOpen] = useState(false);
   const initialState: TaskFormState = { status: "idle", message: null };
@@ -50,7 +52,7 @@ export function TaskComposer({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-9 items-center gap-2 rounded-lg bg-marigold px-4 text-small font-medium text-ink outline-none transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"
+        className={`inline-flex items-center gap-2 rounded-lg px-3 text-small font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${appearance === "primary" ? "h-9 bg-marigold px-4 text-ink hover:opacity-90" : "h-8 border border-border-strong bg-paper text-ink hover:border-ink"}`}
       >
         <Icon name="tasks" />
         {buttonLabel}
