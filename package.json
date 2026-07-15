@@ -9,6 +9,9 @@
     "dev": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspace=apps/web",
     "lint": "npm run lint --workspace=apps/web",
-    "test": "npm run test --workspace=apps/web"
+    "test": "npm run test --workspace=apps/web",
+    "test:rls": "node scripts/verify-rls.mjs",
+    "db:push": "supabase db push",
+    "db:types": "supabase gen types typescript --project-id aixvpsmpiucticxutngp --schema public > apps/web/lib/database.types.ts"
   }
 }
