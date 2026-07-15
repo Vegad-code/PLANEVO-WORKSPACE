@@ -6,6 +6,7 @@ import { TopBar } from "../components/top-bar";
 import { EmptyState } from "../components/empty-state";
 import { TaskComposer } from "../components/task-composer";
 import { CalendarView } from "../components/calendar-view";
+import { FileEntry } from "../components/file-entry";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 
 /*
@@ -301,6 +302,12 @@ export default function DesignPage() {
               items: [],
             }}
           />
+        </div>
+      </Section>
+
+      <Section title="File entry — document / upload / import">
+        <div className="rounded-xl border border-border bg-paper">
+          <FileEntry workspaceId="design-workspace" />
         </div>
       </Section>
     </main>

@@ -1,6 +1,8 @@
 import {
   Calendar,
   ChatBubble,
+  CloudDownload,
+  EmptyPage,
   Folder,
   Home,
   Menu,
@@ -15,6 +17,7 @@ import {
   SidebarCollapse,
   SidebarExpand,
   TaskList,
+  Upload,
   Xmark,
 } from "iconoir-react";
 
@@ -36,7 +39,10 @@ export type IconName =
   | "menu"
   | "close"
   | "arrow-left"
-  | "arrow-right";
+  | "arrow-right"
+  | "upload"
+  | "document"
+  | "import";
 
 const ICONS = {
   workspace: Home,
@@ -57,6 +63,9 @@ const ICONS = {
   close: Xmark,
   "arrow-left": NavArrowLeft,
   "arrow-right": NavArrowRight,
+  upload: Upload,
+  document: EmptyPage,
+  import: CloudDownload,
 } satisfies Record<IconName, typeof Home>;
 
 export function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {
