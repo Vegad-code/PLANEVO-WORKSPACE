@@ -14,12 +14,14 @@ export function MobileSidebar({
   open,
   shell,
   onDismiss,
+  onOpenSettings,
   triggerRef,
   preview = false,
 }: {
   open: boolean;
   shell: WorkspaceShellData;
   onDismiss?: (type: DismissalType) => void;
+  onOpenSettings?: () => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
   preview?: boolean;
 }) {
@@ -95,6 +97,7 @@ export function MobileSidebar({
           headerButtonRef={closeRef}
           onToggle={() => onDismiss?.("close")}
           onNavigate={() => onDismiss?.("navigate")}
+          onOpenSettings={onOpenSettings}
         />
       </div>
     </div>

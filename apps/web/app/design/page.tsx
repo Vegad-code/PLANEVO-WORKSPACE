@@ -8,6 +8,11 @@ import { TaskComposer } from "../components/task-composer";
 import { CalendarView } from "../components/calendar-view";
 import { FileEntry } from "../components/file-entry";
 import { HomeCommandCenter } from "../components/home-command-center";
+import {
+  BillingSummary,
+  IntegrationRow,
+  SettingsPanel,
+} from "../components/settings-dialog";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 
 /*
@@ -268,6 +273,41 @@ export default function DesignPage() {
             open
             shell={DESIGN_PREVIEW_SHELL}
             preview
+          />
+        </div>
+      </Section>
+
+      <Section title="Settings modal — all panes">
+        <p className="mb-4 text-small text-text-secondary">
+          Use the local navigation to review Account, Export, Integrations,
+          Billing & credits, and Appearance.
+        </p>
+        <div className="h-128 overflow-hidden rounded-card border border-border">
+          <SettingsPanel shell={DESIGN_PREVIEW_SHELL} plan="plus" />
+        </div>
+      </Section>
+
+      <Section title="Settings integrations — disconnected / connected">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
+          <IntegrationRow id="gmail" connected={false} />
+          <div className="border-t border-border" />
+          <IntegrationRow id="google-calendar" connected />
+        </div>
+      </Section>
+
+      <Section title="Billing summary — Free / Plus / Pro">
+        <div className="grid gap-4 md:grid-cols-3">
+          <BillingSummary plan="free" />
+          <BillingSummary plan="plus" />
+          <BillingSummary plan="pro" />
+        </div>
+      </Section>
+
+      <Section title="Settings appearance — theme / minimal mode">
+        <div className="h-128 overflow-hidden rounded-card border border-border">
+          <SettingsPanel
+            shell={DESIGN_PREVIEW_SHELL}
+            initialSection="appearance"
           />
         </div>
       </Section>

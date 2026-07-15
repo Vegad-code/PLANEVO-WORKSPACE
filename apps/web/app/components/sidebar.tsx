@@ -15,6 +15,7 @@ type SidebarProps = {
   onFocusCapture?: FocusEventHandler<HTMLElement>;
   onBlurCapture?: FocusEventHandler<HTMLElement>;
   onNavigate?: () => void;
+  onOpenSettings?: () => void;
   mobile?: boolean;
   headerButtonRef?: Ref<HTMLButtonElement>;
 };
@@ -38,6 +39,7 @@ export function Sidebar({
   onFocusCapture,
   onBlurCapture,
   onNavigate,
+  onOpenSettings,
   mobile = false,
   headerButtonRef,
 }: SidebarProps) {
@@ -163,11 +165,10 @@ export function Sidebar({
 
       <div className="shrink-0 border-t border-border p-2">
         <NavItem
-          href="/settings"
           icon="settings"
           label="Settings"
           compact={compact}
-          onNavigate={onNavigate}
+          onClick={onOpenSettings}
         />
       </div>
     </aside>

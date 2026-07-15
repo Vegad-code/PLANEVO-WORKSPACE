@@ -10,14 +10,18 @@ export function TopBar({
   userDisplayName = null,
   userInitials = null,
   menuButtonRef,
+  settingsButtonRef,
   onOpenNavigation,
+  onOpenSettings,
   navigationOpen = false,
 }: {
   breadcrumb?: string[];
   userDisplayName?: string | null;
   userInitials?: string | null;
   menuButtonRef?: Ref<HTMLButtonElement>;
+  settingsButtonRef?: Ref<HTMLButtonElement>;
   onOpenNavigation?: () => void;
+  onOpenSettings?: () => void;
   navigationOpen?: boolean;
 }) {
   const pathname = usePathname();
@@ -64,6 +68,7 @@ export function TopBar({
 
       <div className="ml-4 flex shrink-0 items-center gap-3">
         <button
+          ref={settingsButtonRef}
           type="button"
           aria-label="Search Planevo"
           aria-keyshortcuts="Meta+K Control+K"
@@ -76,9 +81,10 @@ export function TopBar({
         </button>
         <button
           type="button"
+          onClick={onOpenSettings}
           aria-label={
             account.kind === "identity"
-              ? `Open account menu for ${account.name}`
+              ? `Open settings for ${account.name}`
               : "Open settings"
           }
           className="flex size-8 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-label font-medium text-ink outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"

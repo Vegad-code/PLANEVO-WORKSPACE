@@ -17,6 +17,7 @@ import {
   type SidebarEvent,
   type SidebarState,
 } from "./sidebar-state";
+import { SettingsDialog } from "./settings-dialog";
 import { TopBar } from "./top-bar";
 
 const SIDEBAR_STORAGE_KEY = "planevo.sidebar.preference";
@@ -33,12 +34,15 @@ export function AppShell({
     peeked: false,
   });
   const [restored, setRestored] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavigation, dispatchMobileNavigation] = useReducer(
     reduceMobileNavigation,
     { open: false },
   );
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mobileMenuTrigger = useRef<HTMLButtonElement>(null);
+  const topBarSettingsTrigger = useRef<HTMLButtonElement>(null);
+  const settingsReturnFocus = useRef<HTMLElement | null>(null);
 
   const dispatch = useCallback((event: SidebarEvent) => {
     setSidebarState((state) => reduceSidebarState(state, event));
@@ -108,6 +112,29 @@ export function AppShell({
     dispatch({ type: "dismiss-peek" });
   }
 
+  function openSettings(returnFocus?: HTMLElement | null) {
+    settingsReturnFocus.current =
+      returnFocus ??
+      (document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : topBarSettingsTrigger.current);
+    setSettingsOpen(true);
+  }
+
+  function handleSettingsOpenChange(nextOpen: boolean) {
+    setSettingsOpen(nextOpen);
+    if (nextOpen) return;
+
+    window.requestAnimationFrame(() => {
+      const returnTarget = settingsReturnFocus.current;
+      if (returnTarget?.isConnected) {
+        returnTarget.focus();
+      } else {
+        topBarSettingsTrigger.current?.focus();
+      }
+    });
+  }
+
   const sidebarPresentation = getSidebarPresentation(sidebarState);
 
   return (
@@ -133,6 +160,7 @@ export function AppShell({
           onBlurCapture={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) dismissPeek();
           }}
+          onOpenSettings={() => openSettings()}
         />
       </div>
 
@@ -141,7 +169,9 @@ export function AppShell({
           userDisplayName={shell.userDisplayName}
           userInitials={shell.userInitials}
           menuButtonRef={mobileMenuTrigger}
+          settingsButtonRef={topBarSettingsTrigger}
           onOpenNavigation={() => dispatchMobileNavigation({ type: "open" })}
+          onOpenSettings={() => openSettings()}
           navigationOpen={mobileNavigation.open}
         />
         <main aria-label="Workspace canvas" className="min-h-0 flex-1 overflow-auto bg-paper">
@@ -154,6 +184,15 @@ export function AppShell({
         shell={shell}
         onDismiss={dismissMobileNavigation}
         triggerRef={mobileMenuTrigger}
+        onOpenSettings={() => {
+          dispatchMobileNavigation({ type: "navigate" });
+          openSettings(mobileMenuTrigger.current);
+        }}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        shell={shell}
+        onOpenChange={handleSettingsOpenChange}
       />
     </div>
   );
