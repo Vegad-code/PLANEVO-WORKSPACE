@@ -21,10 +21,12 @@ export async function getDataAccess(): Promise<DataAccess | null> {
     return { client: supabase, ownerId: user.id, mode: "auth" };
   }
 
-  if (isDevDataAccessEnabled()) {
+  const preAuthOwnerId = process.env.PLANEVO_DEV_OWNER_ID?.trim();
+
+  if (preAuthOwnerId && isDevDataAccessEnabled()) {
     return {
       client: createAdminClient(),
-      ownerId: process.env.PLANEVO_DEV_OWNER_ID!,
+      ownerId: preAuthOwnerId,
       mode: "dev",
     };
   }

@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings --experimental-strip-types --test app/components/sidebar-state.test.mjs",
-    "db:seed": "node scripts/seed-dev-workspace.mjs"
+    "test": "node --no-warnings --experimental-strip-types --test app/components/sidebar-state.test.mjs lib/queries/workspace-shell.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

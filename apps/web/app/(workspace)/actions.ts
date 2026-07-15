@@ -2,11 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getDataAccess } from "@/lib/data/access";
-import type { Database } from "@/lib/database.types";
-import {
-  getOrCreateDefaultWorkspace,
-  listPagesForWorkspace,
-} from "@/lib/queries/workspace-shell";
+import type { Database, WorkspaceRow } from "@/lib/database.types";
+import { listPagesForWorkspace } from "@/lib/queries/workspace-shell";
 
 type ActionResult<T = void> =
   | { success: true; data: T }
@@ -20,6 +17,29 @@ async function requireDataAccess() {
   return access;
 }
 
+async function getOrCreateDefaultWorkspace(
+  access: NonNullable<Awaited<ReturnType<typeof getDataAccess>>>,
+): Promise<WorkspaceRow> {
+  const { data: workspaces, error: selectError } = await access.client
+    .from("workspaces")
+    .select("*")
+    .eq("owner_id", access.ownerId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (selectError) throw selectError;
+  if (workspaces?.[0]) return workspaces[0];
+
+  const { data: workspace, error: insertError } = await access.client
+    .from("workspaces")
+    .insert({ owner_id: access.ownerId, name: "My workspace" })
+    .select("*")
+    .single();
+
+  if (insertError) throw insertError;
+  return workspace;
+}
+
 export async function bootstrapWorkspace(): Promise<
   ActionResult<Database["public"]["Tables"]["workspaces"]["Row"]>
 > {
@@ -28,15 +48,12 @@ export async function bootstrapWorkspace(): Promise<
     return {
       success: false,
       error:
-        "No data access. Add PLANEVO_DEV_OWNER_ID and a server secret key (SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY) to .env.local, then run npm run db:seed.",
+        "No data access. Add PLANEVO_DEV_OWNER_ID and a server secret key (SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY) to .env.local.",
     };
   }
 
   try {
-    const workspace = await getOrCreateDefaultWorkspace(
-      access.client,
-      access.ownerId,
-    );
+    const workspace = await getOrCreateDefaultWorkspace(access);
     revalidatePath("/", "layout");
     return { success: true, data: workspace };
   } catch (cause) {

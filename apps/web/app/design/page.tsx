@@ -2,13 +2,33 @@ import { MinimalToggle } from "./minimal-toggle";
 import { NavItem } from "../components/nav-item";
 import { Sidebar } from "../components/sidebar";
 import { TopBar } from "../components/top-bar";
-import { FIXTURE_SHELL } from "@/lib/queries/workspace-shell";
+import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
  * labeled. Hex labels show the canonical (non-minimal) values from globals.css;
  * the swatches themselves respond live to the minimal-mode toggle.
  */
+
+const DESIGN_PREVIEW_SHELL: WorkspaceShellData = {
+  status: "ready",
+  workspace: {
+    id: "design-workspace",
+    owner_id: "design-owner",
+    name: "Anthony's workspace",
+    icon: null,
+    created_at: "2026-07-14T00:00:00.000Z",
+  },
+  pages: [
+    { id: "design-physics", label: "Physics 2400", depth: 0 },
+    { id: "design-lab", label: "Lab notes", depth: 1 },
+    { id: "design-apps", label: "Apps tracker", depth: 0 },
+    { id: "design-launch", label: "Launch checklist", depth: 1 },
+    { id: "design-reading", label: "Reading list", depth: 0 },
+  ],
+  userDisplayName: "Anthony",
+  userInitials: "AP",
+};
 
 const CORE = [
   { name: "paper", cls: "bg-paper", hex: "#F5F3ED", role: "App canvas background" },
@@ -179,19 +199,19 @@ export default function DesignPage() {
           <div>
             <p className="mb-2 font-mono text-mono text-text-muted">Expanded · w-sidebar</p>
             <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
-              <Sidebar shell={FIXTURE_SHELL} view="expanded" preview />
+              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="expanded" preview />
             </div>
           </div>
           <div>
             <p className="mb-2 font-mono text-mono text-text-muted">Rail · w-rail</p>
             <div className="relative h-128 w-rail overflow-hidden border-y border-l border-border">
-              <Sidebar shell={FIXTURE_SHELL} view="rail" preview />
+              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="rail" preview />
             </div>
           </div>
           <div>
             <p className="mb-2 font-mono text-mono text-text-muted">Hover-peek · overlay</p>
             <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
-              <Sidebar shell={FIXTURE_SHELL} view="peek" preview />
+              <Sidebar shell={DESIGN_PREVIEW_SHELL} view="peek" preview />
             </div>
           </div>
         </div>

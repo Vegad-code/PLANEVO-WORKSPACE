@@ -1,8 +1,7 @@
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { bootstrapDevWorkspace } from "@/lib/data/dev-workspace";
-import { getDataAccess } from "@/lib/data/access";
-import type { Database, PageRow, WorkspaceRow } from "@/lib/database.types";
+import type { DataAccess } from "../data/access";
+import type { Database, PageRow, WorkspaceRow } from "../database.types";
 
 export type PageTreeItem = {
   id: string;
@@ -10,25 +9,27 @@ export type PageTreeItem = {
   depth: number;
 };
 
+export type WorkspaceShellStatus = "ready" | "empty" | "unavailable";
+
 export type WorkspaceShellData = {
-  dataSource: "database" | "fixture";
+  status: WorkspaceShellStatus;
   workspace: WorkspaceRow | null;
   pages: PageTreeItem[];
   userDisplayName: string | null;
   userInitials: string | null;
 };
 
-const FIXTURE_PAGES: PageTreeItem[] = [
-  { id: "fixture-physics", label: "Physics 2400", depth: 0 },
-  { id: "fixture-lab", label: "Lab notes", depth: 1 },
-  { id: "fixture-apps", label: "Apps tracker", depth: 0 },
-  { id: "fixture-launch", label: "Launch checklist", depth: 1 },
-  { id: "fixture-reading", label: "Reading list", depth: 0 },
-];
+export type WorkspaceShellRepository = {
+  listWorkspaces(ownerId: string): Promise<WorkspaceRow[]>;
+  listPages(workspaceId: string): Promise<PageRow[]>;
+  getUser(): Promise<{
+    email?: string;
+    user_metadata?: Record<string, unknown>;
+  } | null>;
+};
 
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
@@ -36,46 +37,58 @@ function initialsFromName(name: string): string {
 function displayNameFromUser(user: {
   email?: string;
   user_metadata?: Record<string, unknown>;
-}): string {
+}): string | null {
   const fullName = user.user_metadata?.full_name;
   if (typeof fullName === "string" && fullName.trim()) return fullName.trim();
-  if (user.email) return user.email.split("@")[0] ?? "Account";
-  return "Account";
+
+  const emailName = user.email?.split("@")[0]?.trim();
+  return emailName || null;
 }
 
 function buildPageTree(pages: PageRow[]): PageTreeItem[] {
-  const byId = new Map(pages.map((page) => [page.id, page]));
+  const activePages = pages.filter((page) => !page.is_archived);
+  const byId = new Map(activePages.map((page) => [page.id, page]));
+  const childrenByParent = new Map<string | null, PageRow[]>();
 
-  function depthFor(pageId: string, seen = new Set<string>()): number {
-    if (seen.has(pageId)) return 0;
-    seen.add(pageId);
-    const page = byId.get(pageId);
-    if (!page?.parent_page_id) return 0;
-    return 1 + depthFor(page.parent_page_id, seen);
+  for (const page of activePages) {
+    const parentId =
+      page.parent_page_id && byId.has(page.parent_page_id)
+        ? page.parent_page_id
+        : null;
+    const siblings = childrenByParent.get(parentId) ?? [];
+    siblings.push(page);
+    childrenByParent.set(parentId, siblings);
   }
 
-  return pages
-    .filter((page) => !page.is_archived)
-    .sort((a, b) => a.position - b.position || a.title.localeCompare(b.title))
-    .map((page) => ({
-      id: page.id,
-      label: page.title,
-      depth: depthFor(page.id),
-    }));
-}
+  for (const siblings of childrenByParent.values()) {
+    siblings.sort(
+      (left, right) =>
+        left.position - right.position || left.title.localeCompare(right.title),
+    );
+  }
 
-async function listWorkspaces(
-  client: SupabaseClient<Database>,
-  ownerId: string,
-): Promise<WorkspaceRow[]> {
-  const { data, error } = await client
-    .from("workspaces")
-    .select("*")
-    .eq("owner_id", ownerId)
-    .order("created_at", { ascending: true });
+  const tree: PageTreeItem[] = [];
+  const visited = new Set<string>();
 
-  if (error) throw error;
-  return data ?? [];
+  function visit(page: PageRow, depth: number) {
+    if (visited.has(page.id)) return;
+    visited.add(page.id);
+    tree.push({ id: page.id, label: page.title, depth });
+
+    for (const child of childrenByParent.get(page.id) ?? []) {
+      visit(child, depth + 1);
+    }
+  }
+
+  for (const rootPage of childrenByParent.get(null) ?? []) {
+    visit(rootPage, 0);
+  }
+
+  for (const page of activePages) {
+    visit(page, 0);
+  }
+
+  return tree;
 }
 
 export async function listPagesForWorkspace(
@@ -92,71 +105,79 @@ export async function listPagesForWorkspace(
   return data ?? [];
 }
 
-export async function getOrCreateDefaultWorkspace(
+function createWorkspaceShellRepository(
   client: SupabaseClient<Database>,
-  ownerId: string,
-): Promise<WorkspaceRow> {
-  const workspaces = await listWorkspaces(client, ownerId);
-  if (workspaces[0]) return workspaces[0];
+): WorkspaceShellRepository {
+  return {
+    async listWorkspaces(ownerId) {
+      const { data, error } = await client
+        .from("workspaces")
+        .select("*")
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: true });
 
-  const insert: Database["public"]["Tables"]["workspaces"]["Insert"] = {
-    owner_id: ownerId,
-    name: "My workspace",
+      if (error) throw error;
+      return data ?? [];
+    },
+    listPages(workspaceId) {
+      return listPagesForWorkspace(client, workspaceId);
+    },
+    async getUser() {
+      const {
+        data: { user },
+        error,
+      } = await client.auth.getUser();
+
+      if (error) throw error;
+      return user;
+    },
   };
-
-  const { data: created, error: insertError } = await client
-    .from("workspaces")
-    .insert(insert)
-    .select("*")
-    .single();
-
-  if (insertError) throw insertError;
-  return created;
 }
 
-const FIXTURE_SHELL: WorkspaceShellData = {
-  dataSource: "fixture",
-  workspace: null,
-  pages: FIXTURE_PAGES,
-  userDisplayName: "Anthony",
-  userInitials: "AP",
-};
-
-export const getWorkspaceShellData = cache(async (): Promise<WorkspaceShellData> => {
-  const access = await getDataAccess();
-
-  if (!access) {
-    return FIXTURE_SHELL;
+export async function loadWorkspaceShellData(
+  access: DataAccess | null,
+  repository: WorkspaceShellRepository | null,
+): Promise<WorkspaceShellData> {
+  if (!access || !repository) {
+    return {
+      status: "unavailable",
+      workspace: null,
+      pages: [],
+      userDisplayName: null,
+      userInitials: null,
+    };
   }
 
-  let workspace: WorkspaceRow;
-  let pageRows: PageRow[];
-  let userDisplayName: string;
-
-  if (access.mode === "dev") {
-    const bootstrapped = await bootstrapDevWorkspace(access.client);
-    workspace = bootstrapped.workspace;
-    pageRows = bootstrapped.pages;
-    userDisplayName = "Anthony";
-  } else {
-    workspace = await getOrCreateDefaultWorkspace(access.client, access.ownerId);
-    pageRows = await listPagesForWorkspace(access.client, workspace.id);
-
-    const {
-      data: { user },
-    } = await access.client.auth.getUser();
-    userDisplayName = user ? displayNameFromUser(user) : "Account";
+  const [workspace] = await repository.listWorkspaces(access.ownerId);
+  if (!workspace) {
+    return {
+      status: "empty",
+      workspace: null,
+      pages: [],
+      userDisplayName: null,
+      userInitials: null,
+    };
   }
 
-  const pages = pageRows.length > 0 ? buildPageTree(pageRows) : FIXTURE_PAGES;
+  const pageRows = await repository.listPages(workspace.id);
+  const user = await repository.getUser();
+  const userDisplayName = user ? displayNameFromUser(user) : null;
 
   return {
-    dataSource: "database",
+    status: "ready",
     workspace,
-    pages,
+    pages: buildPageTree(pageRows),
     userDisplayName,
-    userInitials: initialsFromName(userDisplayName),
+    userInitials: userDisplayName ? initialsFromName(userDisplayName) : null,
   };
-});
+}
 
-export { FIXTURE_PAGES, FIXTURE_SHELL };
+export const getWorkspaceShellData = cache(async (): Promise<WorkspaceShellData> => {
+  const { getDataAccess } = await import("@/lib/data/access");
+  const access = await getDataAccess();
+  const repository = access
+    ? createWorkspaceShellRepository(access.client)
+    : null;
+
+  return loadWorkspaceShellData(access, repository);
+});
