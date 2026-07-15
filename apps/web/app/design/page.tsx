@@ -1,4 +1,8 @@
 import { MinimalToggle } from "./minimal-toggle";
+import { NavItem } from "../components/nav-item";
+import { Sidebar } from "../components/sidebar";
+import { TopBar } from "../components/top-bar";
+import { FIXTURE_SHELL } from "@/lib/queries/workspace-shell";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
@@ -147,6 +151,49 @@ export default function DesignPage() {
           <p className="mt-1 text-small text-text-secondary">
             1px hairline border on a slightly lighter surface. No shadow, no gradient, no glow.
           </p>
+        </div>
+      </Section>
+
+      <Section title="NavItem — default / hover / active / AI">
+        <div className="w-sidebar space-y-1 border border-border bg-sidebar py-2">
+          <NavItem label="Workspace" icon="workspace" state="default" />
+          <NavItem label="Tasks" icon="tasks" state="hover" />
+          <NavItem label="Calendar" icon="calendar" state="active" />
+          <NavItem label="Planevo AI" icon="ai" state="ai" />
+        </div>
+      </Section>
+
+      <Section title="TopBar — standard / deep breadcrumb">
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-xl border border-border">
+            <TopBar />
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border">
+            <TopBar breadcrumb={["Workspace", "Physics 2400", "Lab notes"]} />
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Sidebar — expanded / icon rail / hover-peek">
+        <div className="flex flex-wrap items-start gap-8">
+          <div>
+            <p className="mb-2 font-mono text-mono text-text-muted">Expanded · w-sidebar</p>
+            <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
+              <Sidebar shell={FIXTURE_SHELL} view="expanded" preview />
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 font-mono text-mono text-text-muted">Rail · w-rail</p>
+            <div className="relative h-128 w-rail overflow-hidden border-y border-l border-border">
+              <Sidebar shell={FIXTURE_SHELL} view="rail" preview />
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 font-mono text-mono text-text-muted">Hover-peek · overlay</p>
+            <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
+              <Sidebar shell={FIXTURE_SHELL} view="peek" preview />
+            </div>
+          </div>
         </div>
       </Section>
     </main>
