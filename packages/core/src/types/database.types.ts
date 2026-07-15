@@ -477,6 +477,18 @@ export interface Database {
         Args: { p_owner_id: string; p_database_id: string; p_name?: string | null };
         Returns: Json;
       };
+      get_workspace_calendar_records: {
+        Args: { p_workspace_id: string; p_start: string; p_end: string };
+        Returns: {
+          record_id: string;
+          property_id: string;
+          title: string;
+          occurs_at: string;
+          database_id: string;
+          database_name: string;
+          page_id: string | null;
+        }[];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

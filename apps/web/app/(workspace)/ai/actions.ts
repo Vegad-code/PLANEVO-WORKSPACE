@@ -34,6 +34,19 @@ export async function saveConversationMessage(formData: FormData): Promise<void>
   const content = String(formData.get("content") ?? "").trim();
   if (!conversationId || !content) return;
   const access = await requireMutationDataAccess();
+
+  // Ownership check in app code — defense in depth over RLS, which the
+  // dev-mode service-role client bypasses.
+  const { workspaceId } = await currentWorkspaceId();
+  const { data: conversation, error: conversationError } = await access.client
+    .from("ai_conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (conversationError) throw conversationError;
+  if (!conversation) throw new Error("Conversation not found.");
+
   const { error } = await access.client.from("ai_messages").insert({
     conversation_id: conversationId,
     role: "user",

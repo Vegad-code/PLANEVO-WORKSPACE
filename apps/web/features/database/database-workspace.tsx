@@ -1,30 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { DatabaseBundle } from "@planevo/core/queries/records";
+import { toDisplayRecord } from "@planevo/core/queries/record-display";
+import { findPropertyByRole, selectOptions } from "@planevo/core/types/property-roles";
 import type { ViewRow } from "@planevo/core/types/database.types";
 import { duplicateDatabase } from "@/app/(workspace)/databases/[databaseId]/actions";
 import { TableView } from "./table-view";
-import { EmptyState } from "@/components/ui/empty-state";
-
-function viewBody(view: ViewRow | undefined, bundle: DatabaseBundle) {
-  // Table is the canonical kernel view; board/list/calendar bodies arrive with
-  // the entry-point de-fragmentation pass.
-  if (!view || view.type === "table") return <TableView bundle={bundle} />;
-  return (
-    <EmptyState
-      icon="workspace"
-      title={`${view.name} view is on its way`}
-      description="This view type is being rebuilt on the shared kernel. Use Table meanwhile — it's the same records."
-    />
-  );
-}
+import { RecordBoard, RecordList } from "./record-board";
+import { MonthGrid } from "./month-grid";
 
 export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
   const views = bundle.views;
   const defaultView = views.find((view) => view.is_default) ?? views[0];
   const [activeViewId, setActiveViewId] = useState<string | null>(defaultView?.id ?? null);
   const activeView = views.find((view) => view.id === activeViewId) ?? defaultView;
+
+  const displayRecords = useMemo(
+    () => bundle.records.map((record) => toDisplayRecord(record, bundle.properties)),
+    [bundle],
+  );
+  const statusProperty = findPropertyByRole(bundle.properties, "status");
+  const statusOptions = statusProperty ? selectOptions(statusProperty) : [];
+
+  function viewBody(view: ViewRow | undefined) {
+    // ponytail: board groups by the status role and calendar uses the record's
+    // date role — per-view config_json property picks return when a view
+    // editor exists; born-with-views always aligns config with roles today.
+    switch (view?.type) {
+      case "board":
+        return <RecordBoard records={displayRecords} statusOptions={statusOptions} />;
+      case "list":
+        return <RecordList records={displayRecords} />;
+      case "calendar":
+        return (
+          <MonthGrid
+            items={displayRecords
+              .filter((record) => record.dueDate)
+              .map((record) => ({
+                id: record.id,
+                title: record.title,
+                date: record.dueDate!,
+              }))}
+          />
+        );
+      default:
+        return <TableView bundle={bundle} />;
+    }
+  }
 
   return (
     <div>
@@ -49,9 +72,7 @@ export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
               </button>
             );
           })}
-          {views.length === 0 && (
-            <span className="text-small text-text-muted">Table</span>
-          )}
+          {views.length === 0 && <span className="text-small text-text-muted">Table</span>}
         </div>
         <form action={duplicateDatabase.bind(null, bundle.database.id)}>
           <button
@@ -63,7 +84,7 @@ export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
           </button>
         </form>
       </div>
-      <div className="mt-4">{viewBody(activeView, bundle)}</div>
+      <div className="mt-4">{viewBody(activeView)}</div>
     </div>
   );
 }

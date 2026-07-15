@@ -19,9 +19,13 @@ export default function AiWelcomePage() {
           {PROMPTS.map((prompt) => <div key={prompt} className="rounded-xl border border-border bg-surface-raised p-4 text-left text-small text-text-secondary">{prompt}</div>)}
         </div>
       </div>
-      <form action={startAiConversation} className="mx-auto mt-8 mb-auto w-full max-w-2xl">
+      <form action={startAiConversation} className="mx-auto mt-8 w-full max-w-2xl">
         <button type="submit" className="flex min-h-14 w-full items-center gap-3 rounded-card border border-slate bg-slate-tint px-4 text-left text-body text-text-secondary outline-none hover:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"><Icon name="ai" className="size-5" /><span>Start a workspace conversation</span><span className="ml-auto text-small text-text-muted">Open</span></button>
       </form>
+      <p className="mx-auto mt-3 mb-auto w-full max-w-2xl text-center text-small text-text-muted">
+        Answers are coming soon — conversations you start are saved to this workspace, and the
+        model layer arrives with the credit system.
+      </p>
     </div>
   );
 }
