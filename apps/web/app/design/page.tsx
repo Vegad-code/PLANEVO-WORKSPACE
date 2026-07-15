@@ -3,6 +3,8 @@ import { NavItem } from "../components/nav-item";
 import { MobileSidebar } from "../components/mobile-sidebar";
 import { Sidebar } from "../components/sidebar";
 import { TopBar } from "../components/top-bar";
+import { EmptyState } from "../components/empty-state";
+import { TaskComposer } from "../components/task-composer";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 
 /*
@@ -264,6 +266,27 @@ export default function DesignPage() {
             shell={DESIGN_PREVIEW_SHELL}
             preview
           />
+        </div>
+      </Section>
+
+      <Section title="Empty state — task database">
+        <EmptyState
+          icon="tasks"
+          title="Your task board is ready when you are"
+          description="Create the first real task without sample rows or fabricated activity."
+          action={<TaskComposer workspaceId={null} buttonLabel="Create first task" />}
+        />
+      </Section>
+
+      <Section title="Task composer — Lumis-inspired full field set">
+        <div className="rounded-xl border border-border bg-surface-raised p-5">
+          <p className="text-body font-medium">Task composer</p>
+          <p className="mt-1 text-small text-text-secondary">
+            Title, description, status, priority, due date, estimate, tags, and attachment handoff.
+          </p>
+          <div className="mt-4">
+            <TaskComposer workspaceId={null} buttonLabel="Open task composer" />
+          </div>
         </div>
       </Section>
     </main>
