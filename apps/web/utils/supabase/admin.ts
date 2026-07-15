@@ -25,6 +25,15 @@ export function createAdminClient() {
   });
 }
 
+/**
+ * Dev-mode data access impersonates a fixed owner through the service-role
+ * client, bypassing RLS. It must never activate in production: it requires an
+ * explicit PLANEVO_DEV_MODE=1 opt-in AND a non-production build.
+ */
 export function isDevDataAccessEnabled(): boolean {
-  return Boolean(process.env.PLANEVO_DEV_OWNER_ID && hasSupabaseServerSecretKey());
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.PLANEVO_DEV_MODE === "1" &&
+    Boolean(process.env.PLANEVO_DEV_OWNER_ID && hasSupabaseServerSecretKey())
+  );
 }

@@ -8,6 +8,7 @@ import { TaskComposer } from "../components/task-composer";
 import { CalendarView } from "../components/calendar-view";
 import { FileEntry } from "../components/file-entry";
 import { HomeCommandCenter } from "../components/home-command-center";
+import { LoginForm } from "../(auth)/login/login-form";
 import {
   BillingSummary,
   IntegrationRow,
@@ -309,6 +310,12 @@ export default function DesignPage() {
             shell={DESIGN_PREVIEW_SHELL}
             initialSection="appearance"
           />
+        </div>
+      </Section>
+
+      <Section title="Login — sign in / sign up card">
+        <div className="mx-auto w-full max-w-sm rounded-card border border-border bg-surface-raised p-6">
+          <LoginForm />
         </div>
       </Section>
 

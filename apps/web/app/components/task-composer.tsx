@@ -43,7 +43,8 @@ export function TaskComposer({
 
   useEffect(() => {
     if (state.status !== "success") return;
-    setOpen(false);
+    // Closing the dialog fires its onClose handler, which owns the setState.
+    dialogRef.current?.close();
     router.refresh();
   }, [router, state.status]);
 

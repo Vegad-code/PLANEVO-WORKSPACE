@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { signOut } from "@/app/(auth)/actions";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 import type { ThemePreference } from "./app-preferences";
 import { Icon, type IconName } from "./planevo-icon";
@@ -149,6 +150,14 @@ function AccountPane({
           Changes are saved to this browser automatically.
         </p>
       </div>
+      <form action={signOut} className="mt-8 border-t border-border pt-5">
+        <button
+          type="submit"
+          className="h-9 rounded-lg border border-border-strong px-4 text-small font-medium outline-none hover:bg-surface-raised focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          Sign out
+        </button>
+      </form>
     </div>
   );
 }
