@@ -145,28 +145,137 @@ git commit -m "fix: keep workspace reads side effect free"
 **Files:**
 - Create: `apps/web/app/components/app-preferences.ts`
 - Create: `apps/web/app/components/app-preferences.test.mjs`
+- Create: `apps/web/app/components/navigation-state.ts`
+- Create: `apps/web/app/components/navigation-state.test.mjs`
 - Create: `apps/web/app/components/mobile-sidebar.tsx`
 - Modify: `apps/web/app/components/app-shell.tsx`
 - Modify: `apps/web/app/components/sidebar.tsx`
 - Modify: `apps/web/app/components/nav-item.tsx`
+- Modify: `apps/web/app/components/planevo-icon.tsx`
 - Modify: `apps/web/app/components/top-bar.tsx`
+- Modify: `apps/web/app/design/minimal-toggle.tsx`
 - Modify: `apps/web/app/design/page.tsx`
 - Modify: `apps/web/app/globals.css`
+- Modify: `apps/web/app/layout.tsx`
+- Modify: `apps/web/next.config.ts`
 - Modify: `apps/web/package.json`
+- Modify: `package-lock.json`
 
 **Interfaces:**
-- Produces: `ThemePreference = "light" | "dark" | "system"` and independent `minimal: boolean`.
-- Produces: `resolveTheme(preference, systemDark)` and versioned storage parsing.
-- Produces: pathname-aware navigation links for Home, Tasks, Calendar, Files, Planevo AI, Agents, and Settings.
+- Produces: `ThemePreference = "light" | "dark" | "system"`, `ResolvedTheme = "light" | "dark"`, and `AppPreferences = { version: 1; theme; minimal }`.
+- Produces: `parseAppPreferences(value)`, `resolveTheme(preference, systemDark)`, and `getRootAppearance(preferences, systemDark)`.
+- Produces: `isNavItemActive(pathname, href)` and `reduceMobileNavigation(state, event)`.
+- Produces: pathname-aware links for Home `/`, Tasks `/tasks`, Calendar `/calendar`, Files `/files`, Planevo AI `/ai`, Agents `/agents`, and Settings `/settings`.
+- Replaces handcrafted inline icon paths with `iconoir-react@7.11.1` through the existing `Icon` wrapper.
 
-- [ ] Write failing tests for versioned preference parsing, four light/dark × minimal combinations, and route-active navigation.
-- [ ] Verify RED with `npm run test --workspace=apps/web`.
-- [ ] Add centralized warm-ink dark token overrides under `[data-theme="dark"]`; do not hardcode colors in components.
-- [ ] Add a 390px slide-over sidebar with focus trapping, Escape/overlay dismissal, and no desktop canvas reflow.
-- [ ] Replace inert `#` navigation with real `next/link` destinations and an icon-first universal-search control in the top bar.
-- [ ] Render expanded, rail, peek, mobile-open, light, dark, minimal-light, and minimal-dark states in `/design`.
-- [ ] Run tests, lint, typecheck, and browser checks at desktop/tablet/390px.
-- [ ] Commit with `git commit -m "feat: complete responsive Planevo shell"`.
+- [ ] **Step 1: Write failing preference and navigation tests**
+
+Cover this exact behavior:
+
+```js
+assert.deepEqual(parseAppPreferences(null), {
+  version: 1,
+  theme: "system",
+  minimal: false,
+});
+assert.deepEqual(parseAppPreferences('{"version":1,"theme":"dark","minimal":true}'), {
+  version: 1,
+  theme: "dark",
+  minimal: true,
+});
+assert.equal(resolveTheme("system", true), "dark");
+assert.equal(resolveTheme("system", false), "light");
+assert.deepEqual(getRootAppearance({ version: 1, theme: "dark", minimal: false }, false), {
+  theme: "dark",
+  minimal: false,
+});
+assert.deepEqual(getRootAppearance({ version: 1, theme: "light", minimal: true }, true), {
+  theme: "light",
+  minimal: true,
+});
+assert.equal(isNavItemActive("/", "/"), true);
+assert.equal(isNavItemActive("/tasks/record-1", "/tasks"), true);
+assert.equal(isNavItemActive("/calendar", "/tasks"), false);
+assert.deepEqual(reduceMobileNavigation({ open: false }, { type: "open" }), { open: true });
+assert.deepEqual(reduceMobileNavigation({ open: true }, { type: "escape" }), { open: false });
+```
+
+Also test malformed/wrong-version preferences fall back to defaults, `theme` and `minimal` remain independent across all four resolved combinations, and mobile close/overlay/navigation events close the drawer.
+
+- [ ] **Step 2: Run the tests and verify RED**
+
+Run: `npm run test --workspace=apps/web`
+
+Expected: existing 15 tests pass and the new tests fail because the preference/navigation modules do not exist.
+
+- [ ] **Step 3: Implement versioned preferences and a no-flash root appearance**
+
+Use storage key `planevo.app.preferences.v1`. `parseAppPreferences` must accept only version `1`, the three theme values, and a boolean `minimal`; everything else returns the default. In `layout.tsx`, add a small pre-hydration appearance script that reads that key and `prefers-color-scheme`, then sets `document.documentElement.dataset.theme` and toggles `data-minimal` before paint. Add `suppressHydrationWarning` to `<html>`. The existing `/design` toggle must update the same versioned preference object instead of maintaining disconnected state.
+
+- [ ] **Step 4: Add the warm-ink dark token layer**
+
+Centralize these provisional values in `globals.css`, never in components:
+
+```css
+[data-theme="dark"] {
+  --color-paper: #1c1b18;
+  --color-ink: #f4f0e7;
+  --color-sidebar: #22211d;
+  --color-surface-raised: #292721;
+  --color-border: #3a372f;
+  --color-border-strong: #575145;
+  --color-text-secondary: #c8c1b3;
+  --color-text-muted: #958d7f;
+  --color-marigold: #d9a64d;
+  --color-brick: #cf6a55;
+  --color-meadow: #7d9f72;
+  --color-slate: #91a9bb;
+  --color-marigold-tint: #463a25;
+  --color-meadow-tint: #293b2a;
+  --color-brick-tint: #452d28;
+  --color-slate-tint: #2b3943;
+}
+```
+
+Add a `[data-theme="dark"][data-minimal]` override so minimal mode still mutes only marigold/brick/meadow while ink/slate remain intact.
+
+- [ ] **Step 5: Replace handcrafted icons with Iconoir**
+
+Install exact package `iconoir-react@7.11.1`, add `experimental.optimizePackageImports: ["iconoir-react"]` to `next.config.ts`, and keep the existing semantic `IconName` API. Map every semantic name to the closest consistent Iconoir 24px outline icon with `strokeWidth={1.5}` and `aria-hidden`; no handcrafted SVG/path data remains in application components.
+
+- [ ] **Step 6: Implement route-aware navigation and the approved sidebar IA**
+
+Convert `NavItem` to `next/link`, derive active state from `usePathname`, and set the active marigold pip only on the current route. Rename the first item to `Home`. Render two honest workspace sections: `Pinned` (empty invitation when none exist) and `Pages` (real shell pages only). The AI group stays at the bottom. Preserve expanded/rail/200ms hover-peek/Command-backslash behavior and existing tests.
+
+- [ ] **Step 7: Implement the mobile drawer and top-bar search trigger**
+
+Below the desktop breakpoint, remove the sidebar spacer and show a menu button in `TopBar`. It opens a fixed paper/sidebar drawer with backdrop, initial focus, Tab/Shift-Tab containment, Escape/backdrop/navigation dismissal, restored trigger focus, and body-scroll lock. Desktop retains grid reflow only for expanded/rail and never for peek. Replace the large Ask-AI pill in the top bar with the approved icon-first universal-search trigger; it expands to the compact label `Search Planevo` and exposes `aria-keyshortcuts="Meta+K Control+K"`. Planevo AI remains available in the sidebar.
+
+- [ ] **Step 8: Render the new states in `/design`**
+
+Show expanded, rail, hover-peek, mobile-open, identity/neutral top bars, light, dark, minimal-light, and minimal-dark. `/design` may use its isolated preview shell, but no production route may receive those rows.
+
+- [ ] **Step 9: Run full verification**
+
+Run:
+
+```bash
+npm run test --workspace=apps/web
+npm run lint --workspace=apps/web
+npx tsc --noEmit -p apps/web/tsconfig.json
+npm run build --workspace=apps/web
+rg -n "<svg|<path|FIXTURE_|href=\"#\"|>Workspace<" apps/web/app/components apps/web/lib
+git diff --check
+```
+
+Expected: all checks pass; the search finds no handcrafted SVG/path, fixture export, inert href, or old first-nav label in production components.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add apps/web package-lock.json
+git commit -m "feat: complete responsive Planevo shell"
+```
 
 ---
 
