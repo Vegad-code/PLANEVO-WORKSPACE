@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
   FoundationMutationError,
@@ -83,6 +83,21 @@ test("invalid task input is rejected before any database call", async () => {
     (error) => error instanceof FoundationMutationError && error.code === "VALIDATION",
   );
   assert.deepEqual(client.calls, []);
+});
+
+test("no migration ever introduces a security definer function", () => {
+  const migrationsDir = new URL("../../../../supabase/migrations/", import.meta.url);
+  const files = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql"));
+  assert.ok(files.length >= 4, "expected the known migration set");
+  for (const name of files) {
+    const sql = readFileSync(new URL(name, migrationsDir), "utf8").toLowerCase();
+    assert.equal(sql.includes("security definer"), false, `${name} uses security definer`);
+    assert.equal(
+      sql.includes("grant") && sql.includes("to anon"),
+      false,
+      `${name} grants to anon`,
+    );
+  }
 });
 
 test("migration keeps RPCs invoker-scoped and task foundations empty", () => {

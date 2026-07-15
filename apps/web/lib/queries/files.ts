@@ -27,7 +27,9 @@ export async function loadFilesData(): Promise<FilesData> {
     .from("file_sources")
     .select("id,name,mime_type,size_bytes,ingestion_status,created_at,page_id,storage_path")
     .eq("workspace_id", workspace.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // ponytail: newest 100 files; add paging when a library outgrows this.
+    .limit(100);
   if (error) throw error;
 
   const fileRows = rows ?? [];

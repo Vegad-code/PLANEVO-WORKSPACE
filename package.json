@@ -12,6 +12,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:rls": "node scripts/verify-rls.mjs",
     "db:push": "supabase db push",
+    "db:seed": "node scripts/seed-dev.mjs",
     "db:types": "supabase gen types typescript --project-id aixvpsmpiucticxutngp --schema public > packages/core/src/types/database.types.ts"
   }
 }

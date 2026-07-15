@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Planevo web
 
-## Getting Started
+The Next.js app. Repo-wide steering lives in the root `AGENTS.md`; product truth
+in `docs/planevo-prd.md`.
 
-First, run the development server:
+## Layout
+
+- `app/` — routes only (layouts, pages, route handlers, error/loading boundaries)
+- `features/` — feature-owned UI + client components (shell, home, tasks,
+  calendar, files, editor, database, settings, search)
+- `components/ui/` — shared primitives (dialog, icons, empty/error states,
+  theme controls)
+- `lib/` — Next-coupled server glue (data access, current-workspace resolution,
+  cached query binders)
+- `../../packages/core` — platform-agnostic types, state machines, queries,
+  mutations (all unit tests live here)
+- `../../packages/api` — typed RPC wrappers shared by future clients
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install            # from the repo root
+npm run dev            # starts this app
+npm test               # pure-logic tests across all workspaces
+npm run test:rls       # two-user RLS isolation check (needs env keys)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`apps/web/.env.local` needs the Supabase URL + publishable key. For pre-auth
+dev mode add `PLANEVO_DEV_MODE=1`, `PLANEVO_DEV_OWNER_ID`, and a server secret
+key — dev mode is hard-disabled in production builds.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Database changes are migrations in `supabase/migrations/`, applied with
+`npm run db:push` (one-time `npx supabase login` first). After schema changes
+run `npm run db:types` and commit the diff. Performance acceptance queries:
+`supabase/performance-checks.md`; seed a 10k-record sandbox with
+`npm run db:seed`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Production checklist
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Env: `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+  only. **Never** set `PLANEVO_DEV_MODE`, `PLANEVO_DEV_OWNER_ID`, or a
+  service/secret key in the app's production environment.
+- Migrations pushed (`npm run db:push`) and `npm run db:types` clean.
+- `npm run test:rls` green against the production project (creates and deletes
+  two throwaway users).
+- Supabase Auth email templates point confirmation links at `/auth/confirm`
+  (`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`)
+  and the site URL is the production domain (used by `/auth/callback`).
+- `next build` clean; sign-up → bootstrap → workspace flow clicked through.

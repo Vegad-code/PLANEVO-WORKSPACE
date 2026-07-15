@@ -6,17 +6,30 @@ import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { DatabaseWorkspace } from "@/features/database/database-workspace";
 import { Icon } from "@/components/ui/planevo-icon";
 
+// The pivot RPC caps a single page at 500 rows; "Show more" grows the limit.
+// ponytail: limit-growth pagination — switch to cursor pages if anyone scrolls
+// past a few thousand records in one sitting.
+const ROW_STEP = 200;
+const ROW_MAX = 500;
+
 export default async function DatabaseRoute({
   params,
+  searchParams,
 }: {
   params: Promise<{ databaseId: string }>;
+  searchParams: Promise<{ rows?: string }>;
 }) {
-  const { databaseId } = await params;
+  const [{ databaseId }, { rows }] = await Promise.all([params, searchParams]);
+  const parsedRows = Number.parseInt(rows ?? "", 10);
+  const limit = Math.min(
+    Number.isFinite(parsedRows) && parsedRows > 0 ? parsedRows : ROW_STEP,
+    ROW_MAX,
+  );
   const current = await getCurrentWorkspace();
   if (!current) notFound();
 
   const { access, workspace } = current;
-  const bundle = await loadDatabaseBundle(access.client, databaseId);
+  const bundle = await loadDatabaseBundle(access.client, databaseId, { limit });
   if (!bundle || bundle.database.workspace_id !== workspace.id) notFound();
 
   await recordRecentItem(access.client, {
@@ -45,6 +58,16 @@ export default async function DatabaseRoute({
       </div>
       <div className="mt-6">
         <DatabaseWorkspace bundle={bundle} />
+        {bundle.records.length >= limit && limit < ROW_MAX && (
+          <div className="mt-4 text-center">
+            <Link
+              href={`/databases/${databaseId}?rows=${Math.min(limit + ROW_STEP, ROW_MAX)}`}
+              className="inline-flex h-8 items-center rounded-lg border border-border-strong bg-paper px-3 text-small font-medium outline-none hover:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              Show more records
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

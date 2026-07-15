@@ -6,12 +6,10 @@ import { requireDataAccess, requireMutationDataAccess } from "@/lib/data/access"
 import { WORKSPACE_COOKIE } from "@/lib/data/current-workspace";
 import {
   createCalendarDatabaseWithViews as createCalendarFoundation,
-  createDocumentPage as createDocumentFoundation,
   createTaskWithRequiredFoundation as createTaskFoundation,
   createWorkspace as createWorkspaceFoundation,
   type CreateTaskWithRequiredFoundationInput,
   type DatabaseFoundationResult,
-  type DocumentCreationResult,
   type TaskCreationResult,
   type WorkspaceCreationResult,
 } from "@/lib/mutations/create-foundations";
@@ -102,16 +100,6 @@ export async function createCalendarDatabaseWithViews(input: {
   return runFoundationAction(
     () => createCalendarFoundation(input),
     "Failed to create the calendar.",
-  );
-}
-
-export async function createDocumentPage(input: {
-  workspaceId: string;
-  title?: string;
-}): Promise<ActionResult<DocumentCreationResult>> {
-  return runFoundationAction(
-    () => createDocumentFoundation(input),
-    "Failed to create the document.",
   );
 }
 

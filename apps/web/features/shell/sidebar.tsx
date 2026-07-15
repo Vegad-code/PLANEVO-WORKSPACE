@@ -144,7 +144,6 @@ export function Sidebar({
           {!compact && <p className="px-5 pb-1 text-label uppercase text-text-muted">AI</p>}
           <nav aria-label="AI navigation" className="space-y-0.5">
             <NavItem href="/ai" label="Planevo AI" icon="ai" variant="ai" compact={compact} onNavigate={onNavigate} />
-            <NavItem href="/agents" label="Agents" icon="agents" compact={compact} onNavigate={onNavigate} />
           </nav>
         </div>
       </div>

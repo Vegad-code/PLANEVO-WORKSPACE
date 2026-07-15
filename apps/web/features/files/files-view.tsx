@@ -12,7 +12,7 @@ function formatBytes(bytes: number | null): string {
 
 export function FilesView({ data }: { data: FilesData }) {
   const action = (
-    <Link href="/files/new" className="inline-flex h-9 items-center gap-2 rounded-lg bg-marigold px-4 text-small font-medium text-ink outline-none hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink">
+    <Link href="/files/new" className="inline-flex h-9 items-center gap-2 rounded-lg bg-ink px-4 text-small font-medium text-paper outline-none hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink">
       <Icon name="upload" />
       New file
     </Link>

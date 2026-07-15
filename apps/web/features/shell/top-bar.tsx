@@ -1,7 +1,7 @@
 "use client";
 
 import type { Ref } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/planevo-icon";
 import { getTopBarAccountPresentation } from "@planevo/core/state/top-bar-state";
 
@@ -25,6 +25,7 @@ export function TopBar({
   navigationOpen?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const routeLabel =
     pathname === "/"
       ? "Home"
@@ -70,6 +71,7 @@ export function TopBar({
         <button
           ref={settingsButtonRef}
           type="button"
+          onClick={() => router.push("/search")}
           aria-label="Search Planevo"
           aria-keyshortcuts="Meta+K Control+K"
           className="group flex h-8 items-center gap-0 rounded-full border border-border bg-surface-raised px-2 text-small text-ink outline-none transition-all hover:gap-2 hover:border-border-strong focus-visible:gap-2 focus-visible:border-border-strong focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"

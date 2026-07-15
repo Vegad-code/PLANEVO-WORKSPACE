@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import {
@@ -29,6 +30,7 @@ export function AppShell({
   children: React.ReactNode;
   shell: WorkspaceShellData;
 }) {
+  const router = useRouter();
   const [sidebarState, setSidebarState] = useState<SidebarState>({
     preference: "expanded",
     peeked: false,
@@ -86,6 +88,10 @@ export function AppShell({
         event.preventDefault();
         clearPeekTimer();
         dispatch({ type: "toggle" });
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        // ⌘K opens search — the v1 command surface is the search route.
+        event.preventDefault();
+        router.push("/search");
       } else if (event.key === "Escape" && sidebarState.peeked) {
         clearPeekTimer();
         dispatch({ type: "dismiss-peek" });
@@ -94,7 +100,7 @@ export function AppShell({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [clearPeekTimer, dispatch, sidebarState.peeked]);
+  }, [clearPeekTimer, dispatch, router, sidebarState.peeked]);
 
   useEffect(() => clearPeekTimer, [clearPeekTimer]);
 

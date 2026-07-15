@@ -20,7 +20,7 @@ export function FileEntry({ workspaceId }: { workspaceId: string | null }) {
           <form action={createPlanevoDocument} className="mt-5 space-y-3">
             <input type="hidden" name="workspaceId" value={workspaceId ?? ""} />
             <input name="title" placeholder="Document title" className="h-10 w-full rounded-lg border border-border-strong bg-paper px-3 text-body outline-none placeholder:text-text-muted focus:border-ink" />
-            <button type="submit" className="h-9 w-full rounded-lg bg-marigold px-3 text-small font-medium text-ink outline-none hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink">Create document</button>
+            <button type="submit" className="h-9 w-full rounded-lg bg-ink px-3 text-small font-medium text-paper outline-none hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink">Create document</button>
           </form>
         </section>
 

@@ -16,6 +16,9 @@ import {
   SettingsPanel,
 } from "@/features/settings/settings-dialog";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
+import type { DisplayRecord } from "@planevo/core/queries/record-display";
+import { RecordBoard, RecordList } from "@/features/database/record-board";
+import { MonthGrid } from "@/features/database/month-grid";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
@@ -43,6 +46,13 @@ const DESIGN_PREVIEW_SHELL: WorkspaceShellData = {
   userDisplayName: "Anthony",
   userInitials: "AP",
 };
+
+const DESIGN_RECORDS: DisplayRecord[] = [
+  { id: "r1", title: "Draft the lab report", description: "Sections 2–4 with figures", status: "In progress", priority: "High", dueDate: "2026-07-18T18:00:00.000Z", estimateMinutes: 90, tags: ["school"] },
+  { id: "r2", title: "Review launch checklist", description: null, status: "To do", priority: null, dueDate: "2026-07-21T09:00:00.000Z", estimateMinutes: null, tags: [] },
+  { id: "r3", title: "Archive old references", description: "Keep only cited sources", status: "Blocked", priority: "Low", dueDate: null, estimateMinutes: 20, tags: ["cleanup"] },
+  { id: "r4", title: "Untriaged idea", description: null, status: null, priority: null, dueDate: null, estimateMinutes: null, tags: [] },
+];
 
 const CORE = [
   { name: "paper", cls: "bg-paper", hex: "#F5F3ED", role: "App canvas background" },
@@ -316,6 +326,27 @@ export default function DesignPage() {
             initialSection="appearance"
           />
         </div>
+      </Section>
+
+      <Section title="Record board — configured, orphan, and no-status lanes">
+        <RecordBoard
+          records={DESIGN_RECORDS}
+          statusOptions={["To do", "In progress", "In review", "Done"]}
+        />
+      </Section>
+
+      <Section title="Record list — role-projected rows">
+        <RecordList records={DESIGN_RECORDS} />
+      </Section>
+
+      <Section title="Month grid — dated records">
+        <MonthGrid
+          items={DESIGN_RECORDS.filter((record) => record.dueDate).map((record) => ({
+            id: record.id,
+            title: record.title,
+            date: record.dueDate!,
+          }))}
+        />
       </Section>
 
       <Section title="Error state — load failure / not found">
