@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { submitTask, type TaskFormState } from "@/app/(workspace)/tasks/actions";
+import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/planevo-icon";
 
 function SubmitButton() {
@@ -35,13 +36,6 @@ export function TaskComposer({
   const router = useRouter();
 
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
-
-  useEffect(() => {
     if (state.status !== "success") return;
     // Closing the dialog fires its onClose handler, which owns the setState.
     dialogRef.current?.close();
@@ -59,14 +53,11 @@ export function TaskComposer({
         {buttonLabel}
       </button>
 
-      <dialog
-        ref={dialogRef}
-        onCancel={(event) => {
-          event.preventDefault();
-          setOpen(false);
-        }}
+      <Dialog
+        open={open}
         onClose={() => setOpen(false)}
-        aria-labelledby="task-composer-title"
+        dialogRef={dialogRef}
+        labelledBy="task-composer-title"
         className="m-auto h-dvh max-h-dvh w-screen max-w-none overflow-hidden rounded-none border border-border bg-paper p-0 text-ink backdrop:bg-ink/30 sm:h-auto sm:w-full sm:max-w-2xl sm:rounded-card"
       >
         <form action={formAction} className="flex max-h-[inherit] flex-col">
@@ -167,7 +158,7 @@ export function TaskComposer({
             <SubmitButton />
           </div>
         </form>
-      </dialog>
+      </Dialog>
     </>
   );
 }

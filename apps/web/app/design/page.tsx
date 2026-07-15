@@ -1,4 +1,4 @@
-import { MinimalToggle } from "./minimal-toggle";
+import { MinimalModeSwitch, ThemeButtonGroup } from "@/components/ui/theme-controls";
 import { NavItem } from "@/features/shell/nav-item";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import { Sidebar } from "@/features/shell/sidebar";
@@ -145,7 +145,10 @@ export default function DesignPage() {
             Every value is provisional until it survives this page. Change globals.css, not components.
           </p>
         </div>
-        <MinimalToggle />
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <ThemeButtonGroup />
+          <MinimalModeSwitch />
+        </div>
       </div>
 
       <Section title="Core palette">
