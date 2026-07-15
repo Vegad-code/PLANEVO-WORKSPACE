@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
-import { Icon } from "@/app/components/planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 
 type Result = { id: string; title: string; kind: "Page" | "Database" | "File"; href: string };
 

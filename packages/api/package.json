@@ -1,0 +1,13 @@
+{
+  "name": "@planevo/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@planevo/core": "*",
+    "@supabase/supabase-js": "^2.110.5"
+  }
+}

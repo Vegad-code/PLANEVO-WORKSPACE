@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
-import type { Json } from "@/lib/database.types";
+import type { Json } from "@planevo/core/types/database.types";
 
 export type TaskItem = {
   id: string;

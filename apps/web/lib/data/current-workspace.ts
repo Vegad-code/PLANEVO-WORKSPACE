@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getDataAccess, type DataAccess } from "@/lib/data/access";
-import type { WorkspaceRow } from "@/lib/database.types";
+import type { WorkspaceRow } from "@planevo/core/types/database.types";
 
 export const WORKSPACE_COOKIE = "planevo_workspace";
 

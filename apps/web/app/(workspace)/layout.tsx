@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { AppShell } from "../components/app-shell";
+import { AppShell } from "@/features/shell/app-shell";
 import { getWorkspaceShellData } from "@/lib/queries/workspace-shell";
 import { createInitialWorkspace } from "./actions";
 

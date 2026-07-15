@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { setCurrentWorkspace } from "@/app/(workspace)/actions";
 import type { WorkspaceSummary } from "@/lib/queries/workspace-shell";
-import { Icon } from "./planevo-icon";
-import { WorkspaceComposer } from "./workspace-composer";
+import { Icon } from "@/components/ui/planevo-icon";
+import { WorkspaceComposer } from "@/features/home/workspace-composer";
 
 export function WorkspaceSwitcher({
   workspaces,

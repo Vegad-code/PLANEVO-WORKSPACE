@@ -37,7 +37,6 @@ export type IconName =
   | "panel-close"
   | "panel-open"
   | "pin"
-  | "ask"
   | "search"
   | "menu"
   | "close"
@@ -62,7 +61,6 @@ const ICONS = {
   "panel-close": SidebarCollapse,
   "panel-open": SidebarExpand,
   pin: Pin,
-  ask: ChatBubble,
   search: Search,
   menu: Menu,
   close: Xmark,

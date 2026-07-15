@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import type { Database } from "@/lib/database.types";
+import type { Database } from "@planevo/core/types/database.types";
 import { getSupabasePublicConfig } from "@/utils/supabase/keys";
 
 export async function createClient() {

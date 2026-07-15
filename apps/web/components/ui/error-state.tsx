@@ -1,4 +1,4 @@
-import { Icon } from "./planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 
 export function ErrorState({
   title = "Something went wrong",

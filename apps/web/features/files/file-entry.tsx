@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createPlanevoDocument, uploadWorkspaceFile } from "@/app/(workspace)/files/new/actions";
-import { Icon } from "./planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 
 export function FileEntry({ workspaceId }: { workspaceId: string | null }) {
   return (

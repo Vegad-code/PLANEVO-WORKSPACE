@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings --experimental-strip-types --test app/components/app-preferences.test.mjs app/components/navigation-state.test.mjs app/components/settings-state.test.mjs app/components/sidebar-state.test.mjs app/components/top-bar-state.test.mjs lib/mutations/create-foundations.test.mjs lib/queries/workspace-home.test.mjs lib/queries/workspace-shell.test.mjs"
+    "test": "node --no-warnings --experimental-strip-types --test lib/queries/workspace-home.test.mjs"
   },
   "dependencies": {
+    "@planevo/api": "*",
+    "@planevo/core": "*",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.5",
     "geist": "^1.7.2",

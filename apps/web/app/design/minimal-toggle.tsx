@@ -1,9 +1,7 @@
 "use client";
 
-import {
-  type ThemePreference,
-} from "../components/app-preferences";
-import { useAppPreferences } from "../components/use-app-preferences";
+import { type ThemePreference } from "@planevo/core/state/app-preferences";
+import { useAppPreferences } from "@/features/settings/use-app-preferences";
 
 export function MinimalToggle() {
   const { preferences, updatePreferences } = useAppPreferences();

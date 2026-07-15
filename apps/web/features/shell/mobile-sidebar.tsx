@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
-import type { MobileNavigationEvent } from "./navigation-state";
-import { Sidebar } from "./sidebar";
+import type { MobileNavigationEvent } from "@planevo/core/state/navigation-state";
+import { Sidebar } from "@/features/shell/sidebar";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';

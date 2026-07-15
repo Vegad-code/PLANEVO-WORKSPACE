@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ErrorState } from "../components/error-state";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function WorkspaceNotFound() {
   return (

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/database.types";
+import type { Database } from "@planevo/core/types/database.types";
 import {
   getSupabaseServerSecretKey,
   getSupabaseUrl,

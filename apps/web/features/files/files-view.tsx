@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { FilesData } from "@/lib/queries/files";
-import { EmptyState } from "./empty-state";
-import { Icon } from "./planevo-icon";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Icon } from "@/components/ui/planevo-icon";
 
 function formatBytes(bytes: number | null): string {
   if (bytes === null) return "Planevo page";

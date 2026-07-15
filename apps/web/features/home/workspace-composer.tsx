@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createNamedWorkspace } from "@/app/(workspace)/home/actions";
-import { Icon } from "./planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 
 export function WorkspaceComposer() {
   const [open, setOpen] = useState(false);

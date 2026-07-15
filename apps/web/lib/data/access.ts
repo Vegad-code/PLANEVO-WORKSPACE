@@ -1,16 +1,9 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { createAdminClient, isDevDataAccessEnabled } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
-import type { Database } from "@/lib/database.types";
+import type { DataAccess } from "@planevo/core/types/data-access";
 
-export type DataAccessMode = "auth" | "dev";
-
-export type DataAccess = {
-  client: SupabaseClient<Database>;
-  ownerId: string;
-  mode: DataAccessMode;
-};
+export type { DataAccess, DataAccessMode } from "@planevo/core/types/data-access";
 
 const DEV_OWNER_ALIAS_KEY = "planevo_dev_owner_alias";
 

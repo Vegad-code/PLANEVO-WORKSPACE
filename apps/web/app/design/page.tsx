@@ -1,20 +1,20 @@
 import { MinimalToggle } from "./minimal-toggle";
-import { NavItem } from "../components/nav-item";
-import { MobileSidebar } from "../components/mobile-sidebar";
-import { Sidebar } from "../components/sidebar";
-import { TopBar } from "../components/top-bar";
-import { EmptyState } from "../components/empty-state";
-import { ErrorState } from "../components/error-state";
-import { TaskComposer } from "../components/task-composer";
-import { CalendarView } from "../components/calendar-view";
-import { FileEntry } from "../components/file-entry";
-import { HomeCommandCenter } from "../components/home-command-center";
+import { NavItem } from "@/features/shell/nav-item";
+import { MobileSidebar } from "@/features/shell/mobile-sidebar";
+import { Sidebar } from "@/features/shell/sidebar";
+import { TopBar } from "@/features/shell/top-bar";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { TaskComposer } from "@/features/tasks/task-composer";
+import { CalendarView } from "@/features/calendar/calendar-view";
+import { FileEntry } from "@/features/files/file-entry";
+import { HomeCommandCenter } from "@/features/home/home-command-center";
 import { LoginForm } from "../(auth)/login/login-form";
 import {
   BillingSummary,
   IntegrationRow,
   SettingsPanel,
-} from "../components/settings-dialog";
+} from "@/features/settings/settings-dialog";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 
 /*

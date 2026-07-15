@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getDataAccess } from "@/lib/data/access";
-import type { Json } from "@/lib/database.types";
-import { Icon } from "@/app/components/planevo-icon";
+import type { Json } from "@planevo/core/types/database.types";
+import { Icon } from "@/components/ui/planevo-icon";
 import { saveConversationMessage } from "../actions";
 
 function messageText(content: Json): string {

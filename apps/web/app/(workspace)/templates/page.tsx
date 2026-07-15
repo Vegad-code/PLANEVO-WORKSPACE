@@ -1,4 +1,4 @@
-import { Icon } from "@/app/components/planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 
 const TEMPLATES = [
   { name: "Weekly planner", detail: "Tasks, priorities, and a week view." },

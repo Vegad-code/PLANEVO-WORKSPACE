@@ -1,10 +1,10 @@
 import Link from "next/link";
 import type { HomeData } from "@/lib/queries/home";
 import { createWorkspaceCalendar } from "@/app/(workspace)/calendar/actions";
-import { ActionCard } from "./action-card";
-import { Icon } from "./planevo-icon";
-import { TaskComposer } from "./task-composer";
-import { WorkspaceComposer } from "./workspace-composer";
+import { ActionCard } from "@/features/home/action-card";
+import { Icon } from "@/components/ui/planevo-icon";
+import { TaskComposer } from "@/features/tasks/task-composer";
+import { WorkspaceComposer } from "@/features/home/workspace-composer";
 
 const quietActionClass = "inline-flex h-8 items-center rounded-lg border border-border-strong bg-paper px-3 text-small font-medium outline-none hover:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink";
 

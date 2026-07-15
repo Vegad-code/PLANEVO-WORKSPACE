@@ -1,4 +1,4 @@
-import { Icon } from "@/app/components/planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 import { startAiConversation } from "./actions";
 
 const PROMPTS = [

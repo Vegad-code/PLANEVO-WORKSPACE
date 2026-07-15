@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Icon, type IconName } from "./planevo-icon";
-import { isNavItemActive } from "./navigation-state";
+import { Icon, type IconName } from "@/components/ui/planevo-icon";
+import { isNavItemActive } from "@planevo/core/state/navigation-state";
 
 export type NavItemState = "default" | "hover" | "active" | "ai";
 

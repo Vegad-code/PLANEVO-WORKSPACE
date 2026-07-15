@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { CalendarData, CalendarItem } from "@/lib/queries/calendar";
-import { Icon } from "./planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 import { createWorkspaceCalendar } from "@/app/(workspace)/calendar/actions";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

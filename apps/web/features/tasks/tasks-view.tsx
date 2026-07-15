@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import type { TaskItem, TasksData } from "@/lib/queries/tasks";
-import { EmptyState } from "./empty-state";
-import { TaskComposer } from "./task-composer";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TaskComposer } from "@/features/tasks/task-composer";
 
 const BOARD_COLUMNS = ["To do", "In progress", "In review", "Done"] as const;
 

@@ -1,9 +1,9 @@
 import type { FocusEventHandler, MouseEventHandler, Ref } from "react";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
-import { Icon } from "./planevo-icon";
-import { NavItem } from "./nav-item";
-import type { SidebarView } from "./sidebar-state";
-import { WorkspaceSwitcher } from "./workspace-switcher";
+import { Icon } from "@/components/ui/planevo-icon";
+import { NavItem } from "@/features/shell/nav-item";
+import type { SidebarView } from "@planevo/core/state/sidebar-state";
+import { WorkspaceSwitcher } from "@/features/shell/workspace-switcher";
 
 type SidebarProps = {
   shell: WorkspaceShellData;

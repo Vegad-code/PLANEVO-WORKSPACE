@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
-import { MobileSidebar } from "./mobile-sidebar";
+import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import {
   reduceMobileNavigation,
   type MobileNavigationEvent,
-} from "./navigation-state";
-import { Sidebar } from "./sidebar";
+} from "@planevo/core/state/navigation-state";
+import { Sidebar } from "@/features/shell/sidebar";
 import {
   getSidebarPresentation,
   matchesSidebarShortcut,
@@ -16,9 +16,9 @@ import {
   reduceSidebarState,
   type SidebarEvent,
   type SidebarState,
-} from "./sidebar-state";
-import { SettingsDialog } from "./settings-dialog";
-import { TopBar } from "./top-bar";
+} from "@planevo/core/state/sidebar-state";
+import { SettingsDialog } from "@/features/settings/settings-dialog";
+import { TopBar } from "@/features/shell/top-bar";
 
 const SIDEBAR_STORAGE_KEY = "planevo.sidebar.preference";
 

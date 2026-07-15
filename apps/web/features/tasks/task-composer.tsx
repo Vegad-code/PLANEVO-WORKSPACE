@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { submitTask, type TaskFormState } from "@/app/(workspace)/tasks/actions";
-import { Icon } from "./planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 
 function SubmitButton() {
   const { pending } = useFormStatus();

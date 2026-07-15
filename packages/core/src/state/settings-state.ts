@@ -1,4 +1,4 @@
-import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
+import type { WorkspaceShellData } from "../queries/workspace-shell";
 
 export const LOCAL_SETTINGS_STORAGE_KEY = "planevo.settings.local.v1";
 

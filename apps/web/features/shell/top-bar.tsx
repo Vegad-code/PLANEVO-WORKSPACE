@@ -2,8 +2,8 @@
 
 import type { Ref } from "react";
 import { usePathname } from "next/navigation";
-import { Icon } from "./planevo-icon";
-import { getTopBarAccountPresentation } from "./top-bar-state";
+import { Icon } from "@/components/ui/planevo-icon";
+import { getTopBarAccountPresentation } from "@planevo/core/state/top-bar-state";
 
 export function TopBar({
   breadcrumb,

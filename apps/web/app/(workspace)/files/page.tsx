@@ -1,4 +1,4 @@
-import { FilesView } from "@/app/components/files-view";
+import { FilesView } from "@/features/files/files-view";
 import { getFilesData } from "@/lib/queries/files";
 
 export default async function FilesPage() {

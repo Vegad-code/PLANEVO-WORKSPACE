@@ -3,8 +3,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { signOut } from "@/app/(auth)/actions";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
-import type { ThemePreference } from "./app-preferences";
-import { Icon, type IconName } from "./planevo-icon";
+import type { ThemePreference } from "@planevo/core/state/app-preferences";
+import { Icon, type IconName } from "@/components/ui/planevo-icon";
 import {
   createDefaultLocalSettings,
   createExportFileName,
@@ -16,8 +16,8 @@ import {
   type IntegrationId,
   type LocalSettings,
   type SettingsSection,
-} from "./settings-state";
-import { useAppPreferences } from "./use-app-preferences";
+} from "@planevo/core/state/settings-state";
+import { useAppPreferences } from "@/features/settings/use-app-preferences";
 
 type Plan = "free" | "plus" | "pro";
 

@@ -7,7 +7,7 @@ import {
   getRootAppearance,
   parseAppPreferences,
   type AppPreferences,
-} from "./app-preferences";
+} from "@planevo/core/state/app-preferences";
 
 function applyPreferences(preferences: AppPreferences, systemDark: boolean) {
   const appearance = getRootAppearance(preferences, systemDark);

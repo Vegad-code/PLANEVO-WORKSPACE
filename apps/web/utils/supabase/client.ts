@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import type { Database } from "@/lib/database.types";
+import type { Database } from "@planevo/core/types/database.types";
 import { getSupabasePublicConfig } from "@/utils/supabase/keys";
 
 export function createClient() {

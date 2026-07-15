@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireDataAccess, requireMutationDataAccess } from "@/lib/data/access";
 import { WORKSPACE_COOKIE } from "@/lib/data/current-workspace";
-import type { Database } from "@/lib/database.types";
 import {
   createCalendarDatabaseWithViews as createCalendarFoundation,
   createDocumentPage as createDocumentFoundation,
@@ -16,7 +15,6 @@ import {
   type TaskCreationResult,
   type WorkspaceCreationResult,
 } from "@/lib/mutations/create-foundations";
-import { listPagesForWorkspace } from "@/lib/queries/workspace-shell";
 
 type ActionResult<T = void> =
   | { success: true; data: T }
@@ -126,65 +124,3 @@ export async function createTaskWithRequiredFoundation(
   );
 }
 
-export async function updateWorkspace(input: {
-  workspaceId: string;
-  name?: string;
-  icon?: string | null;
-}): Promise<ActionResult<Database["public"]["Tables"]["workspaces"]["Row"]>> {
-  try {
-    const access = await requireMutationDataAccess();
-    const updates: Database["public"]["Tables"]["workspaces"]["Update"] = {};
-    if (input.name !== undefined) {
-      const name = input.name.trim();
-      if (!name) return { success: false, error: "Workspace name is required" };
-      updates.name = name;
-    }
-    if (input.icon !== undefined) updates.icon = input.icon;
-
-    const { data, error } = await access.client
-      .from("workspaces")
-      .update(updates)
-      .eq("id", input.workspaceId)
-      .eq("owner_id", access.ownerId)
-      .select("*")
-      .single();
-    if (error) throw error;
-
-    revalidatePath("/", "layout");
-    return { success: true, data };
-  } catch (cause) {
-    return { success: false, error: errorMessage(cause, "Failed to update workspace") };
-  }
-}
-
-export async function createPage(input: {
-  workspaceId: string;
-  title: string;
-  parentPageId?: string | null;
-}): Promise<ActionResult<Database["public"]["Tables"]["pages"]["Row"]>> {
-  try {
-    const access = await requireMutationDataAccess();
-    const siblings = await listPagesForWorkspace(access.client, input.workspaceId);
-    const siblingCount = siblings.filter(
-      (page) => page.parent_page_id === (input.parentPageId ?? null),
-    ).length;
-    const payload: Database["public"]["Tables"]["pages"]["Insert"] = {
-      workspace_id: input.workspaceId,
-      parent_page_id: input.parentPageId ?? null,
-      title: input.title.trim() || "Untitled",
-      position: siblingCount,
-    };
-
-    const { data, error } = await access.client
-      .from("pages")
-      .insert(payload)
-      .select("*")
-      .single();
-    if (error) throw error;
-
-    revalidatePath("/", "layout");
-    return { success: true, data };
-  } catch (cause) {
-    return { success: false, error: errorMessage(cause, "Failed to create page") };
-  }
-}

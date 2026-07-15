@@ -1,5 +1,5 @@
-import type { IconName } from "./planevo-icon";
-import { Icon } from "./planevo-icon";
+import type { IconName } from "@/components/ui/planevo-icon";
+import { Icon } from "@/components/ui/planevo-icon";
 
 export function EmptyState({
   icon,
