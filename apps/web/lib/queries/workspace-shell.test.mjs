@@ -5,7 +5,8 @@ async function loadShellModule() {
   return import("./workspace-shell.ts");
 }
 
-const access = { ownerId: "owner-1", mode: "dev", client: {} };
+const authAccess = { ownerId: "owner-1", mode: "auth", client: {} };
+const devAccess = { ownerId: "owner-1", mode: "dev", client: {} };
 
 const workspace = {
   id: "workspace-1",
@@ -62,7 +63,7 @@ test("returns a true empty state without creating anything", async () => {
     },
   };
 
-  const result = await loadWorkspaceShellData(access, repository);
+  const result = await loadWorkspaceShellData(authAccess, repository);
 
   assert.equal(result.status, "empty");
   assert.equal(result.workspace, null);
@@ -70,7 +71,38 @@ test("returns a true empty state without creating anything", async () => {
   assert.deepEqual(calls, [["listWorkspaces", "owner-1"]]);
 });
 
-test("returns real workspace rows with nested page depth and user identity", async () => {
+test("dev mode skips session user lookup and returns a null identity", async () => {
+  const { loadWorkspaceShellData } = await loadShellModule();
+  const calls = [];
+  const repository = {
+    async listWorkspaces(ownerId) {
+      calls.push(["listWorkspaces", ownerId]);
+      return [workspace];
+    },
+    async listPages(workspaceId) {
+      calls.push(["listPages", workspaceId]);
+      return [];
+    },
+    async getUser() {
+      calls.push(["getUser"]);
+      throw new Error("sessionless admin client has no user");
+    },
+  };
+
+  const result = await loadWorkspaceShellData(devAccess, repository);
+
+  assert.equal(result.status, "ready");
+  assert.equal(result.workspace, workspace);
+  assert.deepEqual(result.pages, []);
+  assert.equal(result.userDisplayName, null);
+  assert.equal(result.userInitials, null);
+  assert.deepEqual(calls, [
+    ["listWorkspaces", "owner-1"],
+    ["listPages", "workspace-1"],
+  ]);
+});
+
+test("auth mode returns real rows with nested depth and user identity", async () => {
   const { loadWorkspaceShellData } = await loadShellModule();
   const rows = [
     page({ id: "root", title: "Projects", position: 0 }),
@@ -97,7 +129,7 @@ test("returns real workspace rows with nested page depth and user identity", asy
     },
   };
 
-  const result = await loadWorkspaceShellData(access, repository);
+  const result = await loadWorkspaceShellData(authAccess, repository);
 
   assert.equal(result.status, "ready");
   assert.equal(result.workspace, workspace);
@@ -129,7 +161,7 @@ test("never substitutes fixture IDs or labels for an empty page query", async ()
     },
   };
 
-  const result = await loadWorkspaceShellData(access, repository);
+  const result = await loadWorkspaceShellData(authAccess, repository);
   const serialized = JSON.stringify(result);
 
   assert.equal(result.status, "ready");

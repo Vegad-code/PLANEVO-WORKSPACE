@@ -160,7 +160,7 @@ export async function loadWorkspaceShellData(
   }
 
   const pageRows = await repository.listPages(workspace.id);
-  const user = await repository.getUser();
+  const user = access.mode === "auth" ? await repository.getUser() : null;
   const userDisplayName = user ? displayNameFromUser(user) : null;
 
   return {

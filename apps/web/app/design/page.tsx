@@ -183,10 +183,13 @@ export default function DesignPage() {
         </div>
       </Section>
 
-      <Section title="TopBar — standard / deep breadcrumb">
+      <Section title="TopBar — live identity / neutral settings">
         <div className="space-y-4">
           <div className="overflow-hidden rounded-xl border border-border">
-            <TopBar />
+            <TopBar
+              userDisplayName={DESIGN_PREVIEW_SHELL.userDisplayName}
+              userInitials={DESIGN_PREVIEW_SHELL.userInitials}
+            />
           </div>
           <div className="overflow-hidden rounded-xl border border-border">
             <TopBar breadcrumb={["Workspace", "Physics 2400", "Lab notes"]} />

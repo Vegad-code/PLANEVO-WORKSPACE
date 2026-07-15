@@ -63,6 +63,13 @@ export async function bootstrapWorkspace(): Promise<
   }
 }
 
+export async function createInitialWorkspace(): Promise<void> {
+  const result = await bootstrapWorkspace();
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+}
+
 export async function createWorkspace(input: {
   name: string;
   icon?: string | null;

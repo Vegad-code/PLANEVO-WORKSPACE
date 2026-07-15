@@ -120,7 +120,10 @@ export function AppShell({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
+        <TopBar
+          userDisplayName={shell.userDisplayName}
+          userInitials={shell.userInitials}
+        />
         <main aria-label="Workspace canvas" className="min-h-0 flex-1 overflow-auto bg-paper">
           {children}
         </main>

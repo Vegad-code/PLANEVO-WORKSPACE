@@ -1,6 +1,20 @@
 import { Icon } from "./planevo-icon";
+import { getTopBarAccountPresentation } from "./top-bar-state";
 
-export function TopBar({ breadcrumb = ["Workspace"] }: { breadcrumb?: string[] }) {
+export function TopBar({
+  breadcrumb = ["Workspace"],
+  userDisplayName = null,
+  userInitials = null,
+}: {
+  breadcrumb?: string[];
+  userDisplayName?: string | null;
+  userInitials?: string | null;
+}) {
+  const account = getTopBarAccountPresentation({
+    userDisplayName,
+    userInitials,
+  });
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-paper px-4 sm:px-6">
       <nav aria-label="Breadcrumb" className="min-w-0">
@@ -27,10 +41,18 @@ export function TopBar({ breadcrumb = ["Workspace"] }: { breadcrumb?: string[] }
         </button>
         <button
           type="button"
-          aria-label="Open account menu"
+          aria-label={
+            account.kind === "identity"
+              ? `Open account menu for ${account.name}`
+              : "Open settings"
+          }
           className="flex size-8 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-label font-medium text-ink outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
-          AP
+          {account.kind === "identity" ? (
+            account.initials
+          ) : (
+            <Icon name="settings" className="size-4 text-text-muted" />
+          )}
         </button>
       </div>
     </header>

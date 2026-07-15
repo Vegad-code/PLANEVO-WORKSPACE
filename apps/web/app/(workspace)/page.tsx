@@ -1,4 +1,5 @@
 import { getWorkspaceShellData } from "@/lib/queries/workspace-shell";
+import { createInitialWorkspace } from "./actions";
 
 export default async function WorkspaceCanvas() {
   const shell = await getWorkspaceShellData();
@@ -26,12 +27,14 @@ export default async function WorkspaceCanvas() {
           <p className="mt-2 text-body text-text-secondary">
             Create a workspace to begin adding pages and shaping a place for your work.
           </p>
-          <button
-            type="button"
-            className="mt-6 rounded-lg bg-ink px-4 py-2 text-small font-medium text-paper"
-          >
-            Create a workspace
-          </button>
+          <form action={createInitialWorkspace}>
+            <button
+              type="submit"
+              className="mt-6 rounded-lg bg-ink px-4 py-2 text-small font-medium text-paper"
+            >
+              Create a workspace
+            </button>
+          </form>
         </div>
       </div>
     );
