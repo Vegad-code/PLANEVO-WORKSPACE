@@ -1,11 +1,12 @@
 "use client";
 
 import type { Ref } from "react";
+import { usePathname } from "next/navigation";
 import { Icon } from "./planevo-icon";
 import { getTopBarAccountPresentation } from "./top-bar-state";
 
 export function TopBar({
-  breadcrumb = ["Home"],
+  breadcrumb,
   userDisplayName = null,
   userInitials = null,
   menuButtonRef,
@@ -19,6 +20,16 @@ export function TopBar({
   onOpenNavigation?: () => void;
   navigationOpen?: boolean;
 }) {
+  const pathname = usePathname();
+  const routeLabel =
+    pathname === "/"
+      ? "Home"
+      : pathname
+          .split("/")
+          .filter(Boolean)
+          .map((segment) => segment.replaceAll("-", " "))
+          .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1));
+  const breadcrumbItems = breadcrumb ?? (Array.isArray(routeLabel) ? routeLabel : [routeLabel]);
   const account = getTopBarAccountPresentation({
     userDisplayName,
     userInitials,
@@ -39,10 +50,10 @@ export function TopBar({
         </button>
         <nav aria-label="Breadcrumb" className="min-w-0">
           <ol className="flex min-w-0 items-center gap-2 text-small text-text-muted">
-            {breadcrumb.map((item, index) => (
+            {breadcrumbItems.map((item, index) => (
               <li key={item} className="flex min-w-0 items-center gap-2">
                 {index > 0 && <span aria-hidden="true">/</span>}
-                <span className={index === breadcrumb.length - 1 ? "truncate text-ink" : "truncate"}>
+                <span className={index === breadcrumbItems.length - 1 ? "truncate text-ink" : "truncate"}>
                   {item}
                 </span>
               </li>
