@@ -11,6 +11,7 @@ import {
   parseMonthParam,
 } from "@planevo/core/state/calendar-state";
 import { Icon } from "@/components/ui/planevo-icon";
+import { RecordDeleteHover } from "@/features/database/delete-record-control";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -19,6 +20,8 @@ export type MonthGridItem = {
   title: string;
   date: string;
   subtitle?: string;
+  recordId?: string;
+  databaseId?: string;
 };
 
 const NAV_BUTTON_CLASS =
@@ -35,10 +38,12 @@ export function MonthGrid({
   items,
   month,
   monthHrefBase,
+  onOpenRecord,
 }: {
   items: MonthGridItem[];
   month?: string;
   monthHrefBase?: string;
+  onOpenRecord?: (recordId: string) => void;
 }) {
   const initialMonth =
     parseMonthParam(month) ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -122,16 +127,56 @@ export function MonthGrid({
                 >
                   {day.getDate()}
                 </span>
-                <div className="mt-2 space-y-1">
-                  {dayItems.slice(0, 3).map((item) => (
-                    <div
-                      key={item.id}
-                      className="truncate rounded-md bg-slate-tint px-2 py-1 text-label text-ink"
-                      title={item.subtitle ? `${item.title} · ${item.subtitle}` : item.title}
-                    >
-                      {item.title}
-                    </div>
-                  ))}
+                <div className="mt-2 flex flex-col gap-1">
+                  {dayItems.slice(0, 3).map((item) => {
+                    const chip = (
+                      <div
+                        className={`truncate rounded-md bg-slate-tint px-2 py-1 text-label text-ink ${
+                          onOpenRecord && item.recordId
+                            ? "cursor-pointer outline-none hover:ring-1 hover:ring-border-strong"
+                            : ""
+                        }`}
+                        title={item.subtitle ? `${item.title} · ${item.subtitle}` : item.title}
+                        role={onOpenRecord && item.recordId ? "button" : undefined}
+                        tabIndex={onOpenRecord && item.recordId ? 0 : undefined}
+                        onClick={
+                          onOpenRecord && item.recordId
+                            ? (event) => {
+                                if ((event.target as HTMLElement).closest("button")) return;
+                                onOpenRecord(item.recordId!);
+                              }
+                            : undefined
+                        }
+                        onKeyDown={
+                          onOpenRecord && item.recordId
+                            ? (event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  onOpenRecord(item.recordId!);
+                                }
+                              }
+                            : undefined
+                        }
+                      >
+                        {item.title}
+                      </div>
+                    );
+
+                    if (!item.recordId || !item.databaseId) {
+                      return <div key={item.id}>{chip}</div>;
+                    }
+
+                    return (
+                      <RecordDeleteHover
+                        key={item.id}
+                        databaseId={item.databaseId}
+                        recordId={item.recordId}
+                        recordTitle={item.title}
+                      >
+                        {chip}
+                      </RecordDeleteHover>
+                    );
+                  })}
                   {dayItems.length > 3 && (
                     <p className="px-1 text-label text-text-muted">+{dayItems.length - 3} more</p>
                   )}

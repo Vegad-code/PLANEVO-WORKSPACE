@@ -5,6 +5,7 @@ import { Sidebar } from "@/features/shell/sidebar";
 import { TopBar } from "@/features/shell/top-bar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { Icon } from "@/components/ui/planevo-icon";
 import { TaskComposer } from "@/features/tasks/task-composer";
 import { CalendarView } from "@/features/calendar/calendar-view";
 import { FileEntry } from "@/features/files/file-entry";
@@ -20,6 +21,7 @@ import type { DisplayRecord } from "@planevo/core/queries/record-display";
 import { RecordBoard, RecordList } from "@/features/database/record-board";
 import { MonthGrid } from "@/features/database/month-grid";
 import { DeleteControlsPreview } from "./delete-controls-preview";
+import { RecordPeekPreview } from "./record-peek-preview";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
@@ -263,7 +265,7 @@ export default function DesignPage() {
         </div>
       </Section>
 
-      <Section title="Sidebar — expanded / hidden / hover-peek">
+      <Section title="Sidebar — expanded / hidden / inset peek">
         <div className="flex flex-wrap items-start gap-8">
           <div>
             <p className="mb-2 font-mono text-mono text-text-muted">Expanded · resizable</p>
@@ -272,31 +274,34 @@ export default function DesignPage() {
             </div>
           </div>
           <div>
-            <p className="mb-2 font-mono text-mono text-text-muted">Hidden · edge trigger</p>
+            <p className="mb-2 font-mono text-mono text-text-muted">Hidden · hamburger</p>
             <div className="relative h-128 w-64 overflow-hidden border border-border bg-paper">
-              <div
-                data-testid="design-edge-trigger"
-                className="absolute inset-y-0 left-0 w-3 bg-border/60"
-                title="Left-edge hover zone"
-              />
-              <p className="absolute left-6 top-4 text-small text-text-muted">
-                Canvas fills the frame. Hover the left edge to peek.
+              <div className="absolute top-3 left-3 flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary">
+                <Icon name="menu" className="size-4" />
+              </div>
+              <p className="absolute left-6 top-14 max-w-48 text-small text-text-muted">
+                Floating three-line control on the canvas. Hover edge or click to peek.
               </p>
             </div>
           </div>
           <div>
-            <p className="mb-2 font-mono text-mono text-text-muted">Hover-peek · overlay</p>
-            <div className="relative h-128 w-72 overflow-hidden border border-border bg-paper">
+            <p className="mb-2 font-mono text-mono text-text-muted">Inset peek · not full height</p>
+            <div className="relative h-128 w-80 overflow-hidden border border-border bg-paper">
               <Sidebar shell={DESIGN_PREVIEW_SHELL} view="peek" width={240} preview />
             </div>
           </div>
         </div>
-        <div className="mt-8">
-          <p className="mb-2 font-mono text-mono text-text-muted">
-            Collapsible sections · Pinned / Pages / Private
-          </p>
-          <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
-            <Sidebar shell={DESIGN_PREVIEW_SHELL} view="expanded" width={210} preview />
+      </Section>
+
+      <Section title="Record peek — center / side">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <p className="mb-2 font-mono text-mono text-text-muted">Center peek</p>
+            <RecordPeekPreview record={DESIGN_RECORDS[0]!} mode="center" />
+          </div>
+          <div>
+            <p className="mb-2 font-mono text-mono text-text-muted">Side peek</p>
+            <RecordPeekPreview record={DESIGN_RECORDS[0]!} mode="side" />
           </div>
         </div>
       </Section>

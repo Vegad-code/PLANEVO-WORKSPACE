@@ -53,9 +53,13 @@ export function TasksView({ data }: { data: TasksData }) {
             }
           />
         ) : view === "board" ? (
-          <RecordBoard records={data.tasks} statusOptions={data.statusOptions} />
+          <RecordBoard
+            records={data.tasks}
+            statusOptions={data.statusOptions}
+            databaseId={data.databaseId}
+          />
         ) : (
-          <RecordList records={data.tasks} />
+          <RecordList records={data.tasks} databaseId={data.databaseId} />
         )}
       </div>
     </div>

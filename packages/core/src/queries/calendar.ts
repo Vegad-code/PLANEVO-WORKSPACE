@@ -4,6 +4,8 @@ import { calendarRange } from "../state/calendar-state";
 
 export type CalendarItem = {
   id: string;
+  recordId: string;
+  databaseId: string;
   title: string;
   date: string;
   databaseName: string;
@@ -50,6 +52,8 @@ export async function loadCalendarMonth(
     hasCalendarDatabase: Boolean(calendarDatabaseResult.data),
     items: (rangeResult.data ?? []).map((row) => ({
       id: `${row.record_id}:${row.property_id}`,
+      recordId: row.record_id,
+      databaseId: row.database_id,
       title: row.title,
       date: row.occurs_at,
       databaseName: row.database_name,

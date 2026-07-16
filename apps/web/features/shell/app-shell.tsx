@@ -9,7 +9,7 @@ import {
   type MobileNavigationEvent,
 } from "@planevo/core/state/navigation-state";
 import { Sidebar } from "@/features/shell/sidebar";
-import { SidebarEdgeTrigger } from "@/features/shell/sidebar/sidebar-edge-trigger";
+import { SidebarPeekTrigger } from "@/features/shell/sidebar/sidebar-peek-trigger";
 import {
   createInitialSidebarState,
   getSidebarPresentation,
@@ -17,6 +17,7 @@ import {
   normalizeSidebarPreference,
   normalizeSidebarWidth,
   PEEK_DELAY_MS,
+  PREVENT_HOVER_MS,
   reduceSidebarState,
   type SidebarEvent,
   type SidebarState,
@@ -27,6 +28,7 @@ import { TopBar } from "@/features/shell/top-bar";
 const SIDEBAR_PREFERENCE_KEY = "planevo.sidebar.preference";
 const SIDEBAR_WIDTH_KEY = "planevo.sidebar.width";
 const DISMISS_PEEK_DELAY_MS = 100;
+const PEEK_EXIT_MS = 200;
 
 export function AppShell({
   children,
@@ -41,18 +43,31 @@ export function AppShell({
   );
   const [restored, setRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [peekExiting, setPeekExiting] = useState(false);
   const [mobileNavigation, dispatchMobileNavigation] = useReducer(
     reduceMobileNavigation,
     { open: false },
   );
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const peekGuardUntil = useRef(0);
+  const preventHoverUntil = useRef(0);
   const mobileMenuTrigger = useRef<HTMLButtonElement>(null);
   const topBarSettingsTrigger = useRef<HTMLButtonElement>(null);
   const settingsReturnFocus = useRef<HTMLElement | null>(null);
 
   const dispatch = useCallback((event: SidebarEvent) => {
-    setSidebarState((state) => reduceSidebarState(state, event));
+    setSidebarState((state) => {
+      const next = reduceSidebarState(state, event);
+      if (
+        event.type === "toggle" &&
+        state.preference === "expanded" &&
+        next.preference === "hidden"
+      ) {
+        preventHoverUntil.current = Date.now() + PREVENT_HOVER_MS;
+      }
+      return next;
+    });
   }, []);
 
   const clearPeekTimer = useCallback(() => {
@@ -108,8 +123,7 @@ export function AppShell({
         router.push("/search");
       } else if (event.key === "Escape" && sidebarState.peeked) {
         clearPeekTimer();
-        clearDismissTimer();
-        dispatch({ type: "dismiss-peek" });
+        scheduleDismissPeek();
       }
     }
 
@@ -131,9 +145,17 @@ export function AppShell({
     [clearDismissTimer, clearPeekTimer],
   );
 
+  function canHoverPeek() {
+    return (
+      sidebarState.preference === "hidden" &&
+      Date.now() >= preventHoverUntil.current
+    );
+  }
+
   function schedulePeek() {
-    if (sidebarState.preference !== "hidden") return;
+    if (!canHoverPeek()) return;
     clearDismissTimer();
+    setPeekExiting(false);
     if (sidebarState.peeked) return;
     clearPeekTimer();
     peekTimer.current = setTimeout(() => {
@@ -145,7 +167,18 @@ export function AppShell({
   function keepPeek() {
     clearPeekTimer();
     clearDismissTimer();
-    if (sidebarState.preference === "hidden" && !sidebarState.peeked) {
+    setPeekExiting(false);
+    if (canHoverPeek() && !sidebarState.peeked) {
+      dispatch({ type: "peek" });
+    }
+  }
+
+  function openPeekNow() {
+    clearPeekTimer();
+    clearDismissTimer();
+    setPeekExiting(false);
+    if (sidebarState.preference === "hidden") {
+      peekGuardUntil.current = Date.now() + PEEK_EXIT_MS + DISMISS_PEEK_DELAY_MS + 50;
       dispatch({ type: "peek" });
     }
   }
@@ -153,10 +186,14 @@ export function AppShell({
   function scheduleDismissPeek() {
     clearPeekTimer();
     clearDismissTimer();
+    if (!sidebarState.peeked) return;
+    if (Date.now() < peekGuardUntil.current) return;
+    setPeekExiting(true);
     dismissTimer.current = setTimeout(() => {
       dispatch({ type: "dismiss-peek" });
+      setPeekExiting(false);
       dismissTimer.current = null;
-    }, DISMISS_PEEK_DELAY_MS);
+    }, PEEK_EXIT_MS + DISMISS_PEEK_DELAY_MS);
   }
 
   function openSettings(returnFocus?: HTMLElement | null) {
@@ -185,6 +222,8 @@ export function AppShell({
   const sidebarPresentation = getSidebarPresentation(sidebarState);
   const isExpanded = sidebarPresentation.spacer === "expanded";
   const showEdgeTrigger = sidebarState.preference === "hidden";
+  const showRevealButton =
+    sidebarState.preference === "hidden" && !sidebarState.peeked;
   const showDesktopSidebar =
     sidebarPresentation.view === "expanded" || sidebarPresentation.view === "peek";
 
@@ -198,10 +237,13 @@ export function AppShell({
             ? ({
                 width: sidebarState.width,
                 ["--sidebar-width" as string]: `${sidebarState.width}px`,
+                transitionDuration: "var(--sidebar-motion-duration-enter)",
               } satisfies CSSProperties)
-            : undefined
+            : {
+                transitionDuration: "var(--sidebar-motion-duration-enter)",
+              }
         }
-        className={`relative hidden shrink-0 transition-[width] duration-200 motion-reduce:transition-none md:block ${
+        className={`relative hidden shrink-0 transition-[width] ease-out motion-reduce:transition-none md:block ${
           isExpanded ? "" : "w-0"
         }`}
       >
@@ -220,23 +262,12 @@ export function AppShell({
         )}
       </div>
 
-      {showEdgeTrigger && (
-        <SidebarEdgeTrigger
-          onMouseEnter={schedulePeek}
-          onMouseLeave={scheduleDismissPeek}
-          onFocus={() => {
-            clearPeekTimer();
-            clearDismissTimer();
-            dispatch({ type: "peek" });
-          }}
-        />
-      )}
-
       {showDesktopSidebar && sidebarPresentation.view === "peek" && (
         <Sidebar
           shell={shell}
           view="peek"
           width={sidebarState.width}
+          peekExiting={peekExiting}
           onToggle={() => dispatch({ type: "toggle" })}
           onPin={() => dispatch({ type: "pin" })}
           onMouseEnter={keepPeek}
@@ -260,6 +291,7 @@ export function AppShell({
           onOpenNavigation={() => dispatchMobileNavigation({ type: "open" })}
           onOpenSettings={() => openSettings()}
           navigationOpen={mobileNavigation.open}
+          showSidebarReveal={showRevealButton}
         />
         <main aria-label="Workspace canvas" className="min-h-0 flex-1 overflow-auto bg-paper">
           {children}
@@ -281,6 +313,15 @@ export function AppShell({
         shell={shell}
         onOpenChange={handleSettingsOpenChange}
       />
+
+      {showEdgeTrigger && (
+        <SidebarPeekTrigger
+          showRevealButton={showRevealButton}
+          onOpenPeek={openPeekNow}
+          onSchedulePeek={schedulePeek}
+          onScheduleDismissPeek={scheduleDismissPeek}
+        />
+      )}
     </div>
   );
 }

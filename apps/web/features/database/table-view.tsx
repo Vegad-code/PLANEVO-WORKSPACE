@@ -9,8 +9,11 @@ import { propertyValueToString } from "@planevo/core/validation/property-values"
 import {
   createProperty,
   createRecord,
+  deleteProperty,
+  deleteRecord,
   upsertRecordValue,
 } from "@/app/(workspace)/databases/[databaseId]/actions";
+import { DeleteEntityControl } from "@/components/ui/delete-entity-control";
 
 const CELL_INPUT_CLASS =
   "h-8 w-full min-w-28 rounded-md border border-transparent bg-transparent px-2 text-small outline-none transition-colors hover:border-border focus:border-ink focus:bg-surface-raised motion-reduce:transition-none";
@@ -90,6 +93,32 @@ function Cell({
       className={`${CELL_INPUT_CLASS} ${error ? "border-brick" : ""}`}
       {...errorProps}
     />
+  );
+}
+
+function PropertyHeader({
+  databaseId,
+  property,
+}: {
+  databaseId: string;
+  property: DatabasePropertyRow;
+}) {
+  if (property.is_primary) {
+    return <span>{property.name}</span>;
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      {property.name}
+      <DeleteEntityControl
+        compact
+        label={`Delete ${property.name}`}
+        title={`Delete “${property.name}”?`}
+        description="This removes the property and every value stored in it across all records. This can't be undone."
+        confirmLabel="Delete property"
+        onConfirm={() => deleteProperty({ databaseId, propertyId: property.id })}
+      />
+    </span>
   );
 }
 
@@ -174,7 +203,13 @@ function AddPropertyMenu({ databaseId }: { databaseId: string }) {
   );
 }
 
-export function TableView({ bundle }: { bundle: DatabaseBundle }) {
+export function TableView({
+  bundle,
+  onOpenRecord,
+}: {
+  bundle: DatabaseBundle;
+  onOpenRecord?: (recordId: string) => void;
+}) {
   const { database, properties, records } = bundle;
   const [isPending, startTransition] = useTransition();
 
@@ -189,7 +224,7 @@ export function TableView({ bundle }: { bundle: DatabaseBundle }) {
                 scope="col"
                 className="whitespace-nowrap px-3 py-2 text-label uppercase text-text-muted"
               >
-                {property.name}
+                <PropertyHeader databaseId={database.id} property={property} />
                 <span className="ml-1.5 font-normal normal-case text-text-muted/70">
                   {property.type}
                 </span>
@@ -201,16 +236,51 @@ export function TableView({ bundle }: { bundle: DatabaseBundle }) {
           </tr>
         </thead>
         <tbody>
-          {records.map((record) => (
-            <tr key={record.id} className="border-b border-border last:border-b-0">
-              {properties.map((property) => (
-                <td key={property.id} className="px-1.5 py-1 align-middle">
-                  <Cell record={record} property={property} />
+          {records.map((record) => {
+            const recordTitle =
+              propertyValueToString(
+                record.values[properties.find((property) => property.is_primary)?.id ?? ""],
+              ) || "Untitled";
+
+            return (
+              <tr
+                key={record.id}
+                className="group relative border-b border-border last:border-b-0"
+                onClick={(event) => {
+                  if (!onOpenRecord) return;
+                  const target = event.target as HTMLElement;
+                  if (
+                    target.closest(
+                      "input, select, button, a, textarea, [role='menuitem']",
+                    )
+                  ) {
+                    return;
+                  }
+                  onOpenRecord(record.id);
+                }}
+              >
+                {properties.map((property) => (
+                  <td key={property.id} className="px-1.5 py-1 align-middle">
+                    <Cell record={record} property={property} />
+                  </td>
+                ))}
+                <td className="w-10 px-1 py-1 align-middle">
+                  <div className="opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
+                    <DeleteEntityControl
+                      compact
+                      label={`Delete ${recordTitle}`}
+                      title={`Delete “${recordTitle}”?`}
+                      description="This permanently removes the record and all of its property values. This can't be undone."
+                      confirmLabel="Delete record"
+                      onConfirm={() =>
+                        deleteRecord({ databaseId: database.id, recordId: record.id })
+                      }
+                    />
+                  </div>
                 </td>
-              ))}
-              <td aria-hidden="true" />
-            </tr>
-          ))}
+              </tr>
+            );
+          })}
           {records.length === 0 && (
             <tr>
               <td

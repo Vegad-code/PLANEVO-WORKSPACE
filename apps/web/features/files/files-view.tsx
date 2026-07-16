@@ -2,13 +2,7 @@ import Link from "next/link";
 import type { FilesData } from "@/lib/queries/files";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/planevo-icon";
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) return "Planevo page";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { FileRow } from "@/features/files/file-row";
 
 export function FilesView({ data }: { data: FilesData }) {
   const action = (
@@ -39,25 +33,9 @@ export function FilesView({ data }: { data: FilesData }) {
           />
         ) : (
           <div className="overflow-hidden rounded-card border border-border bg-surface-raised">
-            {data.files.map((file) => {
-              const content = (
-                <>
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-paper text-text-secondary"><Icon name={file.pageId ? "document" : "files"} className="size-5" /></span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-body font-medium">{file.name}</span>
-                    <span className="mt-1 block text-small text-text-muted">{formatBytes(file.sizeBytes)} · {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(file.createdAt))}</span>
-                  </span>
-                  <span className="rounded-full bg-slate-tint px-2 py-1 text-label capitalize text-ink">{file.status}</span>
-                </>
-              );
-              return file.previewUrl && file.pageId ? (
-                <Link key={file.id} href={file.previewUrl} className="flex items-center gap-4 border-b border-border px-4 py-4 outline-none last:border-b-0 hover:bg-paper focus-visible:bg-paper">{content}</Link>
-              ) : file.previewUrl ? (
-                <a key={file.id} href={file.previewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-4 border-b border-border px-4 py-4 outline-none last:border-b-0 hover:bg-paper focus-visible:bg-paper">{content}</a>
-              ) : (
-                <div key={file.id} className="flex items-center gap-4 border-b border-border px-4 py-4 last:border-b-0">{content}</div>
-              );
-            })}
+            {data.files.map((file) => (
+              <FileRow key={file.id} file={file} />
+            ))}
           </div>
         )}
       </div>

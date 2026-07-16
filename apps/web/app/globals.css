@@ -62,6 +62,13 @@
   --spacing-sidebar: 210px;
   --sidebar-width: var(--spacing-sidebar);
   --spacing-rail: 56px; /* retired icon-rail; kept for any residual utilities */
+
+  /* Sidebar motion — Notion-caliber peek/expand timing */
+  --sidebar-motion-duration-enter: 280ms;
+  --sidebar-motion-duration-peek: 250ms;
+  --sidebar-motion-duration-peek-exit: 200ms;
+  --sidebar-motion-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --sidebar-motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
 }
 
 /* Minimal mode (design-brief §1): mutes marigold/brick/meadow toward neutral;
@@ -109,6 +116,46 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-body);
   line-height: var(--text-body--line-height);
+}
+
+@keyframes sidebar-peek-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sidebar-peek-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+[data-sidebar-view="peek"] {
+  animation: sidebar-peek-in var(--sidebar-motion-duration-peek) var(--sidebar-motion-ease-out)
+    forwards;
+}
+
+[data-sidebar-view="peek"][data-sidebar-peek-exit="true"] {
+  animation: sidebar-peek-out var(--sidebar-motion-duration-peek-exit) var(--sidebar-motion-ease-in)
+    forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sidebar-view="peek"] {
+    animation: none;
+  }
 }
 
 /* BlockNote inherits the token layer — never its own palette or fonts. */

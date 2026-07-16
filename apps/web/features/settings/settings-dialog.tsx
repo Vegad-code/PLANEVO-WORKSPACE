@@ -15,6 +15,7 @@ import { AppearancePane } from "./appearance-pane";
 import { BillingPane, type Plan } from "./billing-pane";
 import { ExportPane } from "./export-pane";
 import { IntegrationsPane } from "./integrations-pane";
+import { WorkspaceDangerPane } from "./workspace-danger-pane";
 
 export { BillingSummary } from "./billing-pane";
 export { IntegrationRow } from "./integrations-pane";
@@ -46,7 +47,17 @@ function SettingsPane({
 }) {
   switch (section) {
     case "account":
-      return <AccountPane settings={settings} onChange={onSettingsChange} />;
+      return (
+        <div className="space-y-10">
+          <AccountPane settings={settings} onChange={onSettingsChange} />
+          {shell.workspace && (
+            <WorkspaceDangerPane
+              workspaceId={shell.workspace.id}
+              workspaceName={shell.workspace.name}
+            />
+          )}
+        </div>
+      );
     case "export":
       return <ExportPane shell={shell} />;
     case "integrations":

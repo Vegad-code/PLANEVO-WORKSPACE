@@ -1,7 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireDataAccess } from "@/lib/data/access";
+import {
+  clearRecentItems,
+  deleteError,
+  virtualPageStoragePath,
+  type DeleteResult,
+} from "@/lib/mutations/delete-entities";
 
 // BlockNote documents are arrays of block objects. Cap the serialized size so
 // a runaway document can't blow up the row (~2MB of JSON).
@@ -96,4 +103,40 @@ export async function updatePageTitle(pageId: string, title: string): Promise<vo
     .eq("id", pageId);
   if (error) throw error;
   revalidatePath("/", "layout");
+}
+
+export async function deletePage(pageId: string): Promise<DeleteResult> {
+  try {
+    const access = await requireDataAccess();
+    const { data: page, error: pageError } = await access.client
+      .from("pages")
+      .select("id, workspace_id, workspaces!inner(owner_id)")
+      .eq("id", pageId)
+      .eq("workspaces.owner_id", access.ownerId)
+      .maybeSingle();
+    if (pageError) throw pageError;
+    if (!page) return { ok: false, error: "Page not found." };
+
+    const { error: fileError } = await access.client
+      .from("file_sources")
+      .delete()
+      .or(`page_id.eq.${pageId},storage_path.eq.${virtualPageStoragePath(pageId)}`);
+    if (fileError) throw fileError;
+
+    await clearRecentItems(access, {
+      workspaceId: page.workspace_id,
+      targetType: "page",
+      targetId: pageId,
+    });
+
+    const { error } = await access.client.from("pages").delete().eq("id", pageId);
+    if (error) throw error;
+
+    revalidatePath("/files");
+    revalidatePath("/", "layout");
+  } catch (cause) {
+    return deleteError(cause, "Failed to delete the page.");
+  }
+
+  redirect("/");
 }

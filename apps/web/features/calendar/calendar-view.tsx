@@ -31,6 +31,8 @@ export function CalendarView({ data, month }: { data: CalendarData; month?: stri
         <MonthGrid
           items={data.items.map((item) => ({
             id: item.id,
+            recordId: item.recordId,
+            databaseId: item.databaseId,
             title: item.title,
             date: item.date,
             subtitle: item.databaseName,

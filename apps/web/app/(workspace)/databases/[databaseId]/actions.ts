@@ -10,6 +10,11 @@ import {
 import { normalizePropertyValue } from "@planevo/core/validation/property-values";
 import { requireDataAccess } from "@/lib/data/access";
 import type { DataAccess } from "@/lib/data/access";
+import {
+  clearRecentItems,
+  deleteError,
+  type DeleteResult,
+} from "@/lib/mutations/delete-entities";
 
 // Every action re-verifies ownership through a workspaces!inner join so the
 // dev-mode service-role client gets the same authorization RLS provides.
@@ -170,4 +175,109 @@ export async function duplicateDatabase(databaseId: string): Promise<void> {
   });
   revalidatePath("/", "layout");
   redirect(`/databases/${result.databaseId}`);
+}
+
+export async function deleteRecord(input: {
+  databaseId: string;
+  recordId: string;
+}): Promise<DeleteResult> {
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+    const { data: record, error: recordError } = await access.client
+      .from("records")
+      .select("id")
+      .eq("id", input.recordId)
+      .eq("database_id", input.databaseId)
+      .maybeSingle();
+    if (recordError) throw recordError;
+    if (!record) return { ok: false, error: "Record not found." };
+
+    const { data: database, error: databaseError } = await access.client
+      .from("databases")
+      .select("workspace_id")
+      .eq("id", input.databaseId)
+      .maybeSingle();
+    if (databaseError) throw databaseError;
+    if (!database) return { ok: false, error: "Database not found." };
+
+    await clearRecentItems(access, {
+      workspaceId: database.workspace_id,
+      targetType: "record",
+      targetId: input.recordId,
+    });
+
+    const { error } = await access.client.from("records").delete().eq("id", input.recordId);
+    if (error) throw error;
+
+    revalidatePath(`/databases/${input.databaseId}`);
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (cause) {
+    return deleteError(cause, "Failed to delete the record.");
+  }
+}
+
+export async function deleteProperty(input: {
+  databaseId: string;
+  propertyId: string;
+}): Promise<DeleteResult> {
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+    const { data: property, error: propertyError } = await access.client
+      .from("database_properties")
+      .select("id, is_primary")
+      .eq("id", input.propertyId)
+      .eq("database_id", input.databaseId)
+      .maybeSingle();
+    if (propertyError) throw propertyError;
+    if (!property) return { ok: false, error: "Property not found." };
+    if (property.is_primary) {
+      return { ok: false, error: "The primary title property can't be deleted." };
+    }
+
+    const { error } = await access.client
+      .from("database_properties")
+      .delete()
+      .eq("id", input.propertyId)
+      .eq("database_id", input.databaseId);
+    if (error) throw error;
+
+    revalidatePath(`/databases/${input.databaseId}`);
+    return { ok: true };
+  } catch (cause) {
+    return deleteError(cause, "Failed to delete the property.");
+  }
+}
+
+export async function deleteDatabase(databaseId: string): Promise<DeleteResult> {
+  try {
+    const access = await requireOwnedDatabase(databaseId);
+    const { data: database, error: databaseError } = await access.client
+      .from("databases")
+      .select("id, workspace_id, name, template_type")
+      .eq("id", databaseId)
+      .maybeSingle();
+    if (databaseError) throw databaseError;
+    if (!database) return { ok: false, error: "Database not found." };
+
+    await clearRecentItems(access, {
+      workspaceId: database.workspace_id,
+      targetType: "database",
+      targetId: databaseId,
+    });
+
+    const { error } = await access.client.from("databases").delete().eq("id", databaseId);
+    if (error) throw error;
+
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+    revalidatePath("/files");
+    revalidatePath("/", "layout");
+  } catch (cause) {
+    return deleteError(cause, "Failed to delete the database.");
+  }
+
+  redirect("/");
 }

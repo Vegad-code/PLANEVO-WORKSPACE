@@ -2,8 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { requireDataAccess, requireMutationDataAccess } from "@/lib/data/access";
 import { WORKSPACE_COOKIE } from "@/lib/data/current-workspace";
+import {
+  deleteError,
+  removeWorkspaceStoragePrefix,
+  type DeleteResult,
+} from "@/lib/mutations/delete-entities";
 import {
   createCalendarDatabaseWithViews as createCalendarFoundation,
   createTaskWithRequiredFoundation as createTaskFoundation,
@@ -110,5 +116,84 @@ export async function createTaskWithRequiredFoundation(
     () => createTaskFoundation(input),
     "Failed to create the task.",
   );
+}
+
+export async function renameWorkspace(input: {
+  workspaceId: string;
+  name: string;
+}): Promise<ActionResult> {
+  const name = input.name.trim();
+  if (!name) return { success: false, error: "Workspace name is required." };
+
+  try {
+    const access = await requireDataAccess();
+    const { error } = await access.client
+      .from("workspaces")
+      .update({ name })
+      .eq("id", input.workspaceId)
+      .eq("owner_id", access.ownerId);
+    if (error) throw error;
+    revalidatePath("/", "layout");
+    return { success: true, data: undefined };
+  } catch (cause) {
+    return { success: false, error: errorMessage(cause, "Failed to rename the workspace.") };
+  }
+}
+
+export async function deleteWorkspace(input: {
+  workspaceId: string;
+  confirmationName: string;
+}): Promise<DeleteResult> {
+  try {
+    const access = await requireDataAccess();
+    const { data: workspace, error: workspaceError } = await access.client
+      .from("workspaces")
+      .select("id, name")
+      .eq("id", input.workspaceId)
+      .eq("owner_id", access.ownerId)
+      .maybeSingle();
+    if (workspaceError) throw workspaceError;
+    if (!workspace) return { ok: false, error: "Workspace not found." };
+    if (input.confirmationName.trim() !== workspace.name) {
+      return { ok: false, error: "The workspace name doesn't match." };
+    }
+
+    await removeWorkspaceStoragePrefix(access, input.workspaceId);
+
+    const store = await cookies();
+    const activeId = store.get(WORKSPACE_COOKIE)?.value;
+    if (activeId === input.workspaceId) {
+      const { data: nextWorkspace, error: nextError } = await access.client
+        .from("workspaces")
+        .select("id")
+        .eq("owner_id", access.ownerId)
+        .neq("id", input.workspaceId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (nextError) throw nextError;
+      if (nextWorkspace) {
+        store.set(WORKSPACE_COOKIE, nextWorkspace.id, {
+          path: "/",
+          maxAge: 60 * 60 * 24 * 365,
+          sameSite: "lax",
+        });
+      } else {
+        store.delete(WORKSPACE_COOKIE);
+      }
+    }
+
+    const { error } = await access.client
+      .from("workspaces")
+      .delete()
+      .eq("id", input.workspaceId);
+    if (error) throw error;
+
+    revalidatePath("/", "layout");
+  } catch (cause) {
+    return deleteError(cause, "Failed to delete the workspace.");
+  }
+
+  redirect("/");
 }
 

@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 import { requireMutationDataAccess } from "@/lib/data/access";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { createWorkspace } from "@/lib/mutations/create-foundations";
+import {
+  clearRecentItems,
+  deleteError,
+  type DeleteResult,
+} from "@/lib/mutations/delete-entities";
 
 async function currentWorkspaceId(): Promise<{ workspaceId: string; ownerId: string }> {
   const current = await getCurrentWorkspace();
@@ -55,4 +60,38 @@ export async function saveConversationMessage(formData: FormData): Promise<void>
   if (error) throw error;
   revalidatePath(`/ai/${conversationId}`);
   redirect(`/ai/${conversationId}`);
+}
+
+export async function deleteConversation(conversationId: string): Promise<DeleteResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const { workspaceId } = await currentWorkspaceId();
+    const { data: conversation, error: conversationError } = await access.client
+      .from("ai_conversations")
+      .select("id")
+      .eq("id", conversationId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (conversationError) throw conversationError;
+    if (!conversation) return { ok: false, error: "Conversation not found." };
+
+    await clearRecentItems(access, {
+      workspaceId,
+      targetType: "conversation",
+      targetId: conversationId,
+    });
+
+    const { error } = await access.client
+      .from("ai_conversations")
+      .delete()
+      .eq("id", conversationId);
+    if (error) throw error;
+
+    revalidatePath("/ai");
+    revalidatePath("/", "layout");
+  } catch (cause) {
+    return deleteError(cause, "Failed to delete the conversation.");
+  }
+
+  redirect("/ai");
 }

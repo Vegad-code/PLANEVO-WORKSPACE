@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { recordRecentItem } from "@planevo/api/rpc";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { PageEditor } from "@/features/editor/page-editor";
+import { PageHeaderActions } from "@/features/editor/page-header-actions";
 import { PageTitle } from "@/features/editor/page-title";
 import { Icon } from "@/components/ui/planevo-icon";
 
@@ -44,8 +45,11 @@ export default async function PageRoute({
           Open database
         </Link>
       )}
-      <PageTitle pageId={page.id} initialTitle={page.title} />
-      <div className="mt-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <PageTitle pageId={page.id} initialTitle={page.title} />
+        <PageHeaderActions pageId={page.id} pageTitle={page.title} />
+      </div>
+      <div>
         <PageEditor pageId={page.id} initialContent={page.content_json} />
       </div>
     </div>

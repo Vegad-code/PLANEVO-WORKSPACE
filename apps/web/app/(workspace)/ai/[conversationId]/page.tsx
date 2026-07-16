@@ -3,6 +3,7 @@ import { recordRecentItem } from "@planevo/api/rpc";
 import type { Json } from "@planevo/core/types/database.types";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { Icon } from "@/components/ui/planevo-icon";
+import { ConversationHeaderActions } from "@/features/ai/conversation-header-actions";
 
 function messageText(content: Json): string {
   if (!Array.isArray(content)) return "";
@@ -47,7 +48,16 @@ export default async function AiConversationPage({ params }: { params: Promise<{
 
   return (
     <div className="mx-auto flex min-h-full max-w-3xl flex-col px-5 py-6 sm:px-8">
-      <div className="border-b border-border pb-4"><p className="text-label uppercase text-text-muted">Planevo AI</p><h1 className="mt-2 text-h2">{conversation.title}</h1></div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+        <div>
+          <p className="text-label uppercase text-text-muted">Planevo AI</p>
+          <h1 className="mt-2 text-h2">{conversation.title}</h1>
+        </div>
+        <ConversationHeaderActions
+          conversationId={conversation.id}
+          conversationTitle={conversation.title}
+        />
+      </div>
       <div className="flex-1 space-y-4 py-6">
         {(messages ?? []).length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center text-center"><Icon name="ai" className="size-6 text-slate" /><p className="mt-4 text-body font-medium">This conversation is empty</p><p className="mt-2 text-small text-text-muted">Planevo AI answers arrive with the model layer. Notes you send are saved here meanwhile.</p></div>

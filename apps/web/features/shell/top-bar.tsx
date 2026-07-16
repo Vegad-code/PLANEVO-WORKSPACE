@@ -14,6 +14,7 @@ export function TopBar({
   onOpenNavigation,
   onOpenSettings,
   navigationOpen = false,
+  showSidebarReveal = false,
 }: {
   breadcrumb?: string[];
   userDisplayName?: string | null;
@@ -23,6 +24,8 @@ export function TopBar({
   onOpenNavigation?: () => void;
   onOpenSettings?: () => void;
   navigationOpen?: boolean;
+  /** Desktop: reserve space for the floating sidebar reveal control. */
+  showSidebarReveal?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -42,7 +45,11 @@ export function TopBar({
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-paper px-4 sm:px-6">
-      <div className="flex min-w-0 items-center gap-2">
+      <div
+        className={`flex min-w-0 items-center gap-2 ${
+          showSidebarReveal ? "md:pl-11" : ""
+        }`}
+      >
         <button
           ref={menuButtonRef}
           type="button"

@@ -17,6 +17,7 @@
     "@planevo/core": "*",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.5",
+    "framer-motion": "^12.42.2",
     "geist": "^1.7.2",
     "iconoir-react": "7.11.1",
     "next": "16.2.10",

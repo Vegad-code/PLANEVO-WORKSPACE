@@ -109,15 +109,20 @@ Sentence case everywhere. Never Title Case, never ALL CAPS (except the label sty
   (2026-07-15):** Notion-style full-hide collapse (replaces the 2026-07-14 icon rail):
   1. **Expanded** — persisted width in the layout grid; drag the right edge to resize;
      click the resize handle (without dragging) or `<<` to hide.
-  2. **Hidden** — 0px spacer; canvas is full-width. An invisible left-edge zone (~12px)
+  2. **Hidden** — 0px spacer; canvas is full-width. A floating three-line (hamburger)
+     control sits at the top-left of the canvas; an invisible left-edge zone also
      reveals the sidebar on hover.
-  3. **Hover-peek** — floating overlay at the persisted width; dismissed on mouse-leave /
-     Esc; lock/pin control expands it back into the layout.
+  3. **Hover-peek** — **inset floating card** (not full viewport height): ~52px from top,
+     rounded, bordered, floats over the canvas; dismissed on mouse-leave / Esc; lock/pin
+     expands it back into the layout. ~500ms prevent-hover after collapse.
   ~200ms hover-intent delay so the peek doesn't flicker; `⌘\` toggles expanded/hidden;
   preference + width persist per user; canvas never reflows during a peek; honor
   reduced-motion. Sidebar footer reserves a slot for the plan/credit card (Plus/Pro see
   the meter, Free sees nothing). Workspace menu carries Settings / Invite / Upgrade /
   Log out (Notion-style).
+
+  **Record peek (database only):** opening a record uses `?p=&peek=center|side` — center
+  modal or right side panel with a mode switcher; Esc/backdrop closes.
 
 ---
 

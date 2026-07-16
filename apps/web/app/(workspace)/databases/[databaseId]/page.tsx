@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { recordRecentItem } from "@planevo/api/rpc";
 import { loadDatabaseBundle } from "@planevo/core/queries/records";
@@ -57,7 +58,9 @@ export default async function DatabaseRoute({
         )}
       </div>
       <div className="mt-6">
-        <DatabaseWorkspace bundle={bundle} />
+        <Suspense fallback={<p className="text-small text-text-muted">Loading database…</p>}>
+          <DatabaseWorkspace bundle={bundle} />
+        </Suspense>
         {bundle.records.length >= limit && limit < ROW_MAX && (
           <div className="mt-4 text-center">
             <Link

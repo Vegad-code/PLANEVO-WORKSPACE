@@ -4,6 +4,11 @@ import { useEffect, useState, type CSSProperties, type FocusEventHandler, type M
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 import type { SidebarView } from "@planevo/core/state/sidebar-state";
 import {
+  SIDEBAR_PEEK_BOTTOM_GAP_PX,
+  SIDEBAR_PEEK_LEFT_OFFSET_PX,
+  SIDEBAR_PEEK_TOP_OFFSET_PX,
+} from "@planevo/core/state/sidebar-state";
+import {
   DEFAULT_SIDEBAR_SECTION_STATE,
   normalizeSectionState,
   reduceSectionCollapse,
@@ -28,6 +33,7 @@ export type SidebarProps = {
   view: SidebarView;
   width?: number;
   preview?: boolean;
+  peekExiting?: boolean;
   onToggle?: () => void;
   onPin?: () => void;
   onWidthChange?: (width: number) => void;
@@ -46,6 +52,7 @@ export function Sidebar({
   view,
   width,
   preview = false,
+  peekExiting = false,
   onToggle,
   onPin,
   onWidthChange,
@@ -90,30 +97,48 @@ export function Sidebar({
 
   if (hidden) return null;
 
-  const placement = overlay
-    ? preview
-      ? "absolute inset-y-0 left-0"
-      : "fixed inset-y-0 left-0"
-    : "relative h-full";
-
   const widthStyle: CSSProperties | undefined =
     typeof width === "number"
       ? { width, ["--sidebar-width" as string]: `${width}px` }
       : undefined;
 
+  const placement = overlay
+    ? preview
+      ? "absolute left-0"
+      : "fixed left-0"
+    : "relative h-full";
+
+  const peekInsetStyle: CSSProperties | undefined = overlay
+    ? {
+        top: SIDEBAR_PEEK_TOP_OFFSET_PX,
+        bottom: SIDEBAR_PEEK_BOTTOM_GAP_PX,
+        left: SIDEBAR_PEEK_LEFT_OFFSET_PX,
+        height: `calc(100dvh - ${SIDEBAR_PEEK_TOP_OFFSET_PX + SIDEBAR_PEEK_BOTTOM_GAP_PX}px)`,
+        ...widthStyle,
+      }
+    : widthStyle;
+
   return (
     <aside
       aria-label="Workspace sidebar"
       data-sidebar-view={view}
+      data-sidebar-peek-exit={peekExiting ? "true" : undefined}
       data-testid="sidebar"
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onFocusCapture={onFocusCapture}
       onBlurCapture={onBlurCapture}
-      style={widthStyle}
-      className={`${placement} z-40 flex flex-col overflow-hidden border-r border-border bg-sidebar transition-[width] duration-200 motion-reduce:transition-none ${
-        widthStyle ? "" : "w-sidebar"
-      }`}
+      style={{
+        ...peekInsetStyle,
+        ...(overlay
+          ? undefined
+          : { transitionDuration: "var(--sidebar-motion-duration-enter)" }),
+      }}
+      className={`${placement} z-40 box-border flex flex-col overflow-hidden bg-sidebar motion-reduce:transition-none ${
+        overlay
+          ? "rounded-xl border border-border"
+          : "border-r border-border transition-[width] ease-out"
+      } ${peekInsetStyle ? "" : "w-sidebar"}`}
     >
       <SidebarHeader
         shell={shell}
