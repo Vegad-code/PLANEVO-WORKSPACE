@@ -17,11 +17,8 @@ import {
   type SidebarSectionState,
 } from "@planevo/core/state/sidebar-section-state";
 import { SidebarHeader } from "@/features/shell/sidebar/sidebar-header";
-import { SidebarQuickActions } from "@/features/shell/sidebar/sidebar-quick-actions";
-import {
-  SidebarDestinationNav,
-  SidebarHomeNav,
-} from "@/features/shell/sidebar/sidebar-primary-nav";
+import { SidebarNewButton } from "@/features/shell/sidebar/sidebar-new-button";
+import { SidebarPrimaryNav } from "@/features/shell/sidebar/sidebar-primary-nav";
 import { SidebarSections } from "@/features/shell/sidebar/sidebar-sections";
 import { SidebarFooter } from "@/features/shell/sidebar/sidebar-footer";
 import { SidebarResizeHandle } from "@/features/shell/sidebar/sidebar-resize-handle";
@@ -71,13 +68,10 @@ export function Sidebar({
   const [sectionState, setSectionState] = useState<SidebarSectionState>(
     DEFAULT_SIDEBAR_SECTION_STATE,
   );
-  const [sectionsRestored, setSectionsRestored] = useState(false);
+  const [sectionsRestored, setSectionsRestored] = useState(preview);
 
   useEffect(() => {
-    if (preview) {
-      setSectionsRestored(true);
-      return;
-    }
+    if (preview) return;
     const timer = window.setTimeout(() => {
       setSectionState(normalizeSectionState(localStorage.getItem(SECTION_STORAGE_KEY)));
       setSectionsRestored(true);
@@ -151,9 +145,8 @@ export function Sidebar({
       />
 
       <div className="flex min-h-0 flex-1 flex-col py-2">
-        <SidebarHomeNav onNavigate={onNavigate} />
-        <SidebarQuickActions onNavigate={onNavigate} />
-        <SidebarDestinationNav onNavigate={onNavigate} />
+        <SidebarNewButton onNavigate={onNavigate} />
+        <SidebarPrimaryNav onNavigate={onNavigate} />
         <div className="mt-3 min-h-0 flex-1">
           <SidebarSections
             pages={shell.pages}
@@ -162,7 +155,11 @@ export function Sidebar({
             onNavigate={onNavigate}
           />
         </div>
-        <SidebarFooter onNavigate={onNavigate} />
+        <SidebarFooter
+          userDisplayName={shell.userDisplayName}
+          userInitials={shell.userInitials}
+          onOpenSettings={onOpenSettings}
+        />
       </div>
 
       {showResize && onWidthChange && (

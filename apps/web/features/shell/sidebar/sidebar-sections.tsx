@@ -37,11 +37,11 @@ export function SidebarSections({
 
       <CollapsibleSection
         id="pages"
-        title="Pages"
+        title="My space"
         collapsed={sectionState.pages}
         onToggle={() => onToggleSection("pages")}
       >
-        <nav aria-label="Pages" className="flex flex-col gap-0.5">
+        <nav aria-label="My space" className="flex flex-col gap-0.5">
           {pages.map((page) => (
             <PageNavItem
               key={page.id}

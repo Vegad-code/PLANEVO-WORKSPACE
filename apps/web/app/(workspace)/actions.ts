@@ -12,6 +12,7 @@ import {
 } from "@/lib/mutations/delete-entities";
 import {
   createCalendarDatabaseWithViews as createCalendarFoundation,
+  createDocumentPage as createDocumentFoundation,
   createTaskWithRequiredFoundation as createTaskFoundation,
   createWorkspace as createWorkspaceFoundation,
   type CreateTaskWithRequiredFoundationInput,
@@ -116,6 +117,17 @@ export async function createTaskWithRequiredFoundation(
     () => createTaskFoundation(input),
     "Failed to create the task.",
   );
+}
+
+export async function createPageAndOpen(): Promise<void> {
+  const { getCurrentWorkspace } = await import("@/lib/data/current-workspace");
+  const current = await getCurrentWorkspace();
+  const workspaceId = current
+    ? current.workspace.id
+    : (await createWorkspaceFoundation({ name: "My workspace" })).workspaceId;
+  const { pageId } = await createDocumentFoundation({ workspaceId });
+  revalidatePath("/", "layout");
+  redirect(`/pages/${pageId}`);
 }
 
 export async function renameWorkspace(input: {

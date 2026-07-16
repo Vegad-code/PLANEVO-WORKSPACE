@@ -10,6 +10,9 @@ import { TaskComposer } from "@/features/tasks/task-composer";
 import { CalendarView } from "@/features/calendar/calendar-view";
 import { FileEntry } from "@/features/files/file-entry";
 import { HomeCommandCenter } from "@/features/home/home-command-center";
+import { ActionCard } from "@/features/home/action-card";
+import { PlanevoComposer } from "@/features/home/planevo-composer";
+import { SidebarNewButton } from "@/features/shell/sidebar/sidebar-new-button";
 import { LoginForm } from "../(auth)/login/login-form";
 import {
   BillingSummary,
@@ -438,9 +441,29 @@ export default function DesignPage() {
         <DeleteControlsPreview />
       </Section>
 
-      <Section title="Home command center — first run">
+      <Section title="Home — Acme-layout launch hub (chips, greeting, cards, composer)">
         <div className="rounded-xl border border-border bg-paper">
           <HomeCommandCenter data={{ state: "first-run", workspaceId: null, workspaceName: null, userName: "Anthony", recents: [] }} />
+        </div>
+      </Section>
+
+      <Section title="Home action card — link / form / button triggers">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ActionCard icon="page" title="Create new page" description="Start writing freely." href="/design" />
+          <ActionCard icon="canvas" title="Open workspace" description="Build with pages, databases, and records." href="/design" />
+          <ActionCard icon="calendar" title="Connect calendar" description="Bring dates into Planevo." href="/design" />
+        </div>
+      </Section>
+
+      <Section title="Home composer — search, create, or ask Planevo">
+        <div className="mx-auto max-w-2xl">
+          <PlanevoComposer />
+        </div>
+      </Section>
+
+      <Section title="Sidebar new button — split action with create menu">
+        <div className="w-sidebar rounded-xl border border-border bg-sidebar pb-32 pt-1">
+          <SidebarNewButton />
         </div>
       </Section>
     </main>

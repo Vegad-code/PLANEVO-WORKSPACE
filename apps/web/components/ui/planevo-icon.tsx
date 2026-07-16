@@ -17,6 +17,7 @@ import {
   Network,
   Page,
   Pin,
+  Plus,
   Search,
   Settings,
   SidebarCollapse,
@@ -24,12 +25,15 @@ import {
   TaskList,
   Upload,
   UserPlus,
+  ViewGrid,
   WarningTriangle,
   Xmark,
 } from "iconoir-react";
 
 export type IconName =
   | "workspace"
+  | "canvas"
+  | "plus"
   | "tasks"
   | "calendar"
   | "files"
@@ -59,6 +63,8 @@ export type IconName =
 
 const ICONS = {
   workspace: Home,
+  canvas: ViewGrid,
+  plus: Plus,
   tasks: TaskList,
   calendar: Calendar,
   files: Folder,

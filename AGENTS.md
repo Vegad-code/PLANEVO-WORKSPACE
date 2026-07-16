@@ -26,20 +26,29 @@ Order of operations:
 1. `docs/design-brief.md` — the design spec. Tokens (with their exact CSS variable names),
    type/spacing scales, component inventory, screen list, and the rules for reference
    images. **This governs all design work.**
-2. `docs/planevo-prd.md` — full product source of truth. Read the relevant section before
-   building any screen (e.g. §5.7 before onboarding, §5.4 before Planevo AI).
+2. `docs/planevo-prd.md` — product strategy source of truth. Read the relevant section
+   before building any screen (e.g. §5.7 before onboarding, §5.4 before Planevo AI).
+   For WHAT each feature is and its V1 boundary, `docs/planevo-feature-spec.md` (F-01…)
+   is the build-ready companion — feature IDs there are the stable references.
 3. `docs/design-build-sheet.md` — the 22-screen build order and what each screen contains.
 4. `docs/references/` — visual craft references ONLY. See the rule below.
 
 ## Inviolable rules (do not break, do not "improve" past these)
 
-- **Reference images are craft-only, never layout.** Everything in `docs/references/` is
-  there for its craft — card treatment, texture, spacing, type hierarchy, radii, restraint.
-  Never clone a reference's information architecture. The Acme AI reference in particular
-  is agent-first; Planevo is not. If you're unsure whether something is craft or IA, ask.
-- **Workspace-first IA, never agent-first.** The home screen leads with the user's own
-  workspace (recent pages, continue where you left off, entry-point cards). NOT a chat
-  console, NOT "Start Chat" as the hero, NOT an agent grid. This is the #1 rule.
+- **Reference images are craft-only, never layout — with ONE founder-granted exception.**
+  Everything in `docs/references/` is there for its craft — card treatment, texture,
+  spacing, type hierarchy, radii, restraint. Never clone a reference's information
+  architecture. **Exception (founder override, 2026-07-16): the Acme AI reference's
+  layout IS the layout reference for the Home screen** — sidebar, centered greeting,
+  action-card grid, bottom composer. This exception covers Home only; every other screen
+  stays craft-only. If you're unsure whether something is craft or IA, ask.
+- **Home is a calm launch hub; the rest of the product stays workspace-first.**
+  (Founder override, 2026-07-16 — supersedes the old "never Acme-style Home" rule and
+  F-47 as originally written in `docs/planevo-feature-spec.md`.) Home is its own route:
+  greeting, filter chips, Planevo-specific action cards, and a bottom composer that can
+  talk to Planevo AI without forcing anyone to be AI-native. Home links into Workspace /
+  Tasks / Calendar / Files but never renders them inline. Outside Home, the old rule
+  holds: no chat console as a front door, no agent grid, no AI-first IA.
 - **Present, not pushy AI.** The AI surface (Planevo AI) is findable in seconds and
   ignorable forever. No sparkle-emoji buttons begging for clicks in core flows. The AI
   layer uses the `slate` token; it never dominates a screen.
@@ -64,7 +73,8 @@ Order of operations:
 
 ## Do not
 
-- Do not clone a reference image's information architecture.
+- Do not clone a reference image's information architecture (single exception: Home,
+  per the founder override above).
 - Do not add an AI chatbot mascot or persona (the old "Bruno" concept is permanently dead).
 - Do not introduce competitor names anywhere in the UI.
 - Do not use gradients, heavy shadows, or glow. Flat, calm, premium.

@@ -24,10 +24,13 @@ export function TaskComposer({
   workspaceId,
   buttonLabel = "New task",
   appearance = "primary",
+  trigger,
 }: {
   workspaceId: string | null;
   buttonLabel?: string;
   appearance?: "primary" | "quiet";
+  /** Custom trigger renderer — receives the open callback and replaces the default button. */
+  trigger?: (open: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const initialState: TaskFormState = { status: "idle", message: null };
@@ -44,14 +47,18 @@ export function TaskComposer({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-2 rounded-lg px-3 text-small font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${appearance === "primary" ? "h-9 bg-marigold px-4 text-ink hover:opacity-90" : "h-8 border border-border-strong bg-paper text-ink hover:border-ink"}`}
-      >
-        <Icon name="tasks" />
-        {buttonLabel}
-      </button>
+      {trigger ? (
+        trigger(() => setOpen(true))
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={`inline-flex items-center gap-2 rounded-lg px-3 text-small font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${appearance === "primary" ? "h-9 bg-marigold px-4 text-ink hover:opacity-90" : "h-8 border border-border-strong bg-paper text-ink hover:border-ink"}`}
+        >
+          <Icon name="tasks" />
+          {buttonLabel}
+        </button>
+      )}
 
       <Dialog
         open={open}
