@@ -495,6 +495,10 @@ export interface Database {
         };
         Returns: Json;
       };
+      create_user_products: {
+        Args: { p_user_id: string; p_seed: Json };
+        Returns: Json;
+      };
       promote_blocks_to_records: {
         Args: {
           p_owner_id: string;

@@ -165,3 +165,89 @@ grant select, insert, update, delete on public.calendars to authenticated;
 grant select, insert, update, delete on public.calendar_events to authenticated;
 grant select, insert, update, delete on public.workspace_links to authenticated;
 grant select, insert, update, delete on public.file_links to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- create_user_products: seed a user's global Tasks + Calendar products
+-- (F-01/F-02 ecosystem strangler — these replace the per-workspace task and
+-- calendar template databases that create_starter_workspace used to create).
+-- security invoker: relies on the tasks/calendars RLS policies above, which
+-- already require user_id = auth.uid(); the explicit guard below matches the
+-- convention in 20260717120000_starter_workspace_and_kernel.sql so a caller
+-- can never write products under someone else's user id.
+-- Idempotent: a user's global products are created once. If a calendar
+-- already exists for p_user_id, the existing state is returned unchanged.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.create_user_products(
+  p_user_id uuid,
+  p_seed jsonb
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  existing_calendar_id uuid;
+  new_calendar_id uuid;
+  calendar_name text;
+  task_el jsonb;
+  new_task_id uuid;
+  task_ids uuid[] := array[]::uuid[];
+  pos numeric := 0;
+begin
+  if auth.role() <> 'service_role' and auth.uid() is distinct from p_user_id then
+    raise exception 'user id does not match the mutation actor' using errcode = '42501';
+  end if;
+
+  select c.id into existing_calendar_id
+  from public.calendars c
+  where c.user_id = p_user_id
+  order by c.created_at asc
+  limit 1;
+
+  if existing_calendar_id is not null then
+    select coalesce(array_agg(t.id order by t.position asc), array[]::uuid[])
+    into task_ids
+    from public.tasks t
+    where t.user_id = p_user_id;
+
+    return jsonb_build_object(
+      'calendar_id', existing_calendar_id,
+      'task_ids', to_jsonb(task_ids),
+      'created', false
+    );
+  end if;
+
+  calendar_name := coalesce(nullif(btrim(p_seed ->> 'calendarName'), ''), 'My Calendar');
+
+  insert into public.calendars (user_id, name)
+  values (p_user_id, calendar_name)
+  returning id into new_calendar_id;
+
+  for task_el in
+    select * from jsonb_array_elements(coalesce(p_seed -> 'starterTasks', '[]'::jsonb))
+  loop
+    insert into public.tasks (user_id, title, status, position)
+    values (
+      p_user_id,
+      coalesce(nullif(btrim(task_el ->> 'title'), ''), 'Untitled'),
+      coalesce(nullif(btrim(task_el ->> 'status'), ''), 'not_started'),
+      pos
+    )
+    returning id into new_task_id;
+
+    task_ids := array_append(task_ids, new_task_id);
+    pos := pos + 1;
+  end loop;
+
+  return jsonb_build_object(
+    'calendar_id', new_calendar_id,
+    'task_ids', to_jsonb(task_ids),
+    'created', true
+  );
+end;
+$$;
+
+revoke all on function public.create_user_products(uuid, jsonb) from public, anon;
+grant execute on function public.create_user_products(uuid, jsonb) to authenticated, service_role;
