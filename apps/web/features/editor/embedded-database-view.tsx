@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import type { DisplayRecord } from "@planevo/core/queries/record-display";
-import { RecordList } from "@/features/database/record-board";
 
 export const FLATTEN_DATABASE_VIEW_EVENT = "planevo:flatten-database-view";
 
@@ -13,13 +12,19 @@ export type FlattenDatabaseViewDetail = {
 
 type EmbeddedDatabaseViewProps = {
   databaseId: string;
+  viewId?: string;
   recordIds: string;
 };
 
 /**
- * Inline database view block (F-10). Shows a compact linked list for promoted records.
+ * Inline database view block (F-10). Compact linked list for promoted records —
+ * kept self-contained so editor stays decoupled from full database list props.
  */
-export function EmbeddedDatabaseView({ databaseId, recordIds }: EmbeddedDatabaseViewProps) {
+export function EmbeddedDatabaseView({
+  databaseId,
+  viewId = "",
+  recordIds,
+}: EmbeddedDatabaseViewProps) {
   const [records, setRecords] = useState<DisplayRecord[]>([]);
   const [databaseName, setDatabaseName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +35,7 @@ export function EmbeddedDatabaseView({ databaseId, recordIds }: EmbeddedDatabase
     async function load() {
       try {
         const params = new URLSearchParams({ databaseId, recordIds });
+        if (viewId) params.set("viewId", viewId);
         const response = await fetch(`/api/embedded-database?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to load embedded view.");
         const payload = (await response.json()) as {
@@ -53,7 +59,7 @@ export function EmbeddedDatabaseView({ databaseId, recordIds }: EmbeddedDatabase
     return () => {
       cancelled = true;
     };
-  }, [databaseId, recordIds]);
+  }, [databaseId, viewId, recordIds]);
 
   if (!databaseId) {
     return (
@@ -103,9 +109,23 @@ export function EmbeddedDatabaseView({ databaseId, recordIds }: EmbeddedDatabase
       ) : records.length === 0 ? (
         <p className="mt-3 text-small text-text-muted">No linked records yet.</p>
       ) : (
-        <div className="mt-3">
-          <RecordList records={records} databaseId={databaseId} />
-        </div>
+        <ul className="mt-3 divide-y divide-border overflow-hidden rounded-lg border border-border">
+          {records.map((record) => (
+            <li key={record.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+              <span className="min-w-0 flex-1 truncate text-body font-medium">
+                {record.title || "Untitled"}
+              </span>
+              {record.status && (
+                <span className="text-small text-text-secondary">{record.status}</span>
+              )}
+              {record.dueDate && (
+                <span className="text-small text-text-muted">
+                  {record.dueDate.slice(0, 10)}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

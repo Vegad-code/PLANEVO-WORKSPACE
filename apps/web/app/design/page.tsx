@@ -23,8 +23,13 @@ import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 import type { DisplayRecord } from "@planevo/core/queries/record-display";
 import { RecordBoard, RecordList } from "@/features/database/record-board";
 import { MonthGrid } from "@/features/database/month-grid";
+import { CommandBarPreview } from "./command-bar-preview";
+import { DatabaseViewsPreview } from "./database-views-preview";
 import { DeleteControlsPreview } from "./delete-controls-preview";
+import { EditorPreview } from "./editor-preview";
 import { RecordPeekPreview } from "./record-peek-preview";
+import { RecordSurfacePreview } from "./record-surface-preview";
+import { WorkspacePreview } from "./workspace-preview";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
@@ -323,6 +328,26 @@ export default function DesignPage() {
             <RecordPeekPreview record={DESIGN_RECORDS[0]!} mode="side" />
           </div>
         </div>
+      </Section>
+
+      <Section title="Database views — tabs, config bar, table / board / list">
+        <DatabaseViewsPreview />
+      </Section>
+
+      <Section title="Record surface — page and peek variants">
+        <RecordSurfacePreview />
+      </Section>
+
+      <Section title="Command bar — capture, fuzzy nav, modes">
+        <CommandBarPreview />
+      </Section>
+
+      <Section title="Editor — slash, promote, icon / cover, mentions">
+        <EditorPreview />
+      </Section>
+
+      <Section title="Workspace — switcher, manage, faces">
+        <WorkspacePreview />
       </Section>
 
       <Section title="Mobile navigation — open drawer">

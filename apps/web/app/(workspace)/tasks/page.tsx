@@ -1,46 +1,48 @@
-import { Suspense } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
+import { DatabaseFace } from "@/features/shell/database-face";
+import { RecreateDatabaseButton } from "@/features/shell/recreate-database-button";
 import { TaskComposer } from "@/features/tasks/task-composer";
-import { TaskDatabaseFace } from "@/features/tasks/task-database-face";
-import { getTaskDatabaseBundle } from "@/lib/queries/tasks";
+import { getTaskFaceBundle } from "@/lib/queries/face-databases";
+import { recreateTaskDatabase } from "./actions";
 
 export default async function TasksPage() {
-  const { workspaceId, bundle } = await getTaskDatabaseBundle();
-
-  if (!workspaceId) {
-    return (
-      <div className="mx-auto max-w-3xl px-5 py-12">
-        <EmptyState
-          icon="tasks"
-          title="Sign in to see your tasks"
-          description="Your task database appears here once you're signed in."
-        />
-      </div>
-    );
-  }
-
-  if (!bundle) {
-    return (
-      <div className="mx-auto max-w-3xl px-5 py-12">
-        <EmptyState
-          icon="tasks"
-          title="Your task board is ready when you are"
-          description="Create your first real task. Planevo will add only the database structure and views it needs."
-          action={
-            <TaskComposer
-              workspaceId={workspaceId}
-              buttonLabel="Create first task"
-              appearance="quiet"
-            />
-          }
-        />
-      </div>
-    );
-  }
+  const { workspaceId, bundle } = await getTaskFaceBundle();
 
   return (
-    <Suspense fallback={<p className="p-8 text-small text-text-muted">Loading tasks…</p>}>
-      <TaskDatabaseFace bundle={bundle} workspaceId={workspaceId} />
-    </Suspense>
+    <DatabaseFace
+      eyebrow="Workspace database"
+      title="Tasks"
+      description="Plan the work, then move it forward."
+      bundle={bundle}
+      workspaceId={workspaceId}
+      unavailable={{
+        icon: "tasks",
+        title: "Sign in to see your tasks",
+        description: "Your task database appears here once you're signed in.",
+      }}
+      empty={{
+        icon: "tasks",
+        title: "Your task board is ready when you are",
+        description:
+          "Recreate the task database with board, list, calendar, and table views — or add your first task.",
+        recreate: (
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <RecreateDatabaseButton
+              label="Create task database"
+              onRecreate={recreateTaskDatabase}
+            />
+            {workspaceId ? (
+              <TaskComposer
+                workspaceId={workspaceId}
+                buttonLabel="Create first task"
+                appearance="quiet"
+              />
+            ) : null}
+          </div>
+        ),
+      }}
+      headerAction={
+        workspaceId ? <TaskComposer workspaceId={workspaceId} appearance="quiet" /> : undefined
+      }
+    />
   );
 }

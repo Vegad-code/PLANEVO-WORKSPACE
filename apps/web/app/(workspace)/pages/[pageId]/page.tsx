@@ -53,7 +53,12 @@ export default async function PageRoute({
         </Link>
       )}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <PageTitle pageId={page.id} initialTitle={page.title} />
+        <PageTitle
+          pageId={page.id}
+          initialTitle={page.title}
+          initialIcon={page.icon}
+          initialCoverImage={page.cover_image}
+        />
         <PageHeaderActions pageId={page.id} pageTitle={page.title} />
       </div>
       <div>

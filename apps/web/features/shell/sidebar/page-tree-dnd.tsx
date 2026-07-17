@@ -18,6 +18,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  needsRebalance,
+  positionBetween,
+  rebalanced,
+} from "@planevo/core/ordering/fractional";
 import { reorderPage } from "@/app/(workspace)/pages/actions";
 import { TreeNavItem } from "@/features/shell/sidebar/tree-nav-item";
 import type { PageTreeItem } from "@/lib/queries/workspace-shell";
@@ -25,6 +30,14 @@ import type { PageTreeItem } from "@/lib/queries/workspace-shell";
 type PageTreeDndProps = {
   pages: PageTreeItem[];
   onNavigate?: () => void;
+  /** Stable DndContext id — required when multiple sidebars mount (desktop + mobile). */
+  dndId?: string;
+};
+
+type ReorderUpdate = {
+  pageId: string;
+  parentPageId: string | null;
+  position: number;
 };
 
 function resolveParentId(pages: PageTreeItem[], index: number): string | null {
@@ -39,42 +52,112 @@ function resolveParentId(pages: PageTreeItem[], index: number): string | null {
   return null;
 }
 
-function computeSiblingPosition(
-  pages: PageTreeItem[],
-  index: number,
-  parentPageId: string | null,
-): number {
-  const siblings: { index: number; position: number }[] = [];
-
+function siblingIndices(pages: PageTreeItem[], parentPageId: string | null): number[] {
+  const indices: number[] = [];
   for (let i = 0; i < pages.length; i += 1) {
-    if (resolveParentId(pages, i) === parentPageId) {
-      siblings.push({ index: i, position: pages[i]!.position });
-    }
+    if (resolveParentId(pages, i) === parentPageId) indices.push(i);
   }
-
-  const siblingIndex = siblings.findIndex((entry) => entry.index === index);
-  const previous = siblings[siblingIndex - 1]?.position;
-  const next = siblings[siblingIndex + 1]?.position;
-
-  if (previous === undefined && next === undefined) return 0;
-  if (previous === undefined) return next! - 1;
-  if (next === undefined) return previous + 1;
-  return (previous + next) / 2;
+  return indices;
 }
 
-function continueSpineForIndex(pages: PageTreeItem[], index: number): boolean {
-  const page = pages[index];
-  const next = pages[index + 1];
-  return Boolean(next && next.depth >= page!.depth && page!.depth > 0);
+function buildReorderUpdates(
+  pages: PageTreeItem[],
+  movedIndex: number,
+  parentPageId: string | null,
+): ReorderUpdate[] {
+  const siblings = siblingIndices(pages, parentPageId);
+  const siblingIndex = siblings.indexOf(movedIndex);
+  if (siblingIndex < 0) return [];
+
+  const previous =
+    siblingIndex > 0 ? pages[siblings[siblingIndex - 1]!]!.position : null;
+  const next =
+    siblingIndex < siblings.length - 1
+      ? pages[siblings[siblingIndex + 1]!]!.position
+      : null;
+
+  if (needsRebalance(previous, next)) {
+    const positions = rebalanced(siblings.length);
+    return siblings.map((pageIndex, index) => ({
+      pageId: pages[pageIndex]!.id,
+      parentPageId,
+      position: positions[index]!,
+    }));
+  }
+
+  return [
+    {
+      pageId: pages[movedIndex]!.id,
+      parentPageId,
+      position: positionBetween(previous, next),
+    },
+  ];
+}
+
+/** True when a later sibling exists at `depth` before the tree goes shallower. */
+function spineContinuesAtDepth(
+  pages: PageTreeItem[],
+  index: number,
+  depth: number,
+): boolean {
+  for (let i = index + 1; i < pages.length; i += 1) {
+    const nextDepth = pages[i]!.depth;
+    if (nextDepth < depth) return false;
+    if (nextDepth === depth) return true;
+  }
+  return false;
+}
+
+function treeRowProps(pages: PageTreeItem[], index: number) {
+  const page = pages[index]!;
+  const ancestorSpines: boolean[] = [];
+  for (let depth = 0; depth < page.depth; depth += 1) {
+    ancestorSpines.push(spineContinuesAtDepth(pages, index, depth));
+  }
+  return {
+    page,
+    continueSpine: spineContinuesAtDepth(pages, index, page.depth),
+    ancestorSpines,
+  };
+}
+
+/** Static rows — used for SSR / pre-hydration so dnd-kit IDs cannot mismatch. */
+function StaticPageTree({
+  pages,
+  onNavigate,
+}: {
+  pages: PageTreeItem[];
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      {pages.map((page, index) => {
+        const { continueSpine, ancestorSpines } = treeRowProps(pages, index);
+        return (
+          <TreeNavItem
+            key={page.id}
+            pageId={page.id}
+            label={page.label}
+            depth={page.depth}
+            continueSpine={continueSpine}
+            ancestorSpines={ancestorSpines}
+            onNavigate={onNavigate}
+          />
+        );
+      })}
+    </>
+  );
 }
 
 function SortableTreeRow({
   page,
   continueSpine,
+  ancestorSpines,
   onNavigate,
 }: {
   page: PageTreeItem;
   continueSpine: boolean;
+  ancestorSpines: boolean[];
   onNavigate?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -94,14 +177,20 @@ function SortableTreeRow({
         label={page.label}
         depth={page.depth}
         continueSpine={continueSpine}
+        ancestorSpines={ancestorSpines}
         onNavigate={onNavigate}
       />
     </div>
   );
 }
 
-export function PageTreeDnd({ pages, onNavigate }: PageTreeDndProps) {
+export function PageTreeDnd({
+  pages,
+  onNavigate,
+  dndId = "workspace-page-tree",
+}: PageTreeDndProps) {
   const [items, setItems] = useState(pages);
+  const [dndReady, setDndReady] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -110,6 +199,10 @@ export function PageTreeDnd({ pages, onNavigate }: PageTreeDndProps) {
   useEffect(() => {
     setItems(pages);
   }, [pages]);
+
+  useEffect(() => {
+    setDndReady(true);
+  }, []);
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
@@ -122,17 +215,20 @@ export function PageTreeDnd({ pages, onNavigate }: PageTreeDndProps) {
 
       const nextItems = arrayMove(items, oldIndex, newIndex);
       const parentPageId = resolveParentId(nextItems, newIndex);
-      const position = computeSiblingPosition(nextItems, newIndex, parentPageId);
+      const updates = buildReorderUpdates(nextItems, newIndex, parentPageId);
 
       setItems(nextItems);
 
-      const result = await reorderPage({
-        pageId: String(active.id),
-        parentPageId,
-        position,
-      });
+      let failed = false;
+      for (const update of updates) {
+        const result = await reorderPage(update);
+        if (!result.ok) {
+          failed = true;
+          break;
+        }
+      }
 
-      if (!result.ok) {
+      if (failed) {
         setItems(pages);
       }
     },
@@ -145,17 +241,30 @@ export function PageTreeDnd({ pages, onNavigate }: PageTreeDndProps) {
     );
   }
 
+  if (!dndReady) {
+    return <StaticPageTree pages={items} onNavigate={onNavigate} />;
+  }
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext
+      id={dndId}
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
       <SortableContext items={items.map((page) => page.id)} strategy={verticalListSortingStrategy}>
-        {items.map((page, index) => (
-          <SortableTreeRow
-            key={page.id}
-            page={page}
-            continueSpine={continueSpineForIndex(items, index)}
-            onNavigate={onNavigate}
-          />
-        ))}
+        {items.map((page, index) => {
+          const { continueSpine, ancestorSpines } = treeRowProps(items, index);
+          return (
+            <SortableTreeRow
+              key={page.id}
+              page={page}
+              continueSpine={continueSpine}
+              ancestorSpines={ancestorSpines}
+              onNavigate={onNavigate}
+            />
+          );
+        })}
       </SortableContext>
     </DndContext>
   );

@@ -4,9 +4,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { duplicateDatabaseStructure } from "@planevo/api/rpc";
 import {
+  needsRebalance,
+  positionBetween,
+  rebalanced,
+} from "@planevo/core/ordering/fractional";
+import {
   IMPLEMENTED_PROPERTY_TYPES,
   type PropertyType,
 } from "@planevo/core/types/property-types";
+import type { Json } from "@planevo/core/types/database.types";
+import {
+  planPropertyConversion,
+  type PropertyConversionPlan,
+} from "@planevo/core/validation/property-conversion";
 import { normalizePropertyValue } from "@planevo/core/validation/property-values";
 import {
   parseRelationTargetIds,
@@ -290,6 +300,257 @@ export async function renameProperty(input: {
     .eq("database_id", input.databaseId);
   if (error) throw error;
   revalidatePath(`/databases/${input.databaseId}`);
+}
+
+export async function updateDatabaseIcon(input: {
+  databaseId: string;
+  icon: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+    const { error } = await access.client
+      .from("databases")
+      .update({ icon: input.icon })
+      .eq("id", input.databaseId);
+    if (error) throw error;
+    revalidatePath(`/databases/${input.databaseId}`);
+    revalidatePath("/workspace");
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Couldn't update the database icon.",
+    };
+  }
+}
+
+export async function renameDatabase(input: {
+  databaseId: string;
+  name: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Database name is required." };
+
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+    const { data: database, error: databaseError } = await access.client
+      .from("databases")
+      .select("page_id")
+      .eq("id", input.databaseId)
+      .maybeSingle();
+    if (databaseError) throw databaseError;
+
+    const { error } = await access.client
+      .from("databases")
+      .update({ name })
+      .eq("id", input.databaseId);
+    if (error) throw error;
+
+    if (database?.page_id) {
+      await access.client.from("pages").update({ title: name }).eq("id", database.page_id);
+    }
+
+    revalidatePath(`/databases/${input.databaseId}`);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to rename the database.",
+    };
+  }
+}
+
+export async function duplicateDatabaseAsTemplate(databaseId: string): Promise<void> {
+  const access = await requireOwnedDatabase(databaseId);
+  const { data: database, error } = await access.client
+    .from("databases")
+    .select("name")
+    .eq("id", databaseId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!database) throw new Error("Database not found.");
+
+  const result = await duplicateDatabaseStructure(access.client, {
+    ownerId: access.ownerId,
+    databaseId,
+    name: `${database.name} template`,
+  });
+  revalidatePath("/", "layout");
+  redirect(`/databases/${result.databaseId}`);
+}
+
+export async function reorderProperty(input: {
+  databaseId: string;
+  propertyId: string;
+  beforePropertyId: string | null;
+  afterPropertyId: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+    const { data: siblings, error: siblingsError } = await access.client
+      .from("database_properties")
+      .select("id, position")
+      .eq("database_id", input.databaseId)
+      .order("position", { ascending: true });
+    if (siblingsError) throw siblingsError;
+    if (!siblings?.length) return { ok: false, error: "No properties to reorder." };
+
+    const before = input.beforePropertyId
+      ? siblings.find((row) => row.id === input.beforePropertyId)?.position ?? null
+      : null;
+    const after = input.afterPropertyId
+      ? siblings.find((row) => row.id === input.afterPropertyId)?.position ?? null
+      : null;
+
+    if (needsRebalance(before, after)) {
+      const positions = rebalanced(siblings.length);
+      for (let i = 0; i < siblings.length; i += 1) {
+        const { error } = await access.client
+          .from("database_properties")
+          .update({ position: positions[i] })
+          .eq("id", siblings[i]!.id);
+        if (error) throw error;
+      }
+    }
+
+    const refreshed = needsRebalance(before, after)
+      ? (
+          await access.client
+            .from("database_properties")
+            .select("id, position")
+            .eq("database_id", input.databaseId)
+            .order("position", { ascending: true })
+        ).data ?? []
+      : siblings;
+
+    const refreshedBefore = input.beforePropertyId
+      ? refreshed.find((row) => row.id === input.beforePropertyId)?.position ?? null
+      : null;
+    const refreshedAfter = input.afterPropertyId
+      ? refreshed.find((row) => row.id === input.afterPropertyId)?.position ?? null
+      : null;
+
+    const position = positionBetween(refreshedBefore, refreshedAfter);
+    const { error } = await access.client
+      .from("database_properties")
+      .update({ position })
+      .eq("id", input.propertyId)
+      .eq("database_id", input.databaseId);
+    if (error) throw error;
+
+    revalidatePath(`/databases/${input.databaseId}`);
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to reorder the property.",
+    };
+  }
+}
+
+export async function updatePropertyConfig(input: {
+  databaseId: string;
+  propertyId: string;
+  config: Json;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+    const { error } = await access.client
+      .from("database_properties")
+      .update({ config_json: input.config })
+      .eq("id", input.propertyId)
+      .eq("database_id", input.databaseId);
+    if (error) throw error;
+    revalidatePath(`/databases/${input.databaseId}`);
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to update the property.",
+    };
+  }
+}
+
+export async function countPropertyValues(input: {
+  databaseId: string;
+  propertyId: string;
+}): Promise<number> {
+  const access = await requireOwnedDatabase(input.databaseId);
+  const { count, error } = await access.client
+    .from("record_values")
+    .select("record_id", { count: "exact", head: true })
+    .eq("property_id", input.propertyId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function convertPropertyType(input: {
+  databaseId: string;
+  propertyId: string;
+  newType: string;
+  confirm?: boolean;
+}): Promise<
+  | { ok: true; dryRun: true; plan: PropertyConversionPlan }
+  | { ok: true; dryRun: false }
+  | { ok: false; error: string }
+> {
+  if (!(IMPLEMENTED_PROPERTY_TYPES as readonly string[]).includes(input.newType)) {
+    return { ok: false, error: "That property type isn't available yet." };
+  }
+
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+    const { data: property, error: propertyError } = await access.client
+      .from("database_properties")
+      .select("id, type, config_json, is_primary")
+      .eq("id", input.propertyId)
+      .eq("database_id", input.databaseId)
+      .maybeSingle();
+    if (propertyError) throw propertyError;
+    if (!property) return { ok: false, error: "Property not found." };
+    if (property.is_primary) {
+      return { ok: false, error: "The primary title property can't change type." };
+    }
+
+    const { data: valueRows, error: valuesError } = await access.client
+      .from("record_values")
+      .select("record_id, value_json")
+      .eq("property_id", input.propertyId);
+    if (valuesError) throw valuesError;
+
+    const plan = planPropertyConversion(
+      property.type as PropertyType,
+      input.newType as PropertyType,
+      property.config_json,
+      (valueRows ?? []).map((row) => ({
+        recordId: row.record_id,
+        value: row.value_json,
+      })),
+    );
+
+    if (!input.confirm) {
+      return { ok: true, dryRun: true, plan };
+    }
+
+    const { error: rpcError } = await access.client.rpc("apply_property_conversion", {
+      p_owner_id: access.ownerId,
+      p_property_id: input.propertyId,
+      p_new_type: input.newType,
+      p_new_config: plan.newConfig,
+      p_value_updates: plan.updates,
+      p_clear_record_ids: plan.clearRecordIds,
+    });
+    if (rpcError) throw rpcError;
+
+    revalidatePath(`/databases/${input.databaseId}`);
+    return { ok: true, dryRun: false };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to convert the property.",
+    };
+  }
 }
 
 export async function duplicateDatabase(databaseId: string): Promise<void> {

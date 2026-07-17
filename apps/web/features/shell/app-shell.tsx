@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import {
@@ -22,6 +21,8 @@ import {
   type SidebarEvent,
   type SidebarState,
 } from "@planevo/core/state/sidebar-state";
+import { CommandBar } from "@/features/command-bar/command-bar";
+import { createPageAndOpen } from "@/app/(workspace)/actions";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
 import { TopBar } from "@/features/shell/top-bar";
 
@@ -37,12 +38,12 @@ export function AppShell({
   children: React.ReactNode;
   shell: WorkspaceShellData;
 }) {
-  const router = useRouter();
   const [sidebarState, setSidebarState] = useState<SidebarState>(
     createInitialSidebarState(),
   );
   const [restored, setRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [peekExiting, setPeekExiting] = useState(false);
   const [mobileNavigation, dispatchMobileNavigation] = useReducer(
     reduceMobileNavigation,
@@ -120,7 +121,10 @@ export function AppShell({
         dispatch({ type: "toggle" });
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        router.push("/search");
+        setCommandBarOpen(true);
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        void createPageAndOpen();
       } else if (event.key === "Escape" && sidebarState.peeked) {
         clearPeekTimer();
         scheduleDismissPeek();
@@ -133,7 +137,6 @@ export function AppShell({
     clearDismissTimer,
     clearPeekTimer,
     dispatch,
-    router,
     sidebarState.peeked,
   ]);
 
@@ -312,6 +315,14 @@ export function AppShell({
         open={settingsOpen}
         shell={shell}
         onOpenChange={handleSettingsOpenChange}
+      />
+      <CommandBar
+        open={commandBarOpen}
+        onClose={() => setCommandBarOpen(false)}
+        onOpenSettings={() => {
+          setCommandBarOpen(false);
+          openSettings();
+        }}
       />
 
       {showEdgeTrigger && (

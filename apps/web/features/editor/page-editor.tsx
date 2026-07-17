@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PlanevoEditorInstance } from "@/features/editor/planevo-editor";
 import type { PlanevoBlock } from "@/features/editor/schema";
 import {
@@ -15,17 +15,17 @@ import {
   type FlattenDatabaseViewDetail,
 } from "@/features/editor/embedded-database-view";
 
-function PageEditorToolbar({
+export function PageEditor({
   pageId,
+  initialContent,
   databaseOptions,
-  editor,
-  markDirtyAndSchedule,
 }: {
   pageId: string;
+  initialContent: unknown;
   databaseOptions: { id: string; name: string }[];
-  editor: PlanevoEditorInstance;
-  markDirtyAndSchedule: () => void;
 }) {
+  const editorRef = useRef<PlanevoEditorInstance | null>(null);
+  const markDirtyRef = useRef<(() => void) | null>(null);
   const [promoteBlocks, setPromoteBlocks] = useState<PlanevoBlock[] | null>(null);
   const [promoteNotice, setPromoteNotice] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
@@ -33,7 +33,11 @@ function PageEditorToolbar({
   useEffect(() => {
     async function onFlatten(event: Event) {
       const detail = (event as CustomEvent<FlattenDatabaseViewDetail>).detail;
-      if (!detail?.databaseId || !detail.recordIds) return;
+      const editor = editorRef.current;
+      const markDirtyAndSchedule = markDirtyRef.current;
+      if (!detail?.databaseId || !detail.recordIds || !editor || !markDirtyAndSchedule) {
+        return;
+      }
 
       const recordIds = detail.recordIds.split(",").map((id) => id.trim()).filter(Boolean);
       const result = await flattenRecordsToLines({
@@ -61,13 +65,7 @@ function PageEditorToolbar({
         content: [{ type: "text" as const, text: line, styles: {} }],
       }));
 
-      if (typeof editor.replaceBlocks === "function") {
-        editor.replaceBlocks([databaseViewBlock], bulletBlocks);
-      } else {
-        editor.insertBlocks(bulletBlocks, databaseViewBlock, "before");
-        editor.removeBlocks([databaseViewBlock]);
-      }
-
+      editor.replaceBlocks([databaseViewBlock], bulletBlocks);
       markDirtyAndSchedule();
       setPromoteNotice(
         `Restored ${result.lines.length} line${result.lines.length === 1 ? "" : "s"} as bullets.`,
@@ -76,14 +74,7 @@ function PageEditorToolbar({
 
     window.addEventListener(FLATTEN_DATABASE_VIEW_EVENT, onFlatten);
     return () => window.removeEventListener(FLATTEN_DATABASE_VIEW_EVENT, onFlatten);
-  }, [editor, markDirtyAndSchedule]);
-
-  function openPromotePanel() {
-    const selection = editor.getSelection();
-    const candidates = (selection?.blocks ?? [editor.getTextCursorPosition().block]) as PlanevoBlock[];
-    setPromoteBlocks(candidates);
-    setPromoteNotice(null);
-  }
+  }, []);
 
   async function confirmPromote(input: {
     databaseId: string;
@@ -98,6 +89,10 @@ function PageEditorToolbar({
       };
     }>;
   }) {
+    const editor = editorRef.current;
+    const markDirtyAndSchedule = markDirtyRef.current;
+    if (!editor || !markDirtyAndSchedule) return;
+
     setPromoting(true);
     try {
       const result = await promoteBlocksToRecords({
@@ -118,25 +113,20 @@ function PageEditorToolbar({
         return;
       }
 
-      const blocksToReplace = input.drafts.map((entry) => entry.block);
-      const databaseViewBlock = {
-        type: "database_view" as const,
-        props: {
-          databaseId: result.databaseId,
-          viewId: "",
-          filterKey: "",
-          recordIds: result.recordIds.join(","),
-        },
-      };
-
-      if (typeof editor.replaceBlocks === "function") {
-        editor.replaceBlocks(blocksToReplace, [databaseViewBlock]);
-      } else {
-        const anchor = blocksToReplace[0]!;
-        editor.insertBlocks([databaseViewBlock], anchor, "before");
-        editor.removeBlocks(blocksToReplace);
-      }
-
+      editor.replaceBlocks(
+        input.drafts.map((entry) => entry.block),
+        [
+          {
+            type: "database_view",
+            props: {
+              databaseId: result.databaseId,
+              viewId: "",
+              filterKey: "",
+              recordIds: result.recordIds.join(","),
+            },
+          },
+        ],
+      );
       markDirtyAndSchedule();
       setPromoteBlocks(null);
       setPromoteNotice(
@@ -148,23 +138,27 @@ function PageEditorToolbar({
   }
 
   return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={promoting || databaseOptions.length === 0}
-          onClick={openPromotePanel}
-          className="h-8 rounded-lg border border-border-strong bg-paper px-3 text-small font-medium outline-none hover:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50"
-          title="Turn selected bullet or checklist items into records"
-        >
-          Turn into records
-        </button>
-        {promoteNotice && (
-          <p role="status" className="text-small text-text-secondary">
-            {promoteNotice}
-          </p>
-        )}
-      </div>
+    <div className="flex flex-col gap-3">
+      {promoteNotice && (
+        <p role="status" className="text-small text-text-secondary">
+          {promoteNotice}
+        </p>
+      )}
+      <PlanevoEditor
+        pageId={pageId}
+        initialContent={initialContent}
+        databaseOptions={databaseOptions}
+        onSave={(content) => savePageContent(pageId, content)}
+        onPromoteRequest={(blocks) => {
+          setPromoteBlocks(blocks);
+          setPromoteNotice(null);
+        }}
+        toolbar={({ editor, markDirtyAndSchedule }) => {
+          editorRef.current = editor;
+          markDirtyRef.current = markDirtyAndSchedule;
+          return null;
+        }}
+      />
       {promoteBlocks && (
         <PromotePanel
           blocks={promoteBlocks}
@@ -175,30 +169,5 @@ function PageEditorToolbar({
         />
       )}
     </div>
-  );
-}
-
-export function PageEditor({
-  pageId,
-  initialContent,
-  databaseOptions,
-}: {
-  pageId: string;
-  initialContent: unknown;
-  databaseOptions: { id: string; name: string }[];
-}) {
-  return (
-    <PlanevoEditor
-      initialContent={initialContent}
-      onSave={(content) => savePageContent(pageId, content)}
-      toolbar={({ editor, markDirtyAndSchedule }) => (
-        <PageEditorToolbar
-          pageId={pageId}
-          databaseOptions={databaseOptions}
-          editor={editor}
-          markDirtyAndSchedule={markDirtyAndSchedule}
-        />
-      )}
-    />
   );
 }

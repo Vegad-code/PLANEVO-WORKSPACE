@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/features/shell/app-shell";
+import { Toaster } from "@/components/ui/toast";
 import { getWorkspaceShellData } from "@/lib/queries/workspace-shell";
 import { createInitialWorkspace } from "./actions";
 
@@ -34,5 +35,10 @@ export default async function WorkspaceLayout({
   if (shell.status === "unavailable") redirect("/login");
   if (shell.status === "empty") return <CreateWorkspaceScreen />;
 
-  return <AppShell shell={shell}>{children}</AppShell>;
+  return (
+    <>
+      <AppShell shell={shell}>{children}</AppShell>
+      <Toaster />
+    </>
+  );
 }

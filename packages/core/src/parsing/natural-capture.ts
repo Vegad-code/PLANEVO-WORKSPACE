@@ -144,6 +144,147 @@ export function parseNaturalCaptureLine(
   };
 }
 
+export type QuickCaptureDraft = CapturedRecordDraft & {
+  /** Local wall-clock time, if the line named one. */
+  time: { hour: number; minute: number } | null;
+  /** Raw `#token` (destination database); resolution happens elsewhere. */
+  databaseToken: string | null;
+  /** Raw `@token` (person mention). */
+  personToken: string | null;
+  priorityToken: "low" | "medium" | "high" | null;
+  /** `every <weekday>` was seen — consumed, but recurrence is not scheduled. */
+  recurringUnsupported: boolean;
+  /** Half-open [start, end) spans consumed from the original line, for chips. */
+  consumedRanges: [number, number][];
+};
+
+const PRIORITY_TOKEN_LABEL: Record<"low" | "medium" | "high", string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
+/**
+ * Parse one command-bar line into a quick-capture draft (F-13). Extends the
+ * record-draft fields with time, destination/person tokens, priority token,
+ * a recurring flag, and the consumed character spans for live highlight chips.
+ * Deterministic, no deps, local timezone via `referenceDate`.
+ */
+export function parseQuickCapture(
+  line: string,
+  referenceDate: Date = new Date(),
+): QuickCaptureDraft {
+  let working = line;
+  const consumed: [number, number][] = [];
+
+  function blank(start: number, end: number): void {
+    consumed.push([start, end]);
+    working = working.slice(0, start) + " ".repeat(end - start) + working.slice(end);
+  }
+
+  function take(regex: RegExp): RegExpExecArray | null {
+    const match = regex.exec(working);
+    if (!match) return null;
+    blank(match.index, match.index + match[0].length);
+    return match;
+  }
+
+  // Recurring first, so "every monday" is never read as a due weekday.
+  const recurringMatch = take(
+    /\bevery\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i,
+  );
+  const recurringUnsupported = recurringMatch !== null;
+
+  const priorityMatch = take(/!!|!(high|medium|low)\b/i);
+  let priorityToken: "low" | "medium" | "high" | null = null;
+  if (priorityMatch) {
+    priorityToken = priorityMatch[1]
+      ? (priorityMatch[1].toLowerCase() as "low" | "medium" | "high")
+      : "high";
+  }
+
+  const dbMatch = take(/#([A-Za-z0-9][\w-]*)/);
+  const databaseToken = dbMatch ? dbMatch[1]! : null;
+  const personMatch = take(/@([A-Za-z0-9][\w-]*)/);
+  const personToken = personMatch ? personMatch[1]! : null;
+
+  // Time (specific presets before numeric forms).
+  let time: { hour: number; minute: number } | null = null;
+  if (take(/\b(?:at\s+)?noon\b/i)) time = { hour: 12, minute: 0 };
+  if (!time && take(/\b(?:at\s+)?midnight\b/i)) time = { hour: 0, minute: 0 };
+  if (!time) {
+    const twelve = take(/\b(?:at\s+)?(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*([ap])m\b/i);
+    if (twelve) {
+      let hour = parseInt(twelve[1]!, 10) % 12;
+      if (twelve[3]!.toLowerCase() === "p") hour += 12;
+      time = { hour, minute: twelve[2] ? parseInt(twelve[2], 10) : 0 };
+    }
+  }
+  if (!time) {
+    const twentyFour = take(/\b(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if (twentyFour) {
+      time = { hour: parseInt(twentyFour[1]!, 10), minute: parseInt(twentyFour[2]!, 10) };
+    }
+  }
+
+  // Dates (relative forms, optional "due"/"by" keyword consumed with them).
+  const DUE = "(?:due\\s+|by\\s+)?";
+  let dueDate: string | null = null;
+
+  const inDays = take(new RegExp(`\\b${DUE}in\\s+(\\d+)\\s+days?\\b`, "i"));
+  if (inDays) dueDate = addDays(referenceDate, parseInt(inDays[1]!, 10)).toISOString();
+
+  if (!dueDate) {
+    const nextWeekdayMatch = take(
+      new RegExp(`\\b${DUE}next\\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\\b`, "i"),
+    );
+    if (nextWeekdayMatch) {
+      const index = WEEKDAY_NAMES.indexOf(
+        nextWeekdayMatch[1]!.toLowerCase() as (typeof WEEKDAY_NAMES)[number],
+      );
+      const coming = nextWeekday(referenceDate, index);
+      const base = startOfDay(referenceDate);
+      const weekEnd = addDays(base, 6 - base.getDay()); // upcoming Saturday
+      dueDate = (coming <= weekEnd ? addDays(coming, 7) : coming).toISOString();
+    }
+  }
+
+  if (!dueDate) {
+    const tmrw = take(new RegExp(`\\b${DUE}(tmrw|tomorrow)\\b`, "i"));
+    if (tmrw) dueDate = addDays(referenceDate, 1).toISOString();
+  }
+  if (!dueDate) {
+    const today = take(new RegExp(`\\b${DUE}today\\b`, "i"));
+    if (today) dueDate = startOfDay(referenceDate).toISOString();
+  }
+  if (!dueDate) {
+    const weekday = take(
+      new RegExp(`\\b${DUE}(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\\b`, "i"),
+    );
+    if (weekday) {
+      const index = WEEKDAY_NAMES.indexOf(
+        weekday[1]!.toLowerCase() as (typeof WEEKDAY_NAMES)[number],
+      );
+      dueDate = nextWeekday(referenceDate, index).toISOString();
+    }
+  }
+
+  const title = working.replace(/\s+/g, " ").trim();
+
+  return {
+    title,
+    dueDate,
+    priority: priorityToken ? PRIORITY_TOKEN_LABEL[priorityToken] : null,
+    status: null,
+    time,
+    databaseToken,
+    personToken,
+    priorityToken,
+    recurringUnsupported,
+    consumedRanges: consumed.sort((a, b) => a[0] - b[0]),
+  };
+}
+
 /** Parse many lines, skipping blanks. */
 export function parseNaturalCaptureLines(
   lines: string[],

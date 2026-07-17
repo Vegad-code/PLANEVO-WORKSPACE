@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import {
+  createFoundationMutations,
+  type FoundationRpcClient,
+} from "@planevo/core/mutations/create-foundations";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { createTaskWithRequiredFoundation } from "../actions";
 
@@ -12,6 +16,23 @@ export type TaskFormState =
 function optionalString(formData: FormData, name: string): string | undefined {
   const value = formData.get(name);
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+export async function recreateTaskDatabase(): Promise<void> {
+  const current = await getCurrentWorkspace();
+  if (!current) throw new Error("Workspace not found.");
+
+  const mutations = createFoundationMutations(
+    current.access.client as unknown as FoundationRpcClient,
+    current.access.ownerId,
+  );
+  await mutations.createTaskDatabaseWithViews({
+    workspaceId: current.workspace.id,
+    name: "Tasks",
+  });
+
+  revalidatePath("/tasks");
+  revalidatePath("/", "layout");
 }
 
 export async function submitTask(

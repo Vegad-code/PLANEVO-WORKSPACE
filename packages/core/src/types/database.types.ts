@@ -43,6 +43,7 @@ export interface Database {
           parent_page_id: string | null;
           title: string;
           icon: string | null;
+          cover_image: string | null;
           content_json: Json;
           database_id: string | null;
           position: number;
@@ -56,6 +57,7 @@ export interface Database {
           parent_page_id?: string | null;
           title?: string;
           icon?: string | null;
+          cover_image?: string | null;
           content_json?: Json;
           database_id?: string | null;
           position?: number;
@@ -69,6 +71,7 @@ export interface Database {
           parent_page_id?: string | null;
           title?: string;
           icon?: string | null;
+          cover_image?: string | null;
           content_json?: Json;
           database_id?: string | null;
           position?: number;
@@ -492,6 +495,30 @@ export interface Database {
       duplicate_database_structure: {
         Args: { p_owner_id: string; p_database_id: string; p_name?: string | null };
         Returns: Json;
+      };
+      apply_property_conversion: {
+        Args: {
+          p_owner_id: string;
+          p_property_id: string;
+          p_new_type: string;
+          p_new_config: Json;
+          p_value_updates: Json;
+          p_clear_record_ids: string[];
+        };
+        Returns: Json;
+      };
+      duplicate_records: {
+        Args: { p_owner_id: string; p_record_ids: string[] };
+        Returns: string[];
+      };
+      move_records_to_database: {
+        Args: {
+          p_owner_id: string;
+          p_record_ids: string[];
+          p_target_database_id: string;
+          p_property_map: Json;
+        };
+        Returns: number;
       };
       get_workspace_calendar_records: {
         Args: { p_workspace_id: string; p_start: string; p_end: string };

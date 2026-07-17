@@ -160,6 +160,15 @@ export function Sidebar({
             expanded={treePreference === "expanded"}
             onToggle={toggleTree}
             onNavigate={onNavigate}
+            dndId={
+              mobile
+                ? "workspace-page-tree-mobile"
+                : preview
+                  ? "workspace-page-tree-preview"
+                  : overlay
+                    ? "workspace-page-tree-peek"
+                    : "workspace-page-tree"
+            }
           />
         </div>
         <SidebarFooter

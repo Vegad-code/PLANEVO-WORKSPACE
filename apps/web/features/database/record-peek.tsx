@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { DisplayRecord } from "@planevo/core/queries/record-display";
+import type { DatabasePropertyRow } from "@planevo/core/types/database.types";
+import type { Json } from "@planevo/core/types/database.types";
 import {
   buildRecordPeekSearchParams,
   DEFAULT_RECORD_PEEK_MODE,
@@ -13,14 +14,19 @@ import {
   type RecordPeekState,
 } from "@planevo/core/state/record-peek-state";
 import { Icon } from "@/components/ui/planevo-icon";
+import { RecordSurface, type RecordSurfaceData } from "./record-surface";
+
+type PeekPayload = RecordSurfaceData & {
+  databaseName: string;
+  pageId: string | null;
+};
 
 type RecordPeekProps = {
-  records: DisplayRecord[];
   databaseId?: string;
   pageId?: string | null;
 };
 
-export function RecordPeek({ records, pageId }: RecordPeekProps) {
+export function RecordPeek({ pageId: pageIdProp }: RecordPeekProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -34,9 +40,9 @@ export function RecordPeek({ records, pageId }: RecordPeekProps) {
     [searchParams],
   );
 
-  const record = peek
-    ? records.find((item) => item.id === peek.recordId) ?? null
-    : null;
+  const [payload, setPayload] = useState<PeekPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const replacePeek = useCallback(
     (next: RecordPeekState | null) => {
@@ -62,6 +68,46 @@ export function RecordPeek({ records, pageId }: RecordPeekProps) {
   );
 
   useEffect(() => {
+    if (!peek) {
+      setPayload(null);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    void fetch(`/api/record-peek/${peek.recordId}`)
+      .then(async (response) => {
+        const body = (await response.json()) as PeekPayload & { error?: string };
+        if (!response.ok) throw new Error(body.error ?? "Failed to load record.");
+        if (cancelled) return;
+        setPayload({
+          recordId: body.recordId,
+          databaseId: body.databaseId,
+          databaseName: body.databaseName,
+          pageId: body.pageId,
+          properties: body.properties as DatabasePropertyRow[],
+          values: body.values as Record<string, Json>,
+          contentJson: body.contentJson,
+        });
+      })
+      .catch((cause) => {
+        if (cancelled) return;
+        setPayload(null);
+        setError(cause instanceof Error ? cause.message : "Failed to load record.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [peek?.recordId]);
+
+  useEffect(() => {
     if (!peek) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -73,22 +119,16 @@ export function RecordPeek({ records, pageId }: RecordPeekProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [close, peek]);
 
-  if (!peek || !record) return null;
+  if (!peek) return null;
 
   const mode = peek.mode;
-  const formattedDate = record.dueDate
-    ? new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(new Date(record.dueDate))
-    : null;
+  const pageId = pageIdProp ?? payload?.pageId ?? null;
 
   const panel = (
     <div
       role="dialog"
       aria-modal={mode === "center"}
-      aria-label={record.title}
+      aria-label="Record peek"
       data-testid="record-peek"
       data-peek-mode={mode}
       className={
@@ -119,11 +159,13 @@ export function RecordPeek({ records, pageId }: RecordPeekProps) {
         <div className="min-w-0 flex-1" />
         <button
           type="button"
-          onClick={() => router.push(`/records/${record.id}`)}
+          onClick={() => router.push(`/records/${peek.recordId}`)}
           className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-small text-text-secondary outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           title="Open full record page"
         >
-          <Icon name="page" className="size-4" />
+          <span aria-hidden className="text-body leading-none">
+            ⤢
+          </span>
           <span className="hidden sm:inline">Open record</span>
         </button>
         {pageId && (
@@ -147,41 +189,17 @@ export function RecordPeek({ records, pageId }: RecordPeekProps) {
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
-        <p className="text-label uppercase text-text-muted">Record</p>
-        <h2 className="mt-1 text-h1 text-ink">{record.title}</h2>
-        {record.description && (
-          <p className="mt-3 max-w-prose text-body text-text-secondary">
-            {record.description}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {loading && (
+          <p className="px-5 py-8 text-small text-text-muted">Loading record…</p>
+        )}
+        {error && (
+          <p role="alert" className="px-5 py-8 text-small text-brick">
+            {error}
           </p>
         )}
-        <dl className="mt-8 grid gap-4 sm:grid-cols-2">
-          <MetaField label="Status" value={record.status} />
-          <MetaField label="Priority" value={record.priority} />
-          <MetaField label="Due" value={formattedDate} />
-          <MetaField
-            label="Estimate"
-            value={
-              record.estimateMinutes !== null
-                ? `${record.estimateMinutes} min`
-                : null
-            }
-          />
-        </dl>
-        {record.tags.length > 0 && (
-          <div className="mt-6">
-            <p className="text-label uppercase text-text-muted">Tags</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {record.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-border px-2 py-1 text-label text-text-secondary"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
+        {!loading && !error && payload && (
+          <RecordSurface variant="peek" data={payload} />
         )}
       </div>
     </div>
@@ -240,15 +258,6 @@ function ModeButton({
     >
       <Icon name={icon} className="size-3.5" />
     </button>
-  );
-}
-
-function MetaField({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div>
-      <dt className="text-label uppercase text-text-muted">{label}</dt>
-      <dd className="mt-1 text-small text-ink">{value ?? "—"}</dd>
-    </div>
   );
 }
 
