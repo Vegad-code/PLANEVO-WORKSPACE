@@ -18,8 +18,8 @@ _Completed 2026-07-17. Commits: 8d0d4ab (T1) · 98ea7b1 (T2) · 7a31d07 (T3) · 
       create-user-products, workspace-links, create-starter-workspace tests).
 - [x] `apps/web` `npx tsc --noEmit`: clean.
 - [x] Migration guard tests pass: no `security definer`, no anon grants in any migration.
-- [ ] **OPEN — founder action:** `supabase db reset` could not run (Docker not installed on
-      this machine). Migration `20260718120000_ecosystem_product_tables.sql` is
-      Opus-review-verified (3 passes: tables/RLS/grants, `create_user_products`,
-      `create_starter_workspace_v2`) but has not been applied to a live database. Run
-      `supabase db reset` locally (with Docker) or apply via CI before relying on it.
+- [x] Migration applied — founder ran `20260718120000_ecosystem_product_tables.sql`
+      directly via the Supabase hosted SQL Editor against Primary Database ("Success. No
+      rows returned"), 2026-07-17. No local Docker/CLI used or required; this repo does
+      not use local Supabase dev. Founder confirmed via information_schema query that all
+      6 tables, both RPCs, and RLS policies exist.
