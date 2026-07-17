@@ -5,14 +5,34 @@ import type { DatabaseBundle } from "@planevo/core/queries/records";
 import type { DatabaseTemplateType } from "@planevo/core/types/property-types";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 
+/**
+ * @deprecated Kernel face routes (DEP-01) backed by template databases
+ * (DEP-02) are being replaced by the ecosystem product tables (Tasks,
+ * Calendar, Files modules). See docs/planevo-feature-spec.md PART VIII.
+ * Remove after the strangler migration completes.
+ */
 export type FaceDatabaseBundle = {
   workspaceId: string;
   bundle: DatabaseBundle | null;
 };
 
+let warnedFaceDatabasesDeprecated = false;
+function warnFaceDatabasesDeprecated() {
+  if (process.env.NODE_ENV === "production" || warnedFaceDatabasesDeprecated) return;
+  warnedFaceDatabasesDeprecated = true;
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[deprecated] apps/web/lib/queries/face-databases.ts (DEP-01/DEP-02) — " +
+      "kernel face routes are being replaced by ecosystem product tables. " +
+      "See docs/planevo-feature-spec.md PART VIII.",
+  );
+}
+
+/** @deprecated See DEP-01/DEP-02 in docs/planevo-feature-spec.md. */
 async function loadFaceBundle(
   templateType: DatabaseTemplateType | "calendar",
 ): Promise<FaceDatabaseBundle> {
+  warnFaceDatabasesDeprecated();
   const current = await getCurrentWorkspace();
   if (!current) return { workspaceId: "", bundle: null };
 
@@ -34,6 +54,9 @@ async function loadFaceBundle(
   return { workspaceId: current.workspace.id, bundle: enriched };
 }
 
+/** @deprecated Replaced by the Tasks module (F-03). See DEP-01. */
 export const getTaskFaceBundle = cache(() => loadFaceBundle("task"));
+/** @deprecated Replaced by the Calendar module (F-04). See DEP-01. */
 export const getCalendarFaceBundle = cache(() => loadFaceBundle("calendar"));
+/** @deprecated Replaced by the Files module (F-05). See DEP-01. */
 export const getFilesFaceBundle = cache(() => loadFaceBundle("files"));
