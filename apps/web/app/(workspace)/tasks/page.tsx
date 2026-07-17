@@ -1,10 +1,41 @@
 import { DatabaseFace } from "@/features/shell/database-face";
 import { RecreateDatabaseButton } from "@/features/shell/recreate-database-button";
 import { TaskComposer } from "@/features/tasks/task-composer";
+import { isEcosystemV2Enabled } from "@/lib/ecosystem/feature-flags";
 import { getTaskFaceBundle } from "@/lib/queries/face-databases";
+import {
+  loadTasksPageData,
+  type TasksPageData,
+} from "@/lib/queries/product-tasks";
 import { recreateTaskDatabase } from "./actions";
 
+function TasksProductView({
+  tasks,
+  status,
+}: Pick<TasksPageData, "tasks" | "status">) {
+  if (status === "unauthenticated") {
+    return (
+      <section>
+        <h1>Tasks</h1>
+        <p>Sign in to see your tasks.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <h1>Tasks</h1>
+      <p>{tasks.length === 1 ? "1 task" : `${tasks.length} tasks`}</p>
+    </section>
+  );
+}
+
 export default async function TasksPage() {
+  if (isEcosystemV2Enabled()) {
+    const data = await loadTasksPageData();
+    return <TasksProductView tasks={data.tasks} status={data.status} />;
+  }
+
   const { workspaceId, bundle } = await getTaskFaceBundle();
 
   return (
