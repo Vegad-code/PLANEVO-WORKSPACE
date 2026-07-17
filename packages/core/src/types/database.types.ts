@@ -15,6 +15,7 @@ export interface Database {
           owner_id: string;
           name: string;
           icon: string | null;
+          settings_json: Json;
           created_at: string;
         };
         Insert: {
@@ -22,6 +23,7 @@ export interface Database {
           owner_id: string;
           name: string;
           icon?: string | null;
+          settings_json?: Json;
           created_at?: string;
         };
         Update: {
@@ -29,6 +31,7 @@ export interface Database {
           owner_id?: string;
           name?: string;
           icon?: string | null;
+          settings_json?: Json;
           created_at?: string;
         };
         Relationships: [];
@@ -143,6 +146,9 @@ export interface Database {
           id: string;
           database_id: string;
           position: number;
+          content_json: Json;
+          deleted_at: string | null;
+          source_block_id: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -151,6 +157,9 @@ export interface Database {
           id?: string;
           database_id: string;
           position?: number;
+          content_json?: Json;
+          deleted_at?: string | null;
+          source_block_id?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -159,6 +168,9 @@ export interface Database {
           id?: string;
           database_id?: string;
           position?: number;
+          content_json?: Json;
+          deleted_at?: string | null;
+          source_block_id?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -434,6 +446,10 @@ export interface Database {
     Functions: {
       create_planevo_workspace: {
         Args: { p_owner_id: string; p_name: string; p_icon?: string | null };
+        Returns: Json;
+      };
+      create_database_from_template: {
+        Args: { p_owner_id: string; p_workspace_id: string; p_template: Json };
         Returns: Json;
       };
       create_task_database_with_views: {

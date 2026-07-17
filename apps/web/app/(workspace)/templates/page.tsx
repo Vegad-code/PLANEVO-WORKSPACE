@@ -1,54 +1,68 @@
-import { Icon } from "@/components/ui/planevo-icon";
+import { Icon, type IconName } from "@/components/ui/planevo-icon";
+import { createDatabaseFromTemplate } from "./actions";
 
-const TEMPLATES = [
-  { name: "Weekly planner", detail: "Tasks, priorities, and a week view." },
-  { name: "Project launch", detail: "Milestones, workstreams, and decisions." },
-  { name: "Course hub", detail: "Assignments, readings, and exam dates." },
-  { name: "Reading library", detail: "Sources, notes, status, and topics." },
-  { name: "Content calendar", detail: "Ideas, drafts, channels, and publish dates." },
-  { name: "Client workspace", detail: "Projects, meetings, files, and follow-ups." },
-  { name: "Personal admin", detail: "Life tasks, documents, and recurring dates." },
-  { name: "Research tracker", detail: "Questions, evidence, sources, and findings." },
+const DATABASE_OPTIONS = [
+  {
+    type: "task",
+    name: "Tasks",
+    icon: "tasks" as IconName,
+    description: "Board, list, and calendar with status, due dates, and priority.",
+  },
+  {
+    type: "notes",
+    name: "Notes",
+    icon: "page" as IconName,
+    description: "Tags and created date with list and table views.",
+  },
+  {
+    type: "project",
+    name: "Projects",
+    icon: "workspace" as IconName,
+    description: "Status, owner, timeline, and linked tasks.",
+  },
+  {
+    type: "files",
+    name: "Files",
+    icon: "files" as IconName,
+    description: "Type, tags, added date, and relations.",
+  },
+  {
+    type: "custom",
+    name: "Blank",
+    icon: "document" as IconName,
+    description: "A name column and table view. Build from there.",
+  },
 ] as const;
 
 export default function TemplatesPage() {
   return (
-    <div className="mx-auto min-h-full max-w-6xl px-5 py-6 sm:px-8 sm:py-8">
-      <p className="text-label uppercase text-text-muted">Start your way</p>
-      <h1 className="mt-2 text-h1">Templates</h1>
-      <p className="mt-2 max-w-2xl text-body text-text-secondary">Choose a Planevo structure, start blank, or describe what you need. None is treated as the default.</p>
+    <div className="mx-auto min-h-full max-w-4xl px-5 py-8 sm:px-8 sm:py-12">
+      <p className="text-label uppercase text-text-muted">New database</p>
+      <h1 className="mt-2 text-h1">Choose a starting point</h1>
+      <p className="mt-2 max-w-2xl text-body text-text-secondary">
+        Every database is born with views and properties. Delete what you do not need.
+      </p>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <section className="rounded-card border border-border bg-surface-raised p-5">
-          <span className="flex size-10 items-center justify-center rounded-lg border border-border bg-paper text-text-secondary"><Icon name="page" className="size-5" /></span>
-          <h2 className="mt-4 text-h3">Template</h2>
-          <p className="mt-2 text-small text-text-secondary">Pick a ready structure and make it yours.</p>
-        </section>
-        <section className="rounded-card border border-border bg-surface-raised p-5">
-          <span className="flex size-10 items-center justify-center rounded-lg border border-border bg-paper text-text-secondary"><Icon name="document" className="size-5" /></span>
-          <h2 className="mt-4 text-h3">Blank</h2>
-          <p className="mt-2 text-small text-text-secondary">Begin with an empty page and no imposed system.</p>
-        </section>
-        <section className="rounded-card border border-slate bg-slate-tint p-5">
-          <span className="flex size-10 items-center justify-center rounded-lg border border-slate bg-paper text-text-secondary"><Icon name="ai" className="size-5" /></span>
-          <h2 className="mt-4 text-h3">Describe it</h2>
-          <p className="mt-2 text-small text-text-secondary">Explain the workspace, then edit its preview before confirming.</p>
-        </section>
+      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+        {DATABASE_OPTIONS.map((option) => (
+          <form key={option.type} action={createDatabaseFromTemplate.bind(null, option.type)}>
+            <button
+              type="submit"
+              className="flex w-full items-start gap-4 rounded-xl border border-border bg-surface-raised p-4 text-left outline-none hover:border-border-strong focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-paper text-text-secondary">
+                <Icon name={option.icon} className="size-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-body font-medium">{option.name}</span>
+                <span className="mt-1 block text-small text-text-secondary">
+                  {option.description}
+                </span>
+              </span>
+            </button>
+          </form>
+        ))}
       </div>
-
-      <section className="mt-10">
-        <h2 className="text-label uppercase text-text-muted">Planevo templates</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {TEMPLATES.map((template) => (
-            <article key={template.name} className="rounded-card border border-border bg-surface-raised p-4">
-              <span className="flex size-9 items-center justify-center rounded-lg border border-border bg-paper text-text-secondary"><Icon name="workspace" /></span>
-              <h3 className="mt-4 text-body font-medium">{template.name}</h3>
-              <p className="mt-2 text-small text-text-secondary">{template.detail}</p>
-              <p className="mt-5 text-label uppercase text-text-muted">Preview available next</p>
-            </article>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

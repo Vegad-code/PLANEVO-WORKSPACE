@@ -6,6 +6,8 @@ export type PageTreeItem = {
   id: string;
   label: string;
   depth: number;
+  parentPageId: string | null;
+  position: number;
 };
 
 export type WorkspaceShellStatus = "ready" | "empty" | "unavailable";
@@ -78,7 +80,13 @@ function buildPageTree(pages: PageRow[]): PageTreeItem[] {
   function visit(page: PageRow, depth: number) {
     if (visited.has(page.id)) return;
     visited.add(page.id);
-    tree.push({ id: page.id, label: page.title, depth });
+    tree.push({
+      id: page.id,
+      label: page.title,
+      depth,
+      parentPageId: page.parent_page_id,
+      position: page.position,
+    });
 
     for (const child of childrenByParent.get(page.id) ?? []) {
       visit(child, depth + 1);

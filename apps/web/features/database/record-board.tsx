@@ -1,6 +1,24 @@
+"use client";
+
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import type { DisplayRecord } from "@planevo/core/queries/record-display";
 import { groupIntoColumns } from "@planevo/core/state/board-state";
-import { deleteRecord } from "@/app/(workspace)/databases/[databaseId]/actions";
+import {
+  deleteRecord,
+  upsertRecordValue,
+} from "@/app/(workspace)/databases/[databaseId]/actions";
 import { DeleteEntityControl } from "@/components/ui/delete-entity-control";
 import { RecordDeleteHover } from "@/features/database/delete-record-control";
 
@@ -8,10 +26,14 @@ function RecordCard({
   record,
   databaseId,
   onOpen,
+  isDragging = false,
+  dragHandleProps,
 }: {
   record: DisplayRecord;
   databaseId?: string | null;
   onOpen?: (recordId: string) => void;
+  isDragging?: boolean;
+  dragHandleProps?: Record<string, unknown>;
 }) {
   const formattedDate = record.dueDate
     ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
@@ -22,9 +44,14 @@ function RecordCard({
 
   return (
     <article
-      className={`group rounded-xl border border-border bg-paper p-4 ${
-        onOpen ? "cursor-pointer outline-none hover:border-border-strong focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink" : ""
-      }`}
+      {...dragHandleProps}
+      className={`group rounded-xl border border-border bg-paper p-4 touch-none ${
+        isDragging ? "opacity-40" : ""
+      } ${
+        onOpen
+          ? "cursor-pointer outline-none hover:border-border-strong focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          : ""
+      } ${dragHandleProps ? "cursor-grab active:cursor-grabbing" : ""}`}
       role={onOpen ? "button" : undefined}
       tabIndex={onOpen ? 0 : undefined}
       onClick={
@@ -60,7 +87,7 @@ function RecordCard({
                 compact
                 label={`Delete ${label}`}
                 title={`Delete “${label}”?`}
-                description="This permanently removes the record and all of its property values. This can't be undone."
+                description="This moves the record to trash. You can restore it within 30 days."
                 confirmLabel="Delete record"
                 onConfirm={() => deleteRecord({ databaseId, recordId: record.id })}
               />
@@ -86,52 +113,193 @@ function RecordCard({
   );
 }
 
+function DraggableRecordCard({
+  record,
+  databaseId,
+  onOpen,
+}: {
+  record: DisplayRecord;
+  databaseId?: string | null;
+  onOpen?: (recordId: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: record.id,
+  });
+  const style: CSSProperties | undefined = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <RecordCard
+        record={record}
+        databaseId={databaseId}
+        onOpen={onOpen}
+        isDragging={isDragging}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
+    </div>
+  );
+}
+
+function BoardColumn({
+  columnKey,
+  label,
+  items,
+  databaseId,
+  onOpenRecord,
+  draggable,
+}: {
+  columnKey: string;
+  label: string;
+  items: DisplayRecord[];
+  databaseId?: string | null;
+  onOpenRecord?: (recordId: string) => void;
+  draggable: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: columnKey, disabled: !draggable });
+
+  return (
+    <section
+      ref={setNodeRef}
+      className={`w-72 shrink-0 rounded-card border bg-surface-raised p-3 transition-colors motion-reduce:transition-none lg:w-auto ${
+        isOver ? "border-ink" : "border-border"
+      }`}
+    >
+      <div className="flex items-center justify-between px-1 py-1">
+        <h2 className="text-small font-medium">{label}</h2>
+        <span className="text-label text-text-muted">{items.length}</span>
+      </div>
+      <div className="mt-3 flex min-h-16 flex-col gap-3">
+        {items.map((record) =>
+          draggable ? (
+            <DraggableRecordCard
+              key={record.id}
+              record={record}
+              databaseId={databaseId}
+              onOpen={onOpenRecord}
+            />
+          ) : (
+            <RecordCard
+              key={record.id}
+              record={record}
+              databaseId={databaseId}
+              onOpen={onOpenRecord}
+            />
+          ),
+        )}
+        {items.length === 0 && (
+          <p className="rounded-xl border border-dashed border-border px-3 py-5 text-center text-small text-text-muted">
+            Nothing here
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Board over DisplayRecords: configured columns + orphan values + no-status
  *  lane — a record never disappears because its status string is unexpected. */
 export function RecordBoard({
   records,
   statusOptions,
   databaseId,
+  statusPropertyId,
   onOpenRecord,
 }: {
   records: DisplayRecord[];
   statusOptions: string[];
   databaseId?: string | null;
+  statusPropertyId?: string | null;
   onOpenRecord?: (recordId: string) => void;
 }) {
-  const columns = groupIntoColumns(records, (record) => record.status, statusOptions);
+  const [boardRecords, setBoardRecords] = useState(records);
+  const [activeRecordId, setActiveRecordId] = useState<string | null>(null);
 
-  return (
+  useEffect(() => {
+    setBoardRecords(records);
+  }, [records]);
+
+  const columns = groupIntoColumns(boardRecords, (record) => record.status, statusOptions);
+  const draggable = Boolean(statusPropertyId && databaseId);
+  const activeRecord = activeRecordId
+    ? boardRecords.find((record) => record.id === activeRecordId)
+    : null;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  );
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveRecordId(String(event.active.id));
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveRecordId(null);
+
+    const { active, over } = event;
+    if (!over || !statusPropertyId || !databaseId) return;
+
+    const recordId = String(active.id);
+    const columnKey = String(over.id);
+    const record = boardRecords.find((item) => item.id === recordId);
+    if (!record) return;
+
+    const targetStatus = columnKey === "__no_group__" ? null : columnKey;
+    const currentStatus = record.status?.trim() || null;
+    if (targetStatus === currentStatus) return;
+
+    const previous = boardRecords;
+    setBoardRecords((current) =>
+      current.map((item) =>
+        item.id === recordId ? { ...item, status: targetStatus } : item,
+      ),
+    );
+
+    const result = await upsertRecordValue({
+      recordId,
+      propertyId: statusPropertyId,
+      rawValue: targetStatus ?? "",
+    });
+
+    if (!result.ok) {
+      setBoardRecords(previous);
+    }
+  }
+
+  const board = (
     <div className="overflow-x-auto pb-4">
       <div className="flex min-w-max gap-4 lg:grid lg:min-w-0 lg:auto-cols-fr lg:grid-flow-col">
         {columns.map((column) => (
-          <section
+          <BoardColumn
             key={column.key}
-            className="w-72 shrink-0 rounded-card border border-border bg-surface-raised p-3 lg:w-auto"
-          >
-            <div className="flex items-center justify-between px-1 py-1">
-              <h2 className="text-small font-medium">{column.label}</h2>
-              <span className="text-label text-text-muted">{column.items.length}</span>
-            </div>
-            <div className="mt-3 flex flex-col gap-3">
-              {column.items.map((record) => (
-                <RecordCard
-                  key={record.id}
-                  record={record}
-                  databaseId={databaseId}
-                  onOpen={onOpenRecord}
-                />
-              ))}
-              {column.items.length === 0 && (
-                <p className="rounded-xl border border-dashed border-border px-3 py-5 text-center text-small text-text-muted">
-                  Nothing here
-                </p>
-              )}
-            </div>
-          </section>
+            columnKey={column.key}
+            label={column.label}
+            items={column.items}
+            databaseId={databaseId}
+            onOpenRecord={onOpenRecord}
+            draggable={draggable}
+          />
         ))}
       </div>
     </div>
+  );
+
+  if (!draggable) {
+    return board;
+  }
+
+  return (
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      {board}
+      <DragOverlay dropAnimation={null}>
+        {activeRecord ? (
+          <RecordCard record={activeRecord} databaseId={databaseId} />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
 

@@ -1,34 +1,37 @@
+import type { ComponentType, SVGProps } from "react";
 import {
-  ArrowUpCircle,
-  Bell,
-  Calendar,
-  ChatBubble,
-  Check,
-  CloudDownload,
-  EmptyPage,
-  Folder,
-  Home,
-  LogOut,
-  Mail,
-  Menu,
-  NavArrowLeft,
-  NavArrowDown,
-  NavArrowRight,
-  Network,
-  Page,
-  Pin,
-  Plus,
-  Search,
-  Settings,
-  SidebarCollapse,
-  SidebarExpand,
-  TaskList,
-  Upload,
-  UserPlus,
-  ViewGrid,
-  WarningTriangle,
-  Xmark,
-} from "iconoir-react";
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowRightOnRectangleIcon,
+  ArrowUpCircleIcon,
+  ArrowUpTrayIcon,
+  Bars3CenterLeftIcon,
+  Bars3Icon,
+  BellIcon,
+  CalendarIcon,
+  ChatBubbleLeftRightIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ClipboardDocumentListIcon,
+  CloudArrowDownIcon,
+  Cog6ToothIcon,
+  DocumentIcon,
+  DocumentTextIcon,
+  EnvelopeIcon,
+  ExclamationTriangleIcon,
+  FolderIcon,
+  HomeIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+  PlusIcon,
+  PuzzlePieceIcon,
+  Squares2X2Icon,
+  UserPlusIcon,
+  WindowIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
+
+type HeroIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 export type IconName =
   | "workspace"
@@ -62,36 +65,36 @@ export type IconName =
   | "mail";
 
 const ICONS = {
-  workspace: Home,
-  canvas: ViewGrid,
-  plus: Plus,
-  tasks: TaskList,
-  calendar: Calendar,
-  files: Folder,
-  page: Page,
-  ai: ChatBubble,
-  agents: Network,
-  settings: Settings,
-  check: Check,
-  "chevron-down": NavArrowDown,
-  "panel-close": SidebarCollapse,
-  "panel-open": SidebarExpand,
-  pin: Pin,
-  search: Search,
-  inbox: Bell,
-  menu: Menu,
-  close: Xmark,
-  "arrow-left": NavArrowLeft,
-  "arrow-right": NavArrowRight,
-  upload: Upload,
-  document: EmptyPage,
-  import: CloudDownload,
-  warning: WarningTriangle,
-  invite: UserPlus,
-  upgrade: ArrowUpCircle,
-  logout: LogOut,
-  mail: Mail,
-} satisfies Record<IconName, typeof Home>;
+  workspace: HomeIcon,
+  canvas: Squares2X2Icon,
+  plus: PlusIcon,
+  tasks: ClipboardDocumentListIcon,
+  calendar: CalendarIcon,
+  files: FolderIcon,
+  page: DocumentIcon,
+  ai: ChatBubbleLeftRightIcon,
+  agents: PuzzlePieceIcon,
+  settings: Cog6ToothIcon,
+  check: CheckIcon,
+  "chevron-down": ChevronDownIcon,
+  "panel-close": Bars3CenterLeftIcon,
+  "panel-open": WindowIcon,
+  pin: MapPinIcon,
+  search: MagnifyingGlassIcon,
+  inbox: BellIcon,
+  menu: Bars3Icon,
+  close: XMarkIcon,
+  "arrow-left": ArrowLeftIcon,
+  "arrow-right": ArrowRightIcon,
+  upload: ArrowUpTrayIcon,
+  document: DocumentTextIcon,
+  import: CloudArrowDownIcon,
+  warning: ExclamationTriangleIcon,
+  invite: UserPlusIcon,
+  upgrade: ArrowUpCircleIcon,
+  logout: ArrowRightOnRectangleIcon,
+  mail: EnvelopeIcon,
+} satisfies Record<IconName, HeroIcon>;
 
 export function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {
   const IconComponent = ICONS[name];
@@ -99,8 +102,7 @@ export function Icon({ name, className = "size-4" }: { name: IconName; className
   return (
     <IconComponent
       aria-hidden="true"
-      className={className}
-      strokeWidth={1.5}
+      className={`${className} stroke-[1.5]`}
     />
   );
 }

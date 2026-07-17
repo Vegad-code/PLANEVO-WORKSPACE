@@ -21,8 +21,8 @@ const shell = {
     created_at: "2026-07-14T00:00:00.000Z",
   },
   pages: [
-    { id: "page-1", label: "Physics 2400", depth: 0 },
-    { id: "page-2", label: "Lab notes", depth: 1 },
+    { id: "page-1", label: "Physics 2400", depth: 0, parentPageId: null, position: 0 },
+    { id: "page-2", label: "Lab notes", depth: 1, parentPageId: "page-1", position: 0 },
   ],
   userDisplayName: "Anthony Jabbour",
   userInitials: "AJ",

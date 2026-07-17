@@ -3,6 +3,18 @@ import { Icon } from "@/components/ui/planevo-icon";
 import { createWorkspaceCalendar } from "@/app/(workspace)/calendar/actions";
 import { MonthGrid } from "@/features/database/month-grid";
 
+const DATABASE_CHIP_CLASSES = [
+  "bg-slate-tint",
+  "bg-marigold-tint",
+  "bg-meadow-tint",
+  "bg-brick-tint",
+] as const;
+
+function chipClassForDatabase(databaseId: string): string {
+  const hash = databaseId.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return DATABASE_CHIP_CLASSES[hash % DATABASE_CHIP_CLASSES.length]!;
+}
+
 export function CalendarView({ data, month }: { data: CalendarData; month?: string }) {
   return (
     <div className="mx-auto flex min-h-full max-w-7xl flex-col px-5 py-6 sm:px-8 sm:py-8">
@@ -36,6 +48,7 @@ export function CalendarView({ data, month }: { data: CalendarData; month?: stri
             title: item.title,
             date: item.date,
             subtitle: item.databaseName,
+            colorClass: chipClassForDatabase(item.databaseId),
           }))}
           month={month}
           monthHrefBase="/calendar"

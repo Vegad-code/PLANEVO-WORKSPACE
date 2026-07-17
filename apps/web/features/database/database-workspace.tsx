@@ -1,16 +1,23 @@
 "use client";
 
-import { useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import type { DatabaseBundle } from "@planevo/core/queries/records";
 import { toDisplayRecord } from "@planevo/core/queries/record-display";
 import { findPropertyByRole, selectOptions } from "@planevo/core/types/property-roles";
 import type { ViewRow } from "@planevo/core/types/database.types";
-import { duplicateDatabase, deleteDatabase } from "@/app/(workspace)/databases/[databaseId]/actions";
+import {
+  createRecordOnDate,
+  duplicateDatabase,
+  deleteDatabase,
+  upsertRecordValue,
+} from "@/app/(workspace)/databases/[databaseId]/actions";
 import { DeleteEntityControl } from "@/components/ui/delete-entity-control";
+import { DatabaseToolbar } from "./database-toolbar";
 import { TableView } from "./table-view";
 import { RecordBoard, RecordList } from "./record-board";
 import { MonthGrid } from "./month-grid";
 import { RecordPeek, useOpenRecordPeek } from "./record-peek";
+import { RecordTrashPanel } from "./record-trash-panel";
 
 export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
   const views = bundle.views;
@@ -23,24 +30,31 @@ export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
     () => bundle.records.map((record) => toDisplayRecord(record, bundle.properties)),
     [bundle],
   );
+  const [filteredRecords, setFilteredRecords] = useState(displayRecords);
   const statusProperty = findPropertyByRole(bundle.properties, "status");
+  const dueProperty = findPropertyByRole(bundle.properties, "due_date");
   const statusOptions = statusProperty ? selectOptions(statusProperty) : [];
+
+  useEffect(() => {
+    setFilteredRecords(displayRecords);
+  }, [displayRecords]);
 
   function viewBody(view: ViewRow | undefined) {
     switch (view?.type) {
       case "board":
         return (
           <RecordBoard
-            records={displayRecords}
+            records={filteredRecords}
             statusOptions={statusOptions}
             databaseId={bundle.database.id}
+            statusPropertyId={statusProperty?.id}
             onOpenRecord={openPeek}
           />
         );
       case "list":
         return (
           <RecordList
-            records={displayRecords}
+            records={filteredRecords}
             databaseId={bundle.database.id}
             onOpenRecord={openPeek}
           />
@@ -48,7 +62,7 @@ export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
       case "calendar":
         return (
           <MonthGrid
-            items={displayRecords
+            items={filteredRecords
               .filter((record) => record.dueDate)
               .map((record) => ({
                 id: record.id,
@@ -58,10 +72,39 @@ export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
                 date: record.dueDate!,
               }))}
             onOpenRecord={openPeek}
+            onCreateOnDay={
+              dueProperty
+                ? (dateIso) =>
+                    void createRecordOnDate({
+                      databaseId: bundle.database.id,
+                      propertyId: dueProperty.id,
+                      dateIso,
+                    })
+                : undefined
+            }
+            onRescheduleRecord={
+              dueProperty
+                ? (recordId, dateIso) =>
+                    upsertRecordValue({
+                      recordId,
+                      propertyId: dueProperty.id,
+                      rawValue: dateIso,
+                    })
+                : undefined
+            }
           />
         );
-      default:
-        return <TableView bundle={bundle} onOpenRecord={openPeek} />;
+      default: {
+        const filteredIds = new Set(filteredRecords.map((record) => record.id));
+        const tableRecords = bundle.records.filter((record) => filteredIds.has(record.id));
+        return (
+          <TableView
+            bundle={bundle}
+            records={tableRecords}
+            onOpenRecord={openPeek}
+          />
+        );
+      }
     }
   }
 
@@ -91,6 +134,7 @@ export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
           {views.length === 0 && <span className="text-small text-text-muted">Table</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <RecordTrashPanel databaseId={bundle.database.id} />
           <form action={duplicateDatabase.bind(null, bundle.database.id)}>
             <button
               type="submit"
@@ -103,17 +147,20 @@ export function DatabaseWorkspace({ bundle }: { bundle: DatabaseBundle }) {
           <DeleteEntityControl
             label="Delete database"
             title={`Delete “${bundle.database.name}”?`}
-            description={
-              bundle.database.template_type
-                ? `This permanently removes the ${bundle.database.template_type} database, all of its records, properties, and views. This can't be undone.`
-                : "This permanently removes the database, all of its records, properties, and views. This can't be undone."
-            }
+            description={`This permanently removes the database and its ${bundle.records.length} record${bundle.records.length === 1 ? "" : "s"}, including all properties and views. This can't be undone.`}
             confirmLabel="Delete database"
             onConfirm={() => deleteDatabase(bundle.database.id)}
           />
         </div>
       </div>
-      <div className="mt-4">{viewBody(activeView)}</div>
+      <div className="mt-4 flex flex-col gap-4">
+        <DatabaseToolbar
+          records={displayRecords}
+          statusOptions={statusOptions}
+          onFilteredChange={setFilteredRecords}
+        />
+        {viewBody(activeView)}
+      </div>
       <Suspense fallback={null}>
         <RecordPeek
           records={displayRecords}

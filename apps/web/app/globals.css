@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "../features/editor/theme/blocknote-tokens.css";
+@import "@blocknote/shadcn/style.css";
+
+/* Scan BlockNote shadcn sources so Tailwind emits its utility classes. */
+@source "../../../node_modules/@blocknote/shadcn";
 
 /*
  * Planevo token layer — design-brief §1–§3. ALL values PROVISIONAL until reviewed
@@ -158,23 +163,3 @@ body {
   }
 }
 
-/* BlockNote inherits the token layer — never its own palette or fonts. */
-.planevo-editor .bn-container {
-  --bn-colors-editor-background: var(--color-paper);
-  --bn-colors-editor-text: var(--color-ink);
-  --bn-colors-menu-background: var(--color-surface-raised);
-  --bn-colors-menu-text: var(--color-ink);
-  --bn-colors-tooltip-background: var(--color-surface-raised);
-  --bn-colors-tooltip-text: var(--color-text-secondary);
-  --bn-colors-hovered-background: var(--color-sidebar);
-  --bn-colors-hovered-text: var(--color-ink);
-  --bn-colors-selected-background: var(--color-ink);
-  --bn-colors-selected-text: var(--color-paper);
-  --bn-colors-disabled-background: var(--color-sidebar);
-  --bn-colors-disabled-text: var(--color-text-muted);
-  --bn-colors-shadow: var(--color-border);
-  --bn-colors-border: var(--color-border);
-  --bn-colors-side-menu: var(--color-text-muted);
-  --bn-font-family: var(--font-sans);
-  --bn-border-radius: 8px;
-}

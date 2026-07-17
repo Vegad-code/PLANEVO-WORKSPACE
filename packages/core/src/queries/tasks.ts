@@ -8,6 +8,7 @@ export type TasksData = {
   status: "ready" | "empty" | "unavailable";
   workspaceId: string | null;
   databaseId: string | null;
+  statusPropertyId: string | null;
   statusOptions: string[];
   tasks: DisplayRecord[];
 };
@@ -15,6 +16,7 @@ export type TasksData = {
 const EMPTY: Omit<TasksData, "status"> = {
   workspaceId: null,
   databaseId: null,
+  statusPropertyId: null,
   statusOptions: [],
   tasks: [],
 };
@@ -43,6 +45,7 @@ export async function loadTasksBundle(
     status: "ready",
     workspaceId,
     databaseId: bundle.database.id,
+    statusPropertyId: statusProperty?.id ?? null,
     statusOptions: statusProperty ? selectOptions(statusProperty) : [],
     tasks: bundle.records.map((record) => toDisplayRecord(record, bundle.properties)),
   };

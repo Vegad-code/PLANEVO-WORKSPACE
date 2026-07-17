@@ -51,3 +51,51 @@ test("normalizes and serializes section collapse state", async () => {
     private: true,
   });
 });
+
+test("toggles workspace tree preference", async () => {
+  const { reduceWorkspaceTreeCollapse, DEFAULT_WORKSPACE_TREE_PREFERENCE } =
+    await loadModule();
+
+  assert.equal(DEFAULT_WORKSPACE_TREE_PREFERENCE, "expanded");
+  assert.equal(reduceWorkspaceTreeCollapse("expanded"), "collapsed");
+  assert.equal(reduceWorkspaceTreeCollapse("collapsed"), "expanded");
+});
+
+test("normalizes workspace tree preference and migrates legacy sections", async () => {
+  const {
+    normalizeWorkspaceTreePreference,
+    serializeWorkspaceTreePreference,
+    DEFAULT_WORKSPACE_TREE_PREFERENCE,
+  } = await loadModule();
+
+  assert.equal(normalizeWorkspaceTreePreference(null), DEFAULT_WORKSPACE_TREE_PREFERENCE);
+  assert.equal(normalizeWorkspaceTreePreference("expanded"), "expanded");
+  assert.equal(normalizeWorkspaceTreePreference("collapsed"), "collapsed");
+  assert.equal(normalizeWorkspaceTreePreference("nope"), DEFAULT_WORKSPACE_TREE_PREFERENCE);
+
+  assert.equal(
+    normalizeWorkspaceTreePreference(
+      null,
+      JSON.stringify({ pinned: false, pages: true, private: false }),
+    ),
+    "collapsed",
+  );
+  assert.equal(
+    normalizeWorkspaceTreePreference(
+      null,
+      JSON.stringify({ pinned: true, pages: false, private: true }),
+    ),
+    "expanded",
+  );
+
+  // New key wins over legacy
+  assert.equal(
+    normalizeWorkspaceTreePreference(
+      "expanded",
+      JSON.stringify({ pinned: false, pages: true, private: false }),
+    ),
+    "expanded",
+  );
+
+  assert.equal(serializeWorkspaceTreePreference("collapsed"), "collapsed");
+});

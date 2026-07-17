@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TasksData } from "@planevo/core/queries/tasks";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DatabaseToolbar } from "@/features/database/database-toolbar";
 import { TaskComposer } from "@/features/tasks/task-composer";
 import { RecordBoard, RecordList } from "@/features/database/record-board";
 
 export function TasksView({ data }: { data: TasksData }) {
   const [view, setView] = useState<"board" | "list">("board");
+  const [filteredTasks, setFilteredTasks] = useState(data.tasks);
   const hasTasks = data.tasks.length > 0;
+
+  useEffect(() => {
+    setFilteredTasks(data.tasks);
+  }, [data.tasks]);
 
   return (
     <div className="mx-auto flex min-h-full max-w-7xl flex-col px-5 py-6 sm:px-8 sm:py-8">
@@ -52,14 +58,24 @@ export function TasksView({ data }: { data: TasksData }) {
               />
             }
           />
-        ) : view === "board" ? (
-          <RecordBoard
-            records={data.tasks}
-            statusOptions={data.statusOptions}
-            databaseId={data.databaseId}
-          />
         ) : (
-          <RecordList records={data.tasks} databaseId={data.databaseId} />
+          <div className="flex flex-col gap-4">
+            <DatabaseToolbar
+              records={data.tasks}
+              statusOptions={data.statusOptions}
+              onFilteredChange={setFilteredTasks}
+            />
+            {view === "board" ? (
+              <RecordBoard
+                records={filteredTasks}
+                statusOptions={data.statusOptions}
+                databaseId={data.databaseId}
+                statusPropertyId={data.statusPropertyId}
+              />
+            ) : (
+              <RecordList records={filteredTasks} databaseId={data.databaseId} />
+            )}
+          </div>
         )}
       </div>
     </div>

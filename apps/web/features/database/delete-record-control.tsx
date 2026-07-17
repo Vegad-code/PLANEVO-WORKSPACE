@@ -20,7 +20,7 @@ export function DeleteRecordControl({
     <DeleteEntityControl
       label={`Delete ${label}`}
       title={`Delete “${label}”?`}
-      description="This permanently removes the record and all of its property values. This can't be undone."
+      description="This moves the record to trash. You can restore it within 30 days."
       confirmLabel="Delete record"
       onConfirm={() => deleteRecord({ databaseId, recordId })}
     />
@@ -48,7 +48,7 @@ export function RecordDeleteHover({
       className={className}
       label={`Delete ${label}`}
       title={`Delete “${label}”?`}
-      description="This permanently removes the record and all of its property values. This can't be undone."
+      description="This moves the record to trash. You can restore it within 30 days."
       confirmLabel="Delete record"
       onConfirm={() => deleteRecord({ databaseId, recordId })}
     >

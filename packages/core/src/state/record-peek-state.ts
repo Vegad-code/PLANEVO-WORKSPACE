@@ -5,7 +5,7 @@ export type RecordPeekState = {
   mode: RecordPeekMode;
 };
 
-export const DEFAULT_RECORD_PEEK_MODE: RecordPeekMode = "center";
+export const DEFAULT_RECORD_PEEK_MODE: RecordPeekMode = "side";
 export const RECORD_PEEK_MODE_STORAGE_KEY = "planevo.record-peek.mode";
 
 export function normalizeRecordPeekMode(

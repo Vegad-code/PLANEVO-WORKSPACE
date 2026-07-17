@@ -117,6 +117,15 @@ export function RecordPeek({ records, pageId }: RecordPeekProps) {
           />
         </div>
         <div className="min-w-0 flex-1" />
+        <button
+          type="button"
+          onClick={() => router.push(`/records/${record.id}`)}
+          className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-small text-text-secondary outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          title="Open full record page"
+        >
+          <Icon name="page" className="size-4" />
+          <span className="hidden sm:inline">Open record</span>
+        </button>
         {pageId && (
           <button
             type="button"

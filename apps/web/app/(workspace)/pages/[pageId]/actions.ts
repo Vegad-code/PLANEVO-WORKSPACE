@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { stripPageContentForTemplate } from "@planevo/core/mutations/duplicate-page";
+import { promoteBlocksToDatabase } from "@planevo/core/mutations/promote-blocks";
+import { createDatabase } from "@planevo/core/mutations/create-database";
 import { requireDataAccess } from "@/lib/data/access";
 import {
   clearRecentItems,
@@ -61,6 +64,94 @@ export async function savePageContent(
 }
 
 /**
+ * F-10: promote list blocks into records, preserving source_block_id for reverse path.
+ */
+export async function promoteBlocksToRecords(input: {
+  pageId: string;
+  databaseId: string;
+  createNewTaskDatabase?: boolean;
+  blocks: Array<{
+    blockId: string;
+    title: string;
+    dueDate?: string | null;
+    priority?: string | null;
+    status?: string | null;
+  }>;
+}): Promise<{
+  ok: boolean;
+  databaseId?: string;
+  recordIds?: string[];
+  error?: string;
+}> {
+  const cleaned = input.blocks
+    .map((block) => ({
+      blockId: block.blockId,
+      title: block.title.trim(),
+      dueDate: block.dueDate ?? null,
+      priority: block.priority ?? null,
+      status: block.status ?? null,
+    }))
+    .filter((block) => block.title.length > 0)
+    .slice(0, 50);
+
+  if (cleaned.length === 0) {
+    return { ok: false, error: "Nothing to promote." };
+  }
+
+  try {
+    const { access, pageId: ownedPageId } = await requireOwnedPage(input.pageId);
+    void ownedPageId;
+
+    let databaseId = input.databaseId;
+
+    if (input.createNewTaskDatabase) {
+      const { data: page, error: pageError } = await access.client
+        .from("pages")
+        .select("workspace_id")
+        .eq("id", input.pageId)
+        .maybeSingle();
+      if (pageError) throw pageError;
+      if (!page) return { ok: false, error: "Page not found." };
+
+      const created = await createDatabase(access.client, access.ownerId, {
+        workspaceId: page.workspace_id,
+        templateType: "task",
+      });
+      databaseId = created.databaseId;
+    }
+
+    const { data: database, error: databaseError } = await access.client
+      .from("databases")
+      .select("id, workspaces!inner(owner_id)")
+      .eq("id", databaseId)
+      .eq("workspaces.owner_id", access.ownerId)
+      .maybeSingle();
+    if (databaseError) throw databaseError;
+    if (!database) return { ok: false, error: "Database not found." };
+
+    const result = await promoteBlocksToDatabase(access.client, access.ownerId, {
+      databaseId,
+      blocks: cleaned,
+    });
+
+    revalidatePath("/tasks");
+    revalidatePath(`/databases/${databaseId}`);
+    revalidatePath("/", "layout");
+
+    return {
+      ok: true,
+      databaseId: result.databaseId,
+      recordIds: result.recordIds,
+    };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to promote blocks.",
+    };
+  }
+}
+
+/**
  * Retroactive structure v1 (PRD §5.3 #1, checklist slice): promote written
  * list items into real task records in the workspace's default task database.
  */
@@ -103,6 +194,36 @@ export async function updatePageTitle(pageId: string, title: string): Promise<vo
     .eq("id", pageId);
   if (error) throw error;
   revalidatePath("/", "layout");
+}
+
+/** F-12: duplicate page layout with cleared text and fresh block ids. */
+export async function duplicatePageAsTemplate(pageId: string): Promise<void> {
+  const { access } = await requireOwnedPage(pageId);
+  const { data: source, error: sourceError } = await access.client
+    .from("pages")
+    .select("id, workspace_id, parent_page_id, title, content_json, icon, position")
+    .eq("id", pageId)
+    .maybeSingle();
+  if (sourceError) throw sourceError;
+  if (!source) throw new Error("Page not found.");
+
+  const copyTitle = `${source.title.trim() || "Untitled"} (copy)`;
+  const { data: created, error: createError } = await access.client
+    .from("pages")
+    .insert({
+      workspace_id: source.workspace_id,
+      parent_page_id: source.parent_page_id,
+      title: copyTitle,
+      content_json: stripPageContentForTemplate(source.content_json),
+      icon: source.icon,
+      position: source.position + 0.5,
+    })
+    .select("id")
+    .single();
+  if (createError) throw createError;
+
+  revalidatePath("/", "layout");
+  redirect(`/pages/${created.id}`);
 }
 
 export async function deletePage(pageId: string): Promise<DeleteResult> {

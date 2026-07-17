@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   addMonths,
   calendarDays,
@@ -22,6 +23,7 @@ export type MonthGridItem = {
   subtitle?: string;
   recordId?: string;
   databaseId?: string;
+  colorClass?: string;
 };
 
 const NAV_BUTTON_CLASS =
@@ -39,20 +41,34 @@ export function MonthGrid({
   month,
   monthHrefBase,
   onOpenRecord,
+  onCreateOnDay,
+  onRescheduleRecord,
 }: {
   items: MonthGridItem[];
   month?: string;
   monthHrefBase?: string;
   onOpenRecord?: (recordId: string) => void;
+  onCreateOnDay?: (dateIso: string) => void;
+  onRescheduleRecord?: (
+    recordId: string,
+    dateIso: string,
+  ) => Promise<{ ok: boolean } | void>;
 }) {
+  const router = useRouter();
   const initialMonth =
     parseMonthParam(month) ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const [localMonth, setLocalMonth] = useState(initialMonth);
+  const [localItems, setLocalItems] = useState(items);
+  const [draggingRecordId, setDraggingRecordId] = useState<string | null>(null);
   const activeMonth = monthHrefBase ? initialMonth : localMonth;
 
   const days = useMemo(() => calendarDays(activeMonth), [activeMonth]);
-  const groupedItems = useMemo(() => groupByDay(items), [items]);
+  const groupedItems = useMemo(() => groupByDay(localItems), [localItems]);
   const today = dateKey(new Date());
+
+  useEffect(() => {
+    setLocalItems(items);
+  }, [items]);
 
   const monthTitle = new Intl.DateTimeFormat(undefined, {
     month: "long",
@@ -61,6 +77,35 @@ export function MonthGrid({
 
   function href(target: Date): string {
     return `${monthHrefBase}?month=${monthParam(target)}`;
+  }
+
+  function dayStartIso(day: Date): string {
+    return new Date(day.getFullYear(), day.getMonth(), day.getDate()).toISOString();
+  }
+
+  async function handleDropOnDay(day: Date, recordId: string) {
+    const nextDate = dayStartIso(day);
+    const previous = localItems;
+    setLocalItems((current) =>
+      current.map((item) =>
+        item.recordId === recordId ? { ...item, date: nextDate } : item,
+      ),
+    );
+    setDraggingRecordId(null);
+
+    if (!onRescheduleRecord) return;
+    const result = await onRescheduleRecord(recordId, nextDate);
+    if (result && !result.ok) {
+      setLocalItems(previous);
+    } else {
+      router.refresh();
+    }
+  }
+
+  async function handleCreateOnDay(day: Date) {
+    if (!onCreateOnDay) return;
+    await onCreateOnDay(dayStartIso(day));
+    router.refresh();
   }
 
   return (
@@ -115,23 +160,47 @@ export function MonthGrid({
             const dayItems = groupedItems.get(key) ?? [];
             const inMonth = day.getMonth() === activeMonth.getMonth();
             return (
-              <div key={key} className="min-h-28 border-b border-r border-border bg-paper p-2 last:border-r-0">
-                <span
-                  className={`flex size-6 items-center justify-center rounded-full text-small ${
+              <div
+                key={key}
+                className="min-h-28 border-b border-r border-border bg-paper p-2 last:border-r-0"
+                onDragOver={(event) => {
+                  if (draggingRecordId) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const recordId = event.dataTransfer.getData("text/record-id") || draggingRecordId;
+                  if (recordId) void handleDropOnDay(day, recordId);
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => void handleCreateOnDay(day)}
+                  className={`flex size-6 items-center justify-center rounded-full text-small outline-none hover:bg-surface-raised focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
                     key === today
                       ? "border border-ink font-medium text-ink"
                       : inMonth
                         ? "text-text-secondary"
                         : "text-text-muted"
                   }`}
+                  title={onCreateOnDay ? "Create record on this day" : undefined}
                 >
                   {day.getDate()}
-                </span>
+                </button>
                 <div className="mt-2 flex flex-col gap-1">
                   {dayItems.slice(0, 3).map((item) => {
                     const chip = (
                       <div
-                        className={`truncate rounded-md bg-slate-tint px-2 py-1 text-label text-ink ${
+                        draggable={Boolean(onRescheduleRecord && item.recordId)}
+                        onDragStart={(event) => {
+                          if (!item.recordId) return;
+                          setDraggingRecordId(item.recordId);
+                          event.dataTransfer.setData("text/record-id", item.recordId);
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => setDraggingRecordId(null)}
+                        className={`truncate rounded-md px-2 py-1 text-label text-ink ${
+                          item.colorClass ?? "bg-slate-tint"
+                        } ${
                           onOpenRecord && item.recordId
                             ? "cursor-pointer outline-none hover:ring-1 hover:ring-border-strong"
                             : ""

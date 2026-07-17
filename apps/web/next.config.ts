@@ -4,7 +4,7 @@ import path from "node:path";
 const nextConfig: NextConfig = {
   transpilePackages: ["@planevo/core", "@planevo/api"],
   experimental: {
-    optimizePackageImports: ["iconoir-react"],
+    optimizePackageImports: ["@heroicons/react"],
   },
   turbopack: {
     root: path.resolve(process.cwd(), "../.."),

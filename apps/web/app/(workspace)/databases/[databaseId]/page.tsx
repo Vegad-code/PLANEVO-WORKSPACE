@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { recordRecentItem } from "@planevo/api/rpc";
 import { loadDatabaseBundle } from "@planevo/core/queries/records";
+import { enrichBundleWithRelationTitles } from "@planevo/core/queries/relation-display";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { DatabaseWorkspace } from "@/features/database/database-workspace";
 import { Icon } from "@/components/ui/planevo-icon";
@@ -30,8 +31,9 @@ export default async function DatabaseRoute({
   if (!current) notFound();
 
   const { access, workspace } = current;
-  const bundle = await loadDatabaseBundle(access.client, databaseId, { limit });
-  if (!bundle || bundle.database.workspace_id !== workspace.id) notFound();
+  const loaded = await loadDatabaseBundle(access.client, databaseId, { limit });
+  if (!loaded || loaded.database.workspace_id !== workspace.id) notFound();
+  const bundle = await enrichBundleWithRelationTitles(access.client, loaded);
 
   await recordRecentItem(access.client, {
     userId: access.ownerId,

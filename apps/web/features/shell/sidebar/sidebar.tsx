@@ -9,21 +9,20 @@ import {
   SIDEBAR_PEEK_TOP_OFFSET_PX,
 } from "@planevo/core/state/sidebar-state";
 import {
-  DEFAULT_SIDEBAR_SECTION_STATE,
-  normalizeSectionState,
-  reduceSectionCollapse,
-  serializeSectionState,
-  type SidebarSectionId,
-  type SidebarSectionState,
+  DEFAULT_WORKSPACE_TREE_PREFERENCE,
+  LEGACY_SECTIONS_STORAGE_KEY,
+  WORKSPACE_TREE_STORAGE_KEY,
+  normalizeWorkspaceTreePreference,
+  reduceWorkspaceTreeCollapse,
+  serializeWorkspaceTreePreference,
+  type WorkspaceTreePreference,
 } from "@planevo/core/state/sidebar-section-state";
 import { SidebarHeader } from "@/features/shell/sidebar/sidebar-header";
 import { SidebarNewButton } from "@/features/shell/sidebar/sidebar-new-button";
 import { SidebarPrimaryNav } from "@/features/shell/sidebar/sidebar-primary-nav";
-import { SidebarSections } from "@/features/shell/sidebar/sidebar-sections";
+import { WorkspaceTreeSection } from "@/features/shell/sidebar/workspace-tree-section";
 import { SidebarFooter } from "@/features/shell/sidebar/sidebar-footer";
 import { SidebarResizeHandle } from "@/features/shell/sidebar/sidebar-resize-handle";
-
-const SECTION_STORAGE_KEY = "planevo.sidebar.sections";
 
 export type SidebarProps = {
   shell: WorkspaceShellData;
@@ -65,28 +64,36 @@ export function Sidebar({
   const overlay = view === "peek";
   const hidden = view === "hidden";
   const showResize = view === "expanded" && !mobile && !preview && Boolean(onWidthChange);
-  const [sectionState, setSectionState] = useState<SidebarSectionState>(
-    DEFAULT_SIDEBAR_SECTION_STATE,
+  const [treePreference, setTreePreference] = useState<WorkspaceTreePreference>(
+    DEFAULT_WORKSPACE_TREE_PREFERENCE,
   );
-  const [sectionsRestored, setSectionsRestored] = useState(preview);
+  const [treeRestored, setTreeRestored] = useState(preview);
 
   useEffect(() => {
     if (preview) return;
     const timer = window.setTimeout(() => {
-      setSectionState(normalizeSectionState(localStorage.getItem(SECTION_STORAGE_KEY)));
-      setSectionsRestored(true);
+      setTreePreference(
+        normalizeWorkspaceTreePreference(
+          localStorage.getItem(WORKSPACE_TREE_STORAGE_KEY),
+          localStorage.getItem(LEGACY_SECTIONS_STORAGE_KEY),
+        ),
+      );
+      setTreeRestored(true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [preview]);
 
   useEffect(() => {
-    if (!preview && sectionsRestored) {
-      localStorage.setItem(SECTION_STORAGE_KEY, serializeSectionState(sectionState));
+    if (!preview && treeRestored) {
+      localStorage.setItem(
+        WORKSPACE_TREE_STORAGE_KEY,
+        serializeWorkspaceTreePreference(treePreference),
+      );
     }
-  }, [preview, sectionState, sectionsRestored]);
+  }, [preview, treePreference, treeRestored]);
 
-  function toggleSection(id: SidebarSectionId) {
-    setSectionState((state) => reduceSectionCollapse(state, id));
+  function toggleTree() {
+    setTreePreference((preference) => reduceWorkspaceTreeCollapse(preference));
   }
 
   if (hidden) return null;
@@ -148,10 +155,10 @@ export function Sidebar({
         <SidebarNewButton onNavigate={onNavigate} />
         <SidebarPrimaryNav onNavigate={onNavigate} />
         <div className="mt-3 min-h-0 flex-1">
-          <SidebarSections
+          <WorkspaceTreeSection
             pages={shell.pages}
-            sectionState={sectionState}
-            onToggleSection={toggleSection}
+            expanded={treePreference === "expanded"}
+            onToggle={toggleTree}
             onNavigate={onNavigate}
           />
         </div>

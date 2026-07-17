@@ -109,10 +109,9 @@ export function TaskComposer({
             <div className="grid gap-4 sm:grid-cols-2">
               <label>
                 <span className="text-label uppercase text-text-muted">Status</span>
-                <select name="status" defaultValue="To do" className="mt-2 h-10 w-full rounded-lg border border-border-strong bg-surface-raised px-3 text-body outline-none focus:border-ink">
-                  <option>To do</option>
+                <select name="status" defaultValue="Not started" className="mt-2 h-10 w-full rounded-lg border border-border-strong bg-surface-raised px-3 text-body outline-none focus:border-ink">
+                  <option>Not started</option>
                   <option>In progress</option>
-                  <option>In review</option>
                   <option>Done</option>
                 </select>
               </label>

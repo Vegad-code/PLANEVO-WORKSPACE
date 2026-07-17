@@ -34,7 +34,7 @@ export async function submitTask(
     workspaceId,
     title,
     description: optionalString(formData, "description"),
-    status: optionalString(formData, "status") ?? "To do",
+    status: optionalString(formData, "status") ?? "Not started",
     priority: optionalString(formData, "priority"),
     dueDate: dueDateValue ? new Date(dueDateValue).toISOString() : null,
     estimateMinutes: estimateValue ? Number.parseInt(estimateValue, 10) : null,

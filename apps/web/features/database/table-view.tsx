@@ -14,9 +14,17 @@ import {
   upsertRecordValue,
 } from "@/app/(workspace)/databases/[databaseId]/actions";
 import { DeleteEntityControl } from "@/components/ui/delete-entity-control";
+import { RelationPicker } from "@/features/database/relation-picker";
 
 const CELL_INPUT_CLASS =
   "h-8 w-full min-w-28 rounded-md border border-transparent bg-transparent px-2 text-small outline-none transition-colors hover:border-border focus:border-ink focus:bg-surface-raised motion-reduce:transition-none";
+
+function relationTargetDatabaseId(property: DatabasePropertyRow): string | null {
+  const config = property.config_json;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
+  const id = (config as Record<string, unknown>).target_database_id;
+  return typeof id === "string" ? id : null;
+}
 
 function Cell({
   record,
@@ -27,6 +35,7 @@ function Cell({
 }) {
   const stored = propertyValueToString(record.values[property.id]);
   const [error, setError] = useState<string | null>(null);
+  const targetDatabaseId = relationTargetDatabaseId(property);
 
   async function commit(rawValue: string) {
     if (rawValue === stored) return;
@@ -41,6 +50,17 @@ function Cell({
   const errorProps = error
     ? { "aria-invalid": true as const, title: error }
     : {};
+
+  if (property.type === "relation" && targetDatabaseId) {
+    return (
+      <RelationPicker
+        recordId={record.id}
+        propertyId={property.id}
+        targetDatabaseId={targetDatabaseId}
+        displayValue={stored}
+      />
+    );
+  }
 
   if (property.type === "checkbox") {
     return (
@@ -205,12 +225,15 @@ function AddPropertyMenu({ databaseId }: { databaseId: string }) {
 
 export function TableView({
   bundle,
+  records: recordsOverride,
   onOpenRecord,
 }: {
   bundle: DatabaseBundle;
+  records?: RecordItem[];
   onOpenRecord?: (recordId: string) => void;
 }) {
-  const { database, properties, records } = bundle;
+  const { database, properties } = bundle;
+  const records = recordsOverride ?? bundle.records;
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -270,7 +293,7 @@ export function TableView({
                       compact
                       label={`Delete ${recordTitle}`}
                       title={`Delete “${recordTitle}”?`}
-                      description="This permanently removes the record and all of its property values. This can't be undone."
+                      description="This moves the record to trash. You can restore it within 30 days."
                       confirmLabel="Delete record"
                       onConfirm={() =>
                         deleteRecord({ databaseId: database.id, recordId: record.id })

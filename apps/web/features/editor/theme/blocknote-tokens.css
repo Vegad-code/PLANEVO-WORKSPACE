@@ -1,0 +1,78 @@
+/*
+ * BlockNote + shadcn bridge — maps Planevo tokens only.
+ * Never introduces a second palette; a token swap in globals.css flows through.
+ */
+
+/* ShadCN semantic vars consumed by @blocknote/shadcn utility classes.
+   Aliases only — colors resolve to Planevo @theme tokens. */
+:root {
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface-raised);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface-raised);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-ink);
+  --primary-foreground: var(--color-paper);
+  --secondary: var(--color-sidebar);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-sidebar);
+  --muted-foreground: var(--color-text-muted);
+  --accent: var(--color-sidebar);
+  --accent-foreground: var(--color-ink);
+  --destructive: var(--color-brick);
+  --input: var(--color-border);
+  --ring: var(--color-border-strong);
+  --radius: 0.5rem; /* matches rounded-lg controls */
+}
+
+/* Utilities BlockNote needs that Planevo does not already define.
+   Do not remount --color-border / --color-sidebar — those are Planevo tokens. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@layer base {
+  .bn-shadcn * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* Classic BlockNote CSS variables (menus, editor chrome). */
+.planevo-editor .bn-container {
+  --bn-colors-editor-background: var(--color-paper);
+  --bn-colors-editor-text: var(--color-ink);
+  --bn-colors-menu-background: var(--color-surface-raised);
+  --bn-colors-menu-text: var(--color-ink);
+  --bn-colors-tooltip-background: var(--color-surface-raised);
+  --bn-colors-tooltip-text: var(--color-text-secondary);
+  --bn-colors-hovered-background: var(--color-sidebar);
+  --bn-colors-hovered-text: var(--color-ink);
+  --bn-colors-selected-background: var(--color-ink);
+  --bn-colors-selected-text: var(--color-paper);
+  --bn-colors-disabled-background: var(--color-sidebar);
+  --bn-colors-disabled-text: var(--color-text-muted);
+  --bn-colors-shadow: var(--color-border);
+  --bn-colors-border: var(--color-border);
+  --bn-colors-side-menu: var(--color-text-muted);
+  --bn-font-family: var(--font-sans);
+  --bn-border-radius: 8px;
+}

@@ -39,15 +39,17 @@ const DESIGN_PREVIEW_SHELL: WorkspaceShellData = {
     owner_id: "design-owner",
     name: "Anthony's workspace",
     icon: null,
+    settings_json: {},
     created_at: "2026-07-14T00:00:00.000Z",
   },
   workspaces: [{ id: "design-workspace", name: "Anthony's workspace", icon: null }],
   pages: [
-    { id: "design-physics", label: "Physics 2400", depth: 0 },
-    { id: "design-lab", label: "Lab notes", depth: 1 },
-    { id: "design-apps", label: "Apps tracker", depth: 0 },
-    { id: "design-launch", label: "Launch checklist", depth: 1 },
-    { id: "design-reading", label: "Reading list", depth: 0 },
+    { id: "design-physics", label: "Physics 2400", depth: 0, parentPageId: null, position: 0 },
+    { id: "design-lab", label: "Lab notes", depth: 1, parentPageId: "design-physics", position: 1 },
+    { id: "design-figures", label: "Figures", depth: 2, parentPageId: "design-lab", position: 2 },
+    { id: "design-apps", label: "Apps tracker", depth: 0, parentPageId: null, position: 3 },
+    { id: "design-launch", label: "Launch checklist", depth: 1, parentPageId: "design-apps", position: 4 },
+    { id: "design-reading", label: "Reading list", depth: 0, parentPageId: null, position: 5 },
   ],
   userDisplayName: "Anthony",
   userInitials: "AP",
@@ -246,10 +248,11 @@ export default function DesignPage() {
       </Section>
 
       <Section title="NavItem — default / hover / active / AI">
-        <div className="w-sidebar space-y-1 border border-border bg-sidebar py-2">
+        <div className="flex w-sidebar flex-col gap-1 border border-border bg-sidebar py-2">
           <NavItem href="/" label="Home" icon="workspace" state="default" />
           <NavItem href="/tasks" label="Tasks" icon="tasks" state="hover" />
           <NavItem href="/calendar" label="Calendar" icon="calendar" state="active" />
+          <NavItem href="/files" label="Files" icon="files" state="default" />
           <NavItem href="/ai" label="Planevo AI" icon="ai" state="ai" />
         </div>
       </Section>
@@ -268,12 +271,25 @@ export default function DesignPage() {
         </div>
       </Section>
 
-      <Section title="Sidebar — expanded / hidden / inset peek">
+      <Section title="Sidebar — minimal IA · expanded / empty tree / peek">
         <div className="flex flex-wrap items-start gap-8">
           <div>
-            <p className="mb-2 font-mono text-mono text-text-muted">Expanded · resizable</p>
+            <p className="mb-2 font-mono text-mono text-text-muted">
+              Expanded · Home / Tasks / Calendar / Files / Workspace tree
+            </p>
             <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
               <Sidebar shell={DESIGN_PREVIEW_SHELL} view="expanded" width={210} preview />
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 font-mono text-mono text-text-muted">Empty workspace tree</p>
+            <div className="relative h-128 w-sidebar overflow-hidden border-y border-l border-border">
+              <Sidebar
+                shell={{ ...DESIGN_PREVIEW_SHELL, pages: [] }}
+                view="expanded"
+                width={210}
+                preview
+              />
             </div>
           </div>
           <div>

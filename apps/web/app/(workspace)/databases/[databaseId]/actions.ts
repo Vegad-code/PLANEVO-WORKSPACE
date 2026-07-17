@@ -8,6 +8,10 @@ import {
   type PropertyType,
 } from "@planevo/core/types/property-types";
 import { normalizePropertyValue } from "@planevo/core/validation/property-values";
+import {
+  parseRelationTargetIds,
+  syncRecordRelations,
+} from "@planevo/core/mutations/record-relations";
 import { requireDataAccess } from "@/lib/data/access";
 import type { DataAccess } from "@/lib/data/access";
 import {
@@ -62,6 +66,17 @@ export async function upsertRecordValue(input: {
     const normalized = normalizePropertyValue(property.type as PropertyType, input.rawValue);
     if (!normalized.ok) return { ok: false, error: normalized.error };
 
+    if (property.type === "relation" || property.type === "person") {
+      const targetIds = parseRelationTargetIds(input.rawValue);
+      await syncRecordRelations(
+        access.client,
+        input.recordId,
+        input.propertyId,
+        targetIds,
+      );
+      return { ok: true };
+    }
+
     if (normalized.value === null) {
       const { error } = await access.client
         .from("record_values")
@@ -109,6 +124,116 @@ export async function createRecord(databaseId: string): Promise<void> {
   });
   if (error) throw error;
   revalidatePath(`/databases/${databaseId}`);
+}
+
+/** F-05 calendar: create a record with a pre-filled date property. */
+export async function createRecordOnDate(input: {
+  databaseId: string;
+  propertyId: string;
+  dateIso: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const access = await requireOwnedDatabase(input.databaseId);
+
+    const { data: property, error: propertyError } = await access.client
+      .from("database_properties")
+      .select("id, type")
+      .eq("id", input.propertyId)
+      .eq("database_id", input.databaseId)
+      .maybeSingle();
+    if (propertyError) throw propertyError;
+    if (!property) return { ok: false, error: "Date property not found." };
+
+    const normalized = normalizePropertyValue(property.type as PropertyType, input.dateIso);
+    if (!normalized.ok) return { ok: false, error: normalized.error };
+
+    const { data: last, error: maxError } = await access.client
+      .from("records")
+      .select("position")
+      .eq("database_id", input.databaseId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (maxError) throw maxError;
+
+    const { data: record, error: recordError } = await access.client
+      .from("records")
+      .insert({
+        database_id: input.databaseId,
+        position: (last?.position ?? -1) + 1,
+        created_by: access.ownerId,
+      })
+      .select("id")
+      .single();
+    if (recordError) throw recordError;
+
+    if (normalized.value !== null) {
+      const { error: valueError } = await access.client.from("record_values").insert({
+        record_id: record.id,
+        property_id: input.propertyId,
+        value_json: normalized.value,
+      });
+      if (valueError) throw valueError;
+    }
+
+    revalidatePath(`/databases/${input.databaseId}`);
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to create the record.",
+    };
+  }
+}
+
+export async function restoreRecord(recordId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const access = await requireDataAccess();
+    const { data: record, error } = await access.client
+      .from("records")
+      .select("id, database_id, databases!inner(workspace_id, workspaces!inner(owner_id))")
+      .eq("id", recordId)
+      .eq("databases.workspaces.owner_id", access.ownerId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!record) return { ok: false, error: "Record not found." };
+
+    const { error: updateError } = await access.client
+      .from("records")
+      .update({ deleted_at: null })
+      .eq("id", recordId);
+    if (updateError) throw updateError;
+
+    revalidatePath(`/databases/${record.database_id}`);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to restore the record.",
+    };
+  }
+}
+
+export async function listTrashedRecords(
+  databaseId: string,
+): Promise<{ id: string; deletedAt: string }[]> {
+  const access = await requireOwnedDatabase(databaseId);
+  const { data, error } = await access.client
+    .from("records")
+    .select("id, deleted_at")
+    .eq("database_id", databaseId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    deletedAt: row.deleted_at!,
+  }));
 }
 
 export async function createProperty(input: {
@@ -206,7 +331,10 @@ export async function deleteRecord(input: {
       targetId: input.recordId,
     });
 
-    const { error } = await access.client.from("records").delete().eq("id", input.recordId);
+    const { error } = await access.client
+      .from("records")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", input.recordId);
     if (error) throw error;
 
     revalidatePath(`/databases/${input.databaseId}`);

@@ -139,9 +139,9 @@ test("auth mode returns real rows with nested depth and user identity", async ()
   assert.equal(result.status, "ready");
   assert.equal(result.workspace, workspace);
   assert.deepEqual(result.pages, [
-    { id: "root", label: "Projects", depth: 0 },
-    { id: "child", label: "Release notes", depth: 1 },
-    { id: "grandchild", label: "Draft", depth: 2 },
+    { id: "root", label: "Projects", depth: 0, parentPageId: null, position: 0 },
+    { id: "child", label: "Release notes", depth: 1, parentPageId: "root", position: 0 },
+    { id: "grandchild", label: "Draft", depth: 2, parentPageId: "child", position: 0 },
   ]);
   assert.equal(result.userDisplayName, "Morgan Lee");
   assert.equal(result.userInitials, "ML");

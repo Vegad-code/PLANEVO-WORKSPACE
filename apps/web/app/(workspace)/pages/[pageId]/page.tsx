@@ -34,6 +34,13 @@ export default async function PageRoute({
     targetId: page.id,
   });
 
+  const { data: databases, error: databasesError } = await access.client
+    .from("databases")
+    .select("id, name")
+    .eq("workspace_id", workspace.id)
+    .order("name", { ascending: true });
+  if (databasesError) throw databasesError;
+
   return (
     <div className="mx-auto min-h-full max-w-3xl px-5 py-8 sm:px-8 sm:py-12">
       {page.database_id && (
@@ -50,7 +57,11 @@ export default async function PageRoute({
         <PageHeaderActions pageId={page.id} pageTitle={page.title} />
       </div>
       <div>
-        <PageEditor pageId={page.id} initialContent={page.content_json} />
+        <PageEditor
+          pageId={page.id}
+          initialContent={page.content_json}
+          databaseOptions={databases ?? []}
+        />
       </div>
     </div>
   );
