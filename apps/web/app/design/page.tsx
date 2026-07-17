@@ -29,6 +29,7 @@ import { DeleteControlsPreview } from "./delete-controls-preview";
 import { EditorPreview } from "./editor-preview";
 import { RecordPeekPreview } from "./record-peek-preview";
 import { RecordSurfacePreview } from "./record-surface-preview";
+import { TasksProductPreview } from "./tasks-product-preview";
 import { WorkspacePreview } from "./workspace-preview";
 
 /*
@@ -344,6 +345,10 @@ export default function DesignPage() {
 
       <Section title="Editor — slash, promote, icon / cover, mentions">
         <EditorPreview />
+      </Section>
+
+      <Section title="Tasks product: task card states and board">
+        <TasksProductPreview />
       </Section>
 
       <Section title="Workspace — switcher, manage, faces">
