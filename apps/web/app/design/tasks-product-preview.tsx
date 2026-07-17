@@ -7,6 +7,13 @@ import {
   type TaskBoardStatus,
 } from "@/features/tasks-product/task-board";
 import { TaskCard } from "@/features/tasks-product/task-card";
+import { TaskList } from "@/features/tasks-product/task-list";
+import { TaskTable } from "@/features/tasks-product/task-table";
+import {
+  TasksToolbar,
+  type TasksView,
+} from "@/features/tasks-product/tasks-toolbar";
+import type { TasksScope } from "@/lib/tasks/scope-prefs";
 
 const DEFAULT_TASK: TaskWithMeta = {
   id: "design-task-default",
@@ -64,6 +71,32 @@ const SUBTASKS_DONE_TASK: TaskWithMeta = {
   fileCount: 0,
 };
 
+const DONE_TASK: TaskWithMeta = {
+  ...DEFAULT_TASK,
+  id: "design-task-done",
+  title: "Publish the project update",
+  status: "done",
+  priority: "medium",
+  due_at: "2099-07-17T18:00:00.000Z",
+  position: 1,
+  subtaskTotal: 2,
+  subtaskDone: 2,
+  fileCount: 2,
+};
+
+const CANCELLED_TASK: TaskWithMeta = {
+  ...DEFAULT_TASK,
+  id: "design-task-cancelled",
+  title: "Book the old meeting room",
+  status: "cancelled",
+  priority: null,
+  due_at: null,
+  position: 1,
+  subtaskTotal: 0,
+  subtaskDone: 0,
+  fileCount: 0,
+};
+
 const CARD_STATES = [
   { label: "Default", task: DEFAULT_TASK },
   { label: "High priority", task: HIGH_PRIORITY_TASK },
@@ -72,9 +105,16 @@ const CARD_STATES = [
 ] as const;
 
 const INITIAL_BOARD_TASKS = CARD_STATES.map(({ task }) => task);
+const LIST_AND_TABLE_TASKS = [
+  ...INITIAL_BOARD_TASKS,
+  DONE_TASK,
+  CANCELLED_TASK,
+];
 
 export function TasksProductPreview() {
   const [tasks, setTasks] = useState<TaskWithMeta[]>(INITIAL_BOARD_TASKS);
+  const [view, setView] = useState<TasksView>("board");
+  const [scope, setScope] = useState<TasksScope>("all");
 
   function handleStatusChange(
     taskId: string,
@@ -109,6 +149,42 @@ export function TasksProductPreview() {
         </p>
         <div className="mt-4">
           <TaskBoard tasks={tasks} onStatusChange={handleStatusChange} />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-h3">Tasks toolbar</h3>
+        <p className="mt-1 text-small text-text-secondary">
+          View and scope controls are fully controlled. Create task is the only marigold action.
+        </p>
+        <div className="mt-4">
+          <TasksToolbar
+            view={view}
+            scope={scope}
+            onViewChange={setView}
+            onScopeChange={setScope}
+            onCreateTask={() => undefined}
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-h3">Status-grouped list</h3>
+        <p className="mt-1 text-small text-text-secondary">
+          Dense rows preserve task metadata and every product status.
+        </p>
+        <div className="mt-4">
+          <TaskList tasks={LIST_AND_TABLE_TASKS} />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-h3">Sortable table</h3>
+        <p className="mt-1 text-small text-text-secondary">
+          Every column sorts on the client. Activate a header again to reverse its direction.
+        </p>
+        <div className="mt-4">
+          <TaskTable tasks={LIST_AND_TABLE_TASKS} />
         </div>
       </div>
     </div>
