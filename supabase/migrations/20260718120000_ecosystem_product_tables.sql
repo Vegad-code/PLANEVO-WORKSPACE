@@ -1,0 +1,167 @@
+-- Ecosystem Phase 1 — product tables and link layer (PRD v2.0 F-01, F-02)
+-- Strangler pattern: Tasks/Calendar/Files become real products with their own
+-- tables, linked into workspaces via workspace_links instead of living inside
+-- the universal kernel (databases/records). See AGENTS.md ecosystem rules.
+--
+-- Order matters: tables before RLS; file_sources.user_id must exist before
+-- the file_links RLS policy can reference it.
+
+-- ---------------------------------------------------------------------------
+-- Tables
+-- ---------------------------------------------------------------------------
+
+create table public.tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  status text not null default 'not_started'
+    check (status in ('not_started', 'in_progress', 'done', 'cancelled')),
+  priority text check (priority is null or priority in ('low', 'medium', 'high')),
+  due_at timestamptz,
+  description_json jsonb not null default '{}'::jsonb,
+  position numeric not null default 0,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index tasks_user_position_idx on public.tasks (user_id, position);
+create index tasks_user_due_idx on public.tasks (user_id, due_at) where due_at is not null;
+
+create table public.task_subtasks (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.tasks (id) on delete cascade,
+  title text not null,
+  is_done boolean not null default false,
+  position numeric not null default 0,
+  created_at timestamptz not null default now()
+);
+create index task_subtasks_task_position_idx on public.task_subtasks (task_id, position);
+
+create table public.calendars (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  color text not null default 'slate',
+  is_visible boolean not null default true,
+  position integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index calendars_user_position_idx on public.calendars (user_id, position);
+
+create table public.calendar_events (
+  id uuid primary key default gen_random_uuid(),
+  calendar_id uuid not null references public.calendars (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  all_day boolean not null default false,
+  location text,
+  description_json jsonb not null default '{}'::jsonb,
+  task_id uuid references public.tasks (id) on delete set null,
+  google_event_id text,
+  source text not null default 'planevo'
+    check (source in ('planevo', 'google')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index calendar_events_calendar_start_idx on public.calendar_events (calendar_id, starts_at);
+create index calendar_events_user_start_idx on public.calendar_events (user_id, starts_at);
+
+-- workspace_links (F-02): explicit handshake between a workspace and a
+-- product resource living outside the kernel. No universal kernel table.
+create table public.workspace_links (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  resource_type text not null check (resource_type in ('task', 'calendar_event', 'file')),
+  resource_id uuid not null,
+  created_by uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (workspace_id, resource_type, resource_id)
+);
+create index workspace_links_workspace_type_idx
+  on public.workspace_links (workspace_id, resource_type);
+
+-- file_links: cross-feature attachment of an existing file to a task or
+-- calendar event (does not move the file, just references it).
+create table public.file_links (
+  id uuid primary key default gen_random_uuid(),
+  file_source_id uuid not null references public.file_sources (id) on delete cascade,
+  target_type text not null check (target_type in ('task', 'calendar_event')),
+  target_id uuid not null,
+  created_at timestamptz not null default now(),
+  unique (file_source_id, target_type, target_id)
+);
+
+-- ---------------------------------------------------------------------------
+-- file_sources: evolve toward user-scoped ownership (PRD §7.3 strangler)
+-- ---------------------------------------------------------------------------
+-- file_sources currently tracks ownership via `created_by` (see
+-- 20260715004609_planevo_app_foundations.sql). Add `user_id` alongside it and
+-- backfill so file_links RLS below (and future product code) has a single,
+-- consistently named owner column to check. Kept nullable here; NOT NULL is
+-- a follow-up once all rows are confirmed backfilled.
+
+alter table public.file_sources
+  add column if not exists user_id uuid references auth.users (id) on delete cascade;
+
+update public.file_sources set user_id = created_by where user_id is null;
+
+-- ---------------------------------------------------------------------------
+-- Row level security
+-- ---------------------------------------------------------------------------
+
+alter table public.tasks enable row level security;
+create policy tasks_owner on public.tasks for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+alter table public.task_subtasks enable row level security;
+create policy task_subtasks_via_task on public.task_subtasks for all to authenticated
+  using (exists (select 1 from public.tasks t where t.id = task_id and t.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.tasks t where t.id = task_id and t.user_id = (select auth.uid())));
+
+alter table public.calendars enable row level security;
+create policy calendars_owner on public.calendars for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+alter table public.calendar_events enable row level security;
+create policy calendar_events_owner on public.calendar_events for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+-- workspace_links: gated by the same workspace-ownership chain the kernel
+-- tables use (public.is_workspace_owner, defined in
+-- 20260714150000_planevo_kernel_schema.sql).
+alter table public.workspace_links enable row level security;
+create policy workspace_links_via_workspace on public.workspace_links for all to authenticated
+  using (public.is_workspace_owner(workspace_id))
+  with check (public.is_workspace_owner(workspace_id));
+
+-- file_links: gated by file_sources ownership (user_id, backfilled above).
+alter table public.file_links enable row level security;
+create policy file_links_via_file_source on public.file_links for all to authenticated
+  using (
+    exists (
+      select 1 from public.file_sources fs
+      where fs.id = file_source_id and fs.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.file_sources fs
+      where fs.id = file_source_id and fs.user_id = (select auth.uid())
+    )
+  );
+
+-- ---------------------------------------------------------------------------
+-- Grants (authenticated role only — product data is never public)
+-- ---------------------------------------------------------------------------
+
+grant select, insert, update, delete on public.tasks to authenticated;
+grant select, insert, update, delete on public.task_subtasks to authenticated;
+grant select, insert, update, delete on public.calendars to authenticated;
+grant select, insert, update, delete on public.calendar_events to authenticated;
+grant select, insert, update, delete on public.workspace_links to authenticated;
+grant select, insert, update, delete on public.file_links to authenticated;
