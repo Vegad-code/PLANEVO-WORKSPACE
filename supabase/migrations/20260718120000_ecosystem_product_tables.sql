@@ -251,3 +251,137 @@ $$;
 
 revoke all on function public.create_user_products(uuid, jsonb) from public, anon;
 grant execute on function public.create_user_products(uuid, jsonb) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- create_starter_workspace_v2: seed workspace + pages only (F-45 ecosystem
+-- rewrite). Ports the workspace-creation and page/block-seeding half of
+-- create_starter_workspace (20260717120000_starter_workspace_and_kernel.sql)
+-- as-is. Drops the create_database_from_template calls and the
+-- onboardingTasks record-seeding loop from v1 — task/calendar/files template
+-- databases are no longer created per-workspace; equivalent starter records
+-- are seeded once per user by create_user_products above. settings_json
+-- therefore never gets default_task_database_id / default_calendar_database_id
+-- / default_files_database_id keys.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.create_starter_workspace_v2(
+  p_owner_id uuid,
+  p_seed jsonb,
+  p_workspace_id uuid default null
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  organizing text;
+  workspace_name text;
+  workspace_icon text;
+  created_workspace_id uuid;
+  getting_started_page_id uuid;
+  notes_page_id uuid;
+  existing_page_count integer;
+begin
+  if auth.role() <> 'service_role' and auth.uid() is distinct from p_owner_id then
+    raise exception 'workspace owner does not match the mutation actor' using errcode = '42501';
+  end if;
+
+  organizing := p_seed ->> 'organizing';
+  if organizing is null or organizing not in ('work', 'personal', 'school', 'other') then
+    raise exception 'organizing answer is required' using errcode = '22023';
+  end if;
+
+  workspace_name := coalesce(nullif(btrim(p_seed ->> 'workspaceName'), ''), 'My Workspace');
+  workspace_icon := p_seed ->> 'workspaceIcon';
+
+  -- Seed into an existing empty workspace when provided (avoids orphan rows).
+  if p_workspace_id is not null then
+    select w.id into created_workspace_id
+    from public.workspaces w
+    where w.id = p_workspace_id and w.owner_id = p_owner_id;
+    if created_workspace_id is null then
+      raise exception 'workspace not found' using errcode = 'P0002';
+    end if;
+    select count(*)::integer into existing_page_count
+    from public.pages p where p.workspace_id = created_workspace_id;
+    if existing_page_count > 0 then
+      raise exception 'workspace already has pages' using errcode = '22023';
+    end if;
+    update public.workspaces
+    set name = workspace_name, icon = workspace_icon
+    where id = created_workspace_id;
+  else
+    insert into public.workspaces (owner_id, name, icon)
+    values (p_owner_id, workspace_name, workspace_icon)
+    returning id into created_workspace_id;
+  end if;
+
+  -- Getting Started page (position 0) — landing target
+  insert into public.pages (
+    workspace_id, title, icon, position, content_json
+  )
+  values (
+    created_workspace_id,
+    coalesce(p_seed -> 'gettingStarted' ->> 'title', 'Getting Started'),
+    coalesce(p_seed -> 'gettingStarted' ->> 'icon', '👋'),
+    0,
+    coalesce(p_seed -> 'gettingStarted' -> 'content', '[]'::jsonb)
+  )
+  returning id into getting_started_page_id;
+
+  -- Notes page (position 1)
+  insert into public.pages (
+    workspace_id, title, icon, position, content_json
+  )
+  values (
+    created_workspace_id,
+    coalesce(p_seed -> 'notes' ->> 'title', 'Notes'),
+    coalesce(p_seed -> 'notes' ->> 'icon', '📝'),
+    1,
+    coalesce(p_seed -> 'notes' -> 'content', '[]'::jsonb)
+  )
+  returning id into notes_page_id;
+
+  update public.workspaces
+  set settings_json = jsonb_build_object(
+    'getting_started_page_id', getting_started_page_id,
+    'notes_page_id', notes_page_id,
+    'organizing', organizing
+  )
+  where id = created_workspace_id;
+
+  insert into public.onboarding_progress (
+    user_id,
+    workspace_id,
+    organizing,
+    current_step,
+    completed_steps_json,
+    completed_at
+  )
+  values (
+    p_owner_id,
+    created_workspace_id,
+    organizing,
+    3,
+    jsonb_build_array('routing', 'seed', 'landing'),
+    now()
+  )
+  on conflict (user_id) do update set
+    workspace_id = excluded.workspace_id,
+    organizing = excluded.organizing,
+    current_step = excluded.current_step,
+    completed_steps_json = excluded.completed_steps_json,
+    completed_at = excluded.completed_at,
+    updated_at = now();
+
+  return jsonb_build_object(
+    'workspace_id', created_workspace_id,
+    'getting_started_page_id', getting_started_page_id,
+    'notes_page_id', notes_page_id
+  );
+end;
+$$;
+
+revoke all on function public.create_starter_workspace_v2(uuid, jsonb, uuid) from public, anon;
+grant execute on function public.create_starter_workspace_v2(uuid, jsonb, uuid) to authenticated, service_role;

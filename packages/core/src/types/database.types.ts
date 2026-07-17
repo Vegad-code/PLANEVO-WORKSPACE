@@ -499,6 +499,14 @@ export interface Database {
         Args: { p_user_id: string; p_seed: Json };
         Returns: Json;
       };
+      create_starter_workspace_v2: {
+        Args: {
+          p_owner_id: string;
+          p_seed: Json;
+          p_workspace_id?: string | null;
+        };
+        Returns: Json;
+      };
       promote_blocks_to_records: {
         Args: {
           p_owner_id: string;
