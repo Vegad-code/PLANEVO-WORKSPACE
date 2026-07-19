@@ -1,79 +1,47 @@
-import { DatabaseFace } from "@/features/shell/database-face";
-import { RecreateDatabaseButton } from "@/features/shell/recreate-database-button";
-import { TaskComposer } from "@/features/tasks/task-composer";
-import { isEcosystemV2Enabled } from "@/lib/ecosystem/feature-flags";
-import { getTaskFaceBundle } from "@/lib/queries/face-databases";
-import {
-  loadTasksPageData,
-  type TasksPageData,
-} from "@/lib/queries/product-tasks";
-import { recreateTaskDatabase } from "./actions";
+import { TasksProductView } from "@/features/tasks-product/tasks-product-view";
+import { loadTasksPageData } from "@/lib/queries/product-tasks";
+import type { TasksScope } from "@/lib/tasks/scope-prefs";
 
-function TasksProductView({
-  tasks,
-  status,
-}: Pick<TasksPageData, "tasks" | "status">) {
-  if (status === "unauthenticated") {
+function requestedScope(value: string | undefined): TasksScope {
+  return value === "workspace" ? "workspace" : "all";
+}
+
+async function TasksProductPage({ scope }: { scope: TasksScope }) {
+  let data = await loadTasksPageData(scope);
+  if (
+    data.status === "ready" &&
+    data.scope === "workspace" &&
+    data.workspaceId === null
+  ) {
+    data = await loadTasksPageData("all");
+  }
+
+  if (data.status === "unauthenticated") {
     return (
-      <section>
-        <h1>Tasks</h1>
-        <p>Sign in to see your tasks.</p>
+      <section className="mx-auto w-full max-w-3xl px-6 py-12">
+        <p className="text-label uppercase text-text-muted">Tasks</p>
+        <h1 className="mt-2 text-h1">Sign in to see your tasks</h1>
+        <p className="mt-2 text-body text-text-secondary">
+          Your task board, list, and table will be ready here after you sign in.
+        </p>
       </section>
     );
   }
 
   return (
-    <section>
-      <h1>Tasks</h1>
-      <p>{tasks.length === 1 ? "1 task" : `${tasks.length} tasks`}</p>
-    </section>
+    <TasksProductView
+      initialTasks={data.tasks}
+      initialScope={data.scope}
+      workspaceId={data.workspaceId}
+    />
   );
 }
 
-export default async function TasksPage() {
-  if (isEcosystemV2Enabled()) {
-    const data = await loadTasksPageData();
-    return <TasksProductView tasks={data.tasks} status={data.status} />;
-  }
-
-  const { workspaceId, bundle } = await getTaskFaceBundle();
-
-  return (
-    <DatabaseFace
-      eyebrow="Workspace database"
-      title="Tasks"
-      description="Plan the work, then move it forward."
-      bundle={bundle}
-      workspaceId={workspaceId}
-      unavailable={{
-        icon: "tasks",
-        title: "Sign in to see your tasks",
-        description: "Your task database appears here once you're signed in.",
-      }}
-      empty={{
-        icon: "tasks",
-        title: "Your task board is ready when you are",
-        description:
-          "Recreate the task database with board, list, calendar, and table views — or add your first task.",
-        recreate: (
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <RecreateDatabaseButton
-              label="Create task database"
-              onRecreate={recreateTaskDatabase}
-            />
-            {workspaceId ? (
-              <TaskComposer
-                workspaceId={workspaceId}
-                buttonLabel="Create first task"
-                appearance="quiet"
-              />
-            ) : null}
-          </div>
-        ),
-      }}
-      headerAction={
-        workspaceId ? <TaskComposer workspaceId={workspaceId} appearance="quiet" /> : undefined
-      }
-    />
-  );
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scope?: string }>;
+}) {
+  const { scope } = await searchParams;
+  return <TasksProductPage scope={requestedScope(scope)} />;
 }
