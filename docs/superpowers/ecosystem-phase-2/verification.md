@@ -1,19 +1,21 @@
 # Phase 2 Tasks product verification
 
-Verified on 2026-07-18 in `/Users/jabbo/PLANEVO` with HEAD at `5da290e`; unrelated
+Verified on 2026-07-18 in `/Users/jabbo/PLANEVO` against code candidate `d4c690d`; unrelated
 pre-existing working-tree changes were preserved.
 
 ## Decision
 
-The fresh automated gates are green, the product routes respond at the HTTP layer, the
-Tasks kernel grep is empty, and read-only remote schema inspection confirms the Task 9
-migrations were applied manually. That inspection also found anonymous execute access on
-the attachment RPC. The local follow-up migration
-`20260718150000_restrict_task_attachment_claim_acl.sql` closes that gap and has a green
-static regression test, but it has not been applied remotely. Qualifying founder dogfood
-sign-off must not begin until it is applied and reverified. Phase 2 is **not complete**:
-browser interaction and rendered fidelity remain unverified, and Task 14 requires three
-consecutive weekday sign-offs in `.superpowers/ecosystem-phase-2/dogfood-log.md`.
+The release-candidate tests, strict TypeScript check, scoped lint, production build, and
+Tasks kernel grep are green. Final review hardening is committed in `d4c690d`, including
+endpoint-complete RLS, canonical file ownership, locked attachment lifecycle operations,
+idempotency keys, transactional ordering/deletion, abandoned-reservation recovery, and
+the visible cancelled/due-date/accessibility fixes. The additive migrations
+`20260718150000_restrict_task_attachment_claim_acl.sql` and
+`20260718160000_phase2_final_integrity.sql` have not been applied remotely. Qualifying
+founder dogfood must not begin until both are applied and reverified. Phase 2 is **not
+complete**: authenticated browser fidelity/interaction remains unverified, and Task 14
+requires three consecutive weekday sign-offs in
+`.superpowers/ecosystem-phase-2/dogfood-log.md`.
 
 ## Commit and cutover evidence
 
@@ -24,6 +26,7 @@ consecutive weekday sign-offs in `.superpowers/ecosystem-phase-2/dogfood-log.md`
 | Task 10 / cross-feature actions | `5da290e feat(web): add Schedule, Attach file, and Add to workspace task actions` |
 | Task 11 / product quick capture | Verified at `bdcf5cc feat(web): wire quick capture to tasks product table` |
 | Task 12 / final empty-kernel check | Required scoped grep below returned no matches (ripgrep exit `1`, the expected no-match result) |
+| Final review hardening | `d4c690d fix(tasks): close Phase 2 final review findings` |
 
 All four commit objects were resolved fresh with `git show -s` on 2026-07-18.
 
@@ -34,16 +37,22 @@ prior worker report.
 
 | Gate | Command | Exact result |
 |---|---|---|
-| Core tests | `cd packages/core && npm test` | exit `0`; `151` tests, `151` passed, `0` failed, `0` skipped |
-| Web tests | `cd apps/web && npm test` | exit `0`; `22` tests, `22` passed, `0` failed, `0` skipped |
+| Core tests | `cd packages/core && npm test` | exit `0`; `155` tests, `155` passed, `0` failed, `0` skipped |
+| Web tests | `cd apps/web && npm test` | exit `0`; `48` tests, `48` passed, `0` failed, `0` skipped |
 | Web TypeScript | `cd apps/web && npx tsc --noEmit` | exit `0`; no output |
+| Phase 2 scoped lint | `cd apps/web && npx eslint <Phase 2 files>` | exit `0`; `0` errors |
+| Production build | `cd apps/web && npm run build` | exit `0`; compiled, typechecked, generated `24/24` static pages; `/design` prerendered and `/tasks` registered |
 | Tasks kernel grep | `rg 'DatabaseFace\|createTaskWithRequiredFoundation\|getTaskFaceBundle\|recreateTaskDatabase' 'apps/web/app/(workspace)/tasks' apps/web/features/tasks-product` | no output; ripgrep exit `1`, explicitly normalized as the expected no-match result |
-| Committed Phase 2 diff scope | `git diff --name-only f19def0^..HEAD \| sort -u \| wc -l` | exit `0`; `54` committed files |
-| Committed Phase 2 whitespace | `git diff --check f19def0^..HEAD` | exit `0`; no output; covers the 54 files committed from the first Phase 2 commit through `5da290e` |
+| Final hardening whitespace | `git diff --check d4c690d^..d4c690d` | exit `0`; no output; covers all 32 files in the final review fix |
 | Route smoke | run `npm run dev` in `apps/web`, then `curl` `/tasks` and `/design` on `127.0.0.1:3000` | exit `0`; `/tasks HTTP 200`; `/design HTTP 200`; server log recorded both `GET` requests as `200` |
 
 The route smoke proves server rendering and routing only. It does not prove layout,
 client hydration, browser console health, or any interaction.
+
+The repository-wide ESLint command still reports pre-existing failures outside the
+Phase 2 Tasks file set in command-bar, database, editor, and shell code. Those unrelated
+files were not changed to manufacture a green Phase 2 result; the exact Tasks scope is
+clean and the production build passes.
 
 ## Hosted migration evidence
 
@@ -62,6 +71,7 @@ The command exited `0` and connected to the remote database. Its relevant rows w
 | `20260718130000_task_in_review_status.sql` | `20260718130000` | blank | not recorded remotely |
 | `20260718140000_task_attachment_claim.sql` | `20260718140000` | blank | not recorded remotely |
 | `20260718150000_restrict_task_attachment_claim_acl.sql` | `20260718150000` | blank | **not applied remotely** |
+| `20260718160000_phase2_final_integrity.sql` | `20260718160000` | not re-queried after creation | **not applied remotely** |
 
 After the founder reported that both migrations had been run manually in the hosted SQL
 Editor, the exact ledger command was repeated in this same Task 13 session. It again
@@ -99,9 +109,9 @@ created locally only; no ACL mutation was made here.
 
 **Schema gate result:** `20260718130000` and `20260718140000` are **APPLIED MANUALLY /
 migration ledger drift**.
-Their runtime schema prerequisites are present. However, `20260718150000` is **REQUIRED
-before production or qualifying dogfood security sign-off**. This is schema evidence, not
-a live attachment or In review interaction test.
+Their runtime schema prerequisites are present. However, `20260718150000` and
+`20260718160000` are **REQUIRED before production or qualifying dogfood security
+sign-off**. This is schema evidence, not a live attachment or In review interaction test.
 
 The ledger output also showed `20260717090000`, `20260717120000`, and
 `20260718120000` as local-only. Do **not** run `db push` while this drift is unresolved;
@@ -119,17 +129,18 @@ That repair mutates the hosted migration ledger and was deliberately **not run**
 documentation slice. Do not mark any earlier version applied without equivalent schema
 evidence.
 
-Because the ledger is already drifting, do not use `db push` blindly to apply the ACL
-follow-up. An authorized operator must first reconcile the proven manual applications or
-run the exact `20260718150000` SQL in the hosted SQL Editor. Then rerun the ACL query
-above. The security gate passes only when `anon_execute` is `false` while
-`authenticated_execute` and `service_role_execute` remain `true`. The operator can then
-mark `20260718150000` applied in the ledger only after that schema evidence exists.
+Because the ledger is already drifting, do not use `db push` blindly. An authorized
+operator must first reconcile the proven manual applications or run the exact
+`20260718150000` and then `20260718160000` SQL in the hosted SQL Editor. Then rerun the
+ACL query above and verify the new functions, columns, indexes, and policies. The security
+gate passes only when `anon_execute` is `false` for every Task attachment RPC while
+`authenticated_execute` and `service_role_execute` remain `true`. Mark a version applied
+in the ledger only after its schema evidence exists.
 
 During founder dogfood:
 
-1. Do not count or sign a Task 14 day until the `20260718150000` remote ACL gate above
-   passes.
+1. Do not count or sign a Task 14 day until both `20260718150000` and `20260718160000`
+   are applied and the remote integrity/ACL gates above pass.
 2. In an authenticated browser, create/move a disposable task into **In review** and
    refresh to prove persistence. Create another disposable task with an attachment and
    confirm the task/file link survives refresh. Do not infer runtime readiness from the
@@ -249,3 +260,14 @@ claimed as passed. These checks are mandatory manual work, not optional polish.
 - Do not restore anonymous execute as a rollback shortcut. If the underlying RPC is
   retired, follow the `20260718140000` removal sequence instead and drop only the function
   after callers and pending reservations are reconciled.
+
+### `20260718160000_phase2_final_integrity.sql`
+
+- Prefer an application rollback while leaving the additive ownership columns, indexes,
+  RLS policies, and invoker-security RPCs installed. They preserve data and narrow access.
+- Before retiring any new RPC, drain old clients and inventory unclaimed,
+  `cleanup_pending`, claimed, and detached attachment sources. Never drop link/source rows
+  or Storage objects as a rollback shortcut.
+- Do not make `file_sources.user_id` nullable again or restore one-sided polymorphic RLS.
+  If a forward correction is needed, ship another additive migration after a two-user RLS
+  and attachment-lifecycle rehearsal.
