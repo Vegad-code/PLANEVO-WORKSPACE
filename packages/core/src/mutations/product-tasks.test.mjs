@@ -27,7 +27,35 @@ test("createTask inserts with defaults", async () => {
   assert.equal(inserted.title, "Ship Phase 2");
   assert.equal(inserted.status, "not_started");
   assert.equal(inserted.user_id, "user-1");
+  assert.equal(inserted.description_json, undefined);
   assert.equal(task.id, "new-id");
+});
+
+test("createTask passes description_json through when provided", async () => {
+  let inserted = null;
+  const client = {
+    from() {
+      return {
+        insert(row) {
+          inserted = row;
+          return {
+            select: () => ({
+              single: async () => ({ data: { id: "new-id", ...row }, error: null }),
+            }),
+          };
+        },
+      };
+    },
+  };
+  await createTask(client, "user-1", {
+    title: "Ship Phase 2",
+    description_json: { text: "Board parity", tags: ["Product"], estimateMinutes: 60 },
+  });
+  assert.deepEqual(inserted.description_json, {
+    text: "Board parity",
+    tags: ["Product"],
+    estimateMinutes: 60,
+  });
 });
 
 test("updateTaskStatus sets completed_at when done", async () => {

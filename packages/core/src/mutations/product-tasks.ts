@@ -10,6 +10,7 @@ export type CreateTaskInput = {
   status?: TaskStatus;
   priority?: TaskPriority | null;
   due_at?: string | null;
+  description_json?: Record<string, unknown>;
 };
 
 export type UpdateTaskInput = {
@@ -37,6 +38,9 @@ export async function createTask(
       status: input.status ?? "not_started",
       priority: input.priority ?? null,
       due_at: input.due_at ?? null,
+      ...(input.description_json !== undefined
+        ? { description_json: input.description_json as Json }
+        : {}),
     })
     .select()
     .single();

@@ -1,6 +1,7 @@
 export const TASK_STATUSES = [
   "not_started",
   "in_progress",
+  "in_review",
   "done",
   "cancelled",
 ] as const;
@@ -8,8 +9,9 @@ export const TASK_STATUSES = [
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  not_started: "Not started",
+  not_started: "To do",
   in_progress: "In progress",
+  in_review: "In review",
   done: "Done",
   cancelled: "Cancelled",
 };
