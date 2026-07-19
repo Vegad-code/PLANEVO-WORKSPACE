@@ -6,8 +6,11 @@ import type {
   CalendarRow,
   TaskDueChip,
 } from "@planevo/core/types/calendar";
+import { useState } from "react";
 import { CalendarSidebar } from "@/features/calendar-product/calendar-sidebar";
 import { CalendarToolbar } from "@/features/calendar-product/calendar-toolbar";
+import { CreateEventPopover } from "@/features/calendar-product/create-event-popover";
+import { EventPeek } from "@/features/calendar-product/event-peek";
 import { TodayColumn } from "@/features/calendar-product/today-column";
 import type { TodayColumnTask } from "@/features/calendar-product/today-task-row";
 import { WeekGrid } from "@/features/calendar-product/week-grid";
@@ -69,6 +72,65 @@ const DESIGN_TASK_DUES: TaskDueChip[] = [
 
 function noop() {
   // Design previews render interactions inert.
+}
+
+function EventPeekDemo() {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const peekEvent = DESIGN_EVENTS[3]!;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={(clickEvent) =>
+          setAnchor(anchor ? null : clickEvent.currentTarget)
+        }
+        className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-ink hover:bg-paper"
+      >
+        {anchor ? "Close event peek" : "Open event peek"}
+      </button>
+      {anchor ? (
+        <EventPeek
+          event={{
+            ...peekEvent,
+            description_json: {
+              text: "Everyone should join this call. The team is all set for the new update.",
+            },
+          }}
+          calendar={DESIGN_CALENDARS[0]!}
+          anchor={anchor}
+          onClose={() => setAnchor(null)}
+          onLinkTask={noop}
+          onAttachFile={noop}
+          onAddToWorkspace={noop}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CreateEventDemo() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-ink hover:bg-paper"
+      >
+        Open create-event form
+      </button>
+      {open ? (
+        <CreateEventPopover
+          slotStart={new Date(2026, 6, 15, 9, 30)}
+          calendars={DESIGN_CALENDARS}
+          onSubmit={() => setOpen(false)}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 export function CalendarProductPreview() {
@@ -146,6 +208,18 @@ export function CalendarProductPreview() {
             </DndContext>
           </div>
         </div>
+      </figure>
+      <figure>
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Event peek — anchored popover with cross-links
+        </figcaption>
+        <EventPeekDemo />
+      </figure>
+      <figure>
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Create event — from grid slot click
+        </figcaption>
+        <CreateEventDemo />
       </figure>
       <figure className="w-full max-w-md">
         <figcaption className="mb-2 text-label uppercase text-text-muted">
