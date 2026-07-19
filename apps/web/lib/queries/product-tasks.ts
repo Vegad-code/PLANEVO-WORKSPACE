@@ -13,12 +13,14 @@ export type TasksPageData =
       status: "unauthenticated";
       tasks: [];
       workspaceId: null;
+      workspaceName: null;
       scope: TasksScope;
     }
   | {
       status: "ready";
       tasks: TaskWithMeta[];
       workspaceId: string | null;
+      workspaceName: string | null;
       scope: TasksScope;
     };
 
@@ -38,6 +40,7 @@ export async function loadTasksPageData(
       status: "unauthenticated",
       tasks: [],
       workspaceId: null,
+      workspaceName: null,
       scope,
     };
   }
@@ -53,6 +56,7 @@ export async function loadTasksPageData(
     status: "ready",
     tasks,
     workspaceId,
+    workspaceName: currentWorkspace?.workspace.name ?? null,
     scope,
   };
 }

@@ -14,6 +14,7 @@ import { toast } from "@/components/ui/toast";
 import type { TaskAttachmentCleanupTarget } from "@/lib/tasks/task-attachment-cleanup";
 import {
   createProductTaskAction,
+  linkProductTaskToWorkspaceAction,
   moveProductTaskAction,
 } from "@/app/(workspace)/tasks/actions";
 import { CreateTaskDialog } from "./create-task-dialog";
@@ -37,6 +38,7 @@ type TasksProductViewProps = {
   initialTasks: TaskWithMeta[];
   initialScope: TasksScope;
   workspaceId: string | null;
+  workspaceName?: string | null;
 };
 
 type OptimisticMove = {
@@ -110,6 +112,10 @@ export function TasksEmptyState({
         </kbd>{" "}
         anytime to create one.
       </p>
+      <p className="mt-2 text-small text-text-muted">
+        Import from CSV is coming soon — for now, capture tasks here or from quick
+        capture.
+      </p>
       <button
         type="button"
         onClick={onCreateTask}
@@ -125,6 +131,7 @@ export function TasksProductView({
   initialTasks,
   initialScope,
   workspaceId,
+  workspaceName = null,
 }: TasksProductViewProps) {
   const router = useRouter();
   const [view, setView] = useState<TasksView>("board");
@@ -141,6 +148,7 @@ export function TasksProductView({
     ? tasks.find((task) => task.id === selectedTaskId) ?? null
     : null;
   const boardTasks = activeTasks(tasks);
+  const visibleTasks = boardTasks;
 
   const closePeek = useCallback(() => setSelectedTaskId(null), []);
 
@@ -254,6 +262,26 @@ export function TasksProductView({
         closeCreate();
         if (result.data.attachmentError) {
           toast(result.data.attachmentError, { tone: "error" });
+        } else if (workspaceId) {
+          const label = workspaceName?.trim() || "this workspace";
+          toast(`Add to ${label}?`, {
+            action: {
+              label: "Add",
+              onClick: () => {
+                void linkProductTaskToWorkspaceAction({
+                  taskId: result.data.task.id,
+                  workspaceId,
+                }).then((linkResult) => {
+                  if (!linkResult.ok) {
+                    toast(linkResult.error, { tone: "error" });
+                    return;
+                  }
+                  toast(`Added to ${label}`);
+                  router.refresh();
+                });
+              },
+            },
+          });
         } else {
           toast("Task created");
         }
@@ -281,7 +309,7 @@ export function TasksProductView({
     });
   }
 
-  const content = tasks.length === 0 ? (
+  const content = visibleTasks.length === 0 ? (
     <TasksEmptyState onCreateTask={() => openCreate()} />
   ) : view === "board" ? (
     <TaskBoard
@@ -291,9 +319,9 @@ export function TasksProductView({
       onCreateTask={openCreate}
     />
   ) : view === "list" ? (
-    <TaskList tasks={tasks} onTaskSelect={setSelectedTaskId} />
+    <TaskList tasks={visibleTasks} onTaskSelect={setSelectedTaskId} />
   ) : (
-    <TaskTable tasks={tasks} onTaskSelect={setSelectedTaskId} />
+    <TaskTable tasks={visibleTasks} onTaskSelect={setSelectedTaskId} />
   );
 
   return (
@@ -301,7 +329,7 @@ export function TasksProductView({
       aria-labelledby="tasks-product-title"
       className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
     >
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-label uppercase text-text-muted">
             {initialScope === "workspace" ? "This workspace" : "All tasks"}
@@ -311,10 +339,14 @@ export function TasksProductView({
               Tasks
             </h1>
             <span
-              aria-label={tasks.length === 1 ? "1 task" : `${tasks.length} tasks`}
+              aria-label={
+                visibleTasks.length === 1
+                  ? "1 task"
+                  : `${visibleTasks.length} tasks`
+              }
               className="rounded-full border border-border bg-surface-raised px-2 py-0.5 font-mono text-label text-text-muted"
             >
-              {tasks.length}
+              {visibleTasks.length}
             </span>
           </div>
         </div>

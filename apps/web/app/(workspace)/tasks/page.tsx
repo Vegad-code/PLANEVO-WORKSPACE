@@ -33,6 +33,7 @@ async function TasksProductPage({ scope }: { scope: TasksScope }) {
       initialTasks={data.tasks}
       initialScope={data.scope}
       workspaceId={data.workspaceId}
+      workspaceName={data.workspaceName}
     />
   );
 }
