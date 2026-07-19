@@ -1,7 +1,8 @@
 # Phase 2 Tasks product verification
 
 Verified on 2026-07-18 in `/Users/jabbo/PLANEVO` against code candidate `d4c690d`; unrelated
-pre-existing working-tree changes were preserved.
+pre-existing working-tree changes were preserved. **Migration gate re-verified 2026-07-19**
+during Phase 2 audit remediation Task 1.
 
 ## Decision
 
@@ -9,13 +10,16 @@ The release-candidate tests, strict TypeScript check, scoped lint, production bu
 Tasks kernel grep are green. Final review hardening is committed in `d4c690d`, including
 endpoint-complete RLS, canonical file ownership, locked attachment lifecycle operations,
 idempotency keys, transactional ordering/deletion, abandoned-reservation recovery, and
-the visible cancelled/due-date/accessibility fixes. The additive migrations
-`20260718150000_restrict_task_attachment_claim_acl.sql` and
-`20260718160000_phase2_final_integrity.sql` have not been applied remotely. Qualifying
-founder dogfood must not begin until both are applied and reverified. Phase 2 is **not
-complete**: authenticated browser fidelity/interaction remains unverified, and Task 14
-requires three consecutive weekday sign-offs in
-`.superpowers/ecosystem-phase-2/dogfood-log.md`.
+the visible cancelled/due-date/accessibility fixes.
+
+**Migration gate (2026-07-19): PASSED.** Schema introspection confirms all Phase 2 final
+integrity RPCs are present on the linked remote database. ACL checks show
+`anon_execute = false` and `authenticated_execute = true` for every task attachment and
+ordering RPC. Migration ledger repaired for `20260718130000` through `20260718160000`.
+
+Phase 2 is **not complete**: audit remediation code changes and authenticated browser
+fidelity/interaction remain in progress; Task 14 requires three consecutive weekday
+sign-offs in `.superpowers/ecosystem-phase-2/dogfood-log.md`.
 
 ## Commit and cutover evidence
 
@@ -55,6 +59,33 @@ files were not changed to manufacture a green Phase 2 result; the exact Tasks sc
 clean and the production build passes.
 
 ## Hosted migration evidence
+
+### 2026-07-19 remediation re-verification (Task 1)
+
+Fresh linked-database queries during Phase 2 audit remediation:
+
+```sh
+cd /Users/jabbo/PLANEVO
+node_modules/.bin/supabase db query --linked \
+  "select p.proname, pg_get_function_identity_arguments(p.oid) as arguments from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('create_task_ordered','move_task_ordered','delete_task_cascade','claim_task_attachment','schedule_task_idempotent','reserve_task_attachment') order by p.proname;"
+
+node_modules/.bin/supabase db query --linked \
+  "select p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute, has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and (p.proname like '%task_attachment%' or p.proname in ('create_task_ordered','move_task_ordered','delete_task_cascade','schedule_task_idempotent')) order by p.proname;"
+
+node_modules/.bin/supabase migration repair --linked --status applied \
+  20260718130000 20260718140000 20260718150000 20260718160000
+```
+
+| Check | Result |
+|---|---|
+| RPC presence | exit `0`; `create_task_ordered`, `move_task_ordered`, `delete_task_cascade`, `schedule_task_idempotent`, `reserve_task_attachment`, and **both** `claim_task_attachment` signatures (legacy 3-arg + current 4-arg with `p_operation_key`) |
+| ACL gate | exit `0`; every row has `anon_execute: false`, `authenticated_execute: true` |
+| Ledger repair | exit `0`; `Repaired migration history: [20260718130000 20260718140000 20260718150000 20260718160000] => applied` |
+
+**Note:** The legacy 3-arg `claim_task_attachment` remains alongside the 4-arg version.
+Application code must call the 4-arg RPC via `claimTaskAttachment` in core.
+
+### 2026-07-18 initial verification (historical)
 
 The repository has the Supabase CLI (`2.109.1`) and an existing linked project. A safe,
 read-only status check was run:
