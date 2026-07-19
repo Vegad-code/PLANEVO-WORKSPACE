@@ -11,7 +11,12 @@ import {
   toggleSubtask,
   updateTaskAndStatus,
 } from "@planevo/core/mutations/product-tasks";
-import { claimTaskAttachment } from "@planevo/core/mutations/task-cross-links";
+import {
+  attachFileToTask,
+  claimTaskAttachment,
+  linkTaskToWorkspace,
+  scheduleTask,
+} from "@planevo/core/mutations/task-cross-links";
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -29,9 +34,18 @@ import {
   MAX_TASK_ATTACHMENT_BYTES,
   MAX_TASK_ATTACHMENTS,
   TASK_ATTACHMENT_BUCKET,
+  isVisibleFileSourceMetadata,
   taskAttachmentObjectName,
   type UploadedTaskAttachment,
 } from "@/lib/tasks/task-attachments";
+import {
+  attachFileToTaskActionInputSchema,
+  linkTaskToWorkspaceActionInputSchema,
+  scheduleTaskActionInputSchema,
+  taskCrossLinkOptions,
+  taskCrossLinkOptionsInputSchema,
+  type TaskCrossLinkOptions,
+} from "@/lib/tasks/task-cross-link-contracts";
 
 export type TaskActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -166,6 +180,101 @@ async function requireOwnedTask(
       ? (data.description_json as Record<string, unknown>)
       : {};
   return { ...data, status: status.data, description_json: descriptionJson };
+}
+
+async function requireOwnedVisibleFileSource(
+  access: DataAccess,
+  fileSourceId: string,
+): Promise<{ id: string; name: string }> {
+  const { data, error } = await access.client
+    .from("file_sources")
+    .select("id,name,metadata_json")
+    .eq("id", fileSourceId)
+    .eq("user_id", access.ownerId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || !isVisibleFileSourceMetadata(data.metadata_json)) {
+    throw new Error("File not found.");
+  }
+  return { id: data.id, name: data.name };
+}
+
+async function requireOwnedWorkspace(
+  access: DataAccess,
+  workspaceId: string,
+): Promise<{ id: string; name: string }> {
+  const { data, error } = await access.client
+    .from("workspaces")
+    .select("id,name")
+    .eq("id", workspaceId)
+    .eq("owner_id", access.ownerId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Workspace not found.");
+  return data;
+}
+
+async function loadOwnedTaskCrossLinkOptions(
+  access: DataAccess,
+  taskId: string,
+): Promise<TaskCrossLinkOptions> {
+  const [files, attachedFiles, workspaces, linkedWorkspaces, current] =
+    await Promise.all([
+      access.client
+        .from("file_sources")
+        .select("id,name,mime_type,size_bytes,metadata_json")
+        .eq("user_id", access.ownerId)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      access.client
+        .from("file_links")
+        .select("file_source_id")
+        .eq("target_type", "task")
+        .eq("target_id", taskId),
+      access.client
+        .from("workspaces")
+        .select("id,name")
+        .eq("owner_id", access.ownerId)
+        .order("created_at", { ascending: true })
+        .limit(100),
+      access.client
+        .from("workspace_links")
+        .select("workspace_id")
+        .eq("resource_type", "task")
+        .eq("resource_id", taskId),
+      getCurrentWorkspace(),
+    ]);
+
+  if (files.error) throw files.error;
+  if (attachedFiles.error) throw attachedFiles.error;
+  if (workspaces.error) throw workspaces.error;
+  if (linkedWorkspaces.error) throw linkedWorkspaces.error;
+
+  return taskCrossLinkOptions({
+    files: files.data ?? [],
+    attachedFileIds: (attachedFiles.data ?? []).map(
+      (link) => link.file_source_id,
+    ),
+    workspaces: workspaces.data ?? [],
+    currentWorkspaceId:
+      current?.access.ownerId === access.ownerId ? current.workspace.id : null,
+    linkedWorkspaceIds: (linkedWorkspaces.data ?? []).map(
+      (link) => link.workspace_id,
+    ),
+  });
+}
+
+async function countTaskFiles(
+  access: DataAccess,
+  taskId: string,
+): Promise<number> {
+  const { count, error } = await access.client
+    .from("file_links")
+    .select("id", { count: "exact", head: true })
+    .eq("target_type", "task")
+    .eq("target_id", taskId);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 async function requireOwnedSubtask(
@@ -575,5 +684,102 @@ export async function deleteProductSubtaskAction(input: {
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not delete the subtask.");
+  }
+}
+
+export async function scheduleProductTaskAction(input: {
+  taskId: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<TaskActionResult<{ eventId: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = scheduleTaskActionInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error:
+          parsed.error.issues[0]?.message ?? "Choose a valid date and time.",
+      };
+    }
+    const task = await requireOwnedTask(access, parsed.data.taskId);
+    const event = await scheduleTask(access.client, access.ownerId, {
+      taskId: task.id,
+      title: task.title,
+      startsAt: parsed.data.startsAt,
+      endsAt: parsed.data.endsAt,
+    });
+    revalidatePath("/tasks");
+    return { ok: true, data: { eventId: event.id } };
+  } catch (cause) {
+    return actionError(cause, "Could not schedule the task.");
+  }
+}
+
+export async function attachFileToProductTaskAction(input: {
+  taskId: string;
+  fileSourceId: string;
+}): Promise<TaskActionResult<{ fileCount: number; fileName: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = attachFileToTaskActionInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid file." };
+    }
+    await requireOwnedTask(access, parsed.data.taskId);
+    const file = await requireOwnedVisibleFileSource(
+      access,
+      parsed.data.fileSourceId,
+    );
+    await attachFileToTask(access.client, parsed.data);
+    const fileCount = await countTaskFiles(access, parsed.data.taskId);
+    revalidatePath("/tasks");
+    return {
+      ok: true,
+      data: { fileCount, fileName: file.name },
+    };
+  } catch (cause) {
+    return actionError(cause, "Could not attach the file.");
+  }
+}
+
+export async function linkProductTaskToWorkspaceAction(input: {
+  taskId: string;
+  workspaceId: string;
+}): Promise<TaskActionResult<{ workspaceName: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = linkTaskToWorkspaceActionInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid workspace." };
+    }
+    await requireOwnedTask(access, parsed.data.taskId);
+    const workspace = await requireOwnedWorkspace(
+      access,
+      parsed.data.workspaceId,
+    );
+    await linkTaskToWorkspace(access.client, access.ownerId, parsed.data);
+    revalidatePath("/tasks");
+    return { ok: true, data: { workspaceName: workspace.name } };
+  } catch (cause) {
+    return actionError(cause, "Could not add the task to the workspace.");
+  }
+}
+
+export async function loadTaskCrossLinkOptionsAction(input: {
+  taskId: string;
+}): Promise<TaskActionResult<TaskCrossLinkOptions>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = taskCrossLinkOptionsInputSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid task." };
+    await requireOwnedTask(access, parsed.data.taskId);
+    const data = await loadOwnedTaskCrossLinkOptions(
+      access,
+      parsed.data.taskId,
+    );
+    return { ok: true, data };
+  } catch (cause) {
+    return actionError(cause, "Could not load cross-feature options.");
   }
 }

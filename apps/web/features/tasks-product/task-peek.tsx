@@ -20,6 +20,7 @@ import {
   toggleProductSubtaskAction,
   updateProductTaskAction,
 } from "@/app/(workspace)/tasks/actions";
+import { TaskCrossLinkActions } from "./cross-link-actions";
 
 type TaskPeekProps = {
   task: TaskWithMeta;
@@ -230,6 +231,12 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
                 className={`${inputClassName} resize-y`}
               />
             </label>
+
+            <TaskCrossLinkActions
+              taskId={task.id}
+              dueAt={task.due_at}
+              initialFileCount={task.fileCount}
+            />
 
             <section aria-labelledby="task-subtasks-title" className="border-t border-border pt-5">
               <div className="flex items-center justify-between gap-3">

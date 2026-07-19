@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings --experimental-strip-types --test lib/queries/workspace-home.test.mjs features/tasks-product/task-board-ordering.test.mjs"
+    "test": "node --no-warnings --experimental-strip-types --test lib/queries/workspace-home.test.mjs features/tasks-product/task-board-ordering.test.mjs lib/tasks/task-cross-link-contracts.test.mjs features/tasks-product/task-cross-link-actions-contract.test.mjs features/tasks-product/task-cross-link-ui-contract.test.mjs"
   },
   "dependencies": {
     "@blocknote/core": "^0.51.4",

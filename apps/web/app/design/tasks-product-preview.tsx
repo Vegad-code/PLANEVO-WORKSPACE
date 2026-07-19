@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import { CreateTaskDialog } from "@/features/tasks-product/create-task-dialog";
+import { TaskCrossLinkActionsPreview } from "@/features/tasks-product/cross-link-actions";
 import { TasksEmptyState } from "@/features/tasks-product/tasks-product-view";
 import {
   TaskBoard,
@@ -258,6 +259,25 @@ export function TasksProductPreview() {
             }}
             isCreateDialogOpen={createOpen}
           />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-h3">Cross-feature action states</h3>
+        <p className="mt-1 text-small text-text-secondary">
+          Neutral manual actions, each picker, and calm pending, success, and retry states.
+        </p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <TaskCrossLinkActionsPreview state="default" />
+          <TaskCrossLinkActionsPreview state="schedule" />
+          <TaskCrossLinkActionsPreview state="files" />
+          <TaskCrossLinkActionsPreview state="files-empty" />
+          <TaskCrossLinkActionsPreview state="workspace" />
+          <TaskCrossLinkActionsPreview state="workspace-empty" />
+          <TaskCrossLinkActionsPreview state="loading" />
+          <TaskCrossLinkActionsPreview state="pending" />
+          <TaskCrossLinkActionsPreview state="success" />
+          <TaskCrossLinkActionsPreview state="error" />
         </div>
       </div>
 
