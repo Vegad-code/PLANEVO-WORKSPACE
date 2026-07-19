@@ -35,6 +35,7 @@ import { OnboardingPreview } from "./onboarding-preview";
 import { PageChromePreview } from "./page-chrome-preview";
 import { RecordPeekPreview } from "./record-peek-preview";
 import { RecordSurfacePreview } from "./record-surface-preview";
+import { CalendarProductPreview } from "./calendar-product-preview";
 import { TasksProductPreview } from "./tasks-product-preview";
 import { WorkspacePreview } from "./workspace-preview";
 
@@ -388,6 +389,10 @@ export default function DesignPage() {
 
       <Section title="Tasks product: task card states and board">
         <TasksProductPreview />
+      </Section>
+
+      <Section title="Calendar product: sidebar, today column, week grid">
+        <CalendarProductPreview />
       </Section>
 
       <Section title="Workspace — switcher, manage, faces">
