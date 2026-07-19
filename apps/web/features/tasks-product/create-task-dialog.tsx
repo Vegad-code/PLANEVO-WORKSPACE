@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CloudUpload, FileText, Square, X } from "lucide-react";
+import { Calendar, CloudUpload, FileText, X } from "lucide-react";
 import {
   TASK_PRIORITIES,
   type TaskPriority,
@@ -17,11 +17,9 @@ import type { TaskBoardStatus } from "./task-board-ordering";
 
 /**
  * Create-task modal matching the Lumis reference (founder override
- * 2026-07-18): title, description, priority, due date, estimate, tag chips,
- * and an attachment drop zone. Purely presentational — the parent owns
- * submission, so `/design` can mount it against a no-op. Field state lives
- * here and is discarded on unmount; parents mount it only while open, so
- * closing always resets the form.
+ * 2026-07-19): narrow shell, taller controls, ink Create Task CTA,
+ * title / description / priority / due / estimate / tags / attachments.
+ * Presentational — parent owns submission so `/design` can mount a no-op.
  */
 
 export const TASK_TAGS = [
@@ -89,7 +87,7 @@ export function CreateTaskDialog({
   const [isDragOver, setIsDragOver] = useState(false);
 
   const inputClassName =
-    "w-full rounded-lg border border-border-strong bg-paper px-3 py-2 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink";
+    "h-11 w-full rounded-lg border border-border bg-paper px-3 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink";
   const labelClassName = "mb-2 block text-label uppercase text-text-muted";
 
   function toggleTag(tag: string) {
@@ -151,14 +149,17 @@ export function CreateTaskDialog({
         if (!isPending) onClose();
       }}
       labelledBy="create-task-title"
-      className="m-4 max-h-dvh w-auto max-w-lg overflow-hidden rounded-card border border-border bg-surface-raised p-0 text-ink backdrop:bg-ink/30 sm:m-auto sm:w-full"
+      className="m-4 max-h-dvh w-auto max-w-md overflow-hidden rounded-2xl border border-border bg-surface-raised p-0 text-ink shadow-lg backdrop:bg-ink/30 sm:m-auto sm:w-full"
     >
       <form onSubmit={handleSubmit} className="flex max-h-dvh flex-col">
-        <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-          <div>
-            <p className="text-label uppercase text-text-muted">New task</p>
-            <h2 id="create-task-title" className="mt-1 text-h2">
-              Create new task
+        <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="size-3.5 shrink-0 rounded-sm bg-ink"
+            />
+            <h2 id="create-task-title" className="truncate text-h3">
+              Create New Task
             </h2>
           </div>
           <button
@@ -172,7 +173,7 @@ export function CreateTaskDialog({
           </button>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-6">
           <label className="block">
             <span className={labelClassName}>Task title</span>
             <input
@@ -181,7 +182,7 @@ export function CreateTaskDialog({
               maxLength={500}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="e.g. Weekly progress update"
+              placeholder="e.g. Weekly progress..."
               className={inputClassName}
             />
           </label>
@@ -191,10 +192,10 @@ export function CreateTaskDialog({
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              rows={3}
+              rows={5}
               maxLength={20_000}
-              placeholder="What does this task cover end-to-end?"
-              className={`${inputClassName} resize-y`}
+              placeholder="What does this workflow do end-to-end?"
+              className="min-h-28 w-full resize-y rounded-lg border border-border bg-paper px-3 py-2.5 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
             />
           </label>
 
@@ -213,15 +214,21 @@ export function CreateTaskDialog({
             ))}
           </SelectField>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className={labelClassName}>Due date</span>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-                className={inputClassName}
-              />
+              <span className="relative block">
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) => setDueDate(event.target.value)}
+                  className={`${inputClassName} pr-10`}
+                />
+                <Calendar
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-text-muted"
+                />
+              </span>
             </label>
             <SelectField
               label="Estimate"
@@ -248,13 +255,18 @@ export function CreateTaskDialog({
                     type="button"
                     aria-pressed={isSelected}
                     onClick={() => toggleTag(tag)}
-                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-small outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+                    className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-small outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                       isSelected
                         ? "border-ink bg-paper text-ink"
                         : "border-border bg-paper text-text-secondary hover:border-border-strong hover:text-ink"
                     }`}
                   >
-                    <Square aria-hidden="true" className="size-3 shrink-0" />
+                    <span
+                      aria-hidden="true"
+                      className={`size-2.5 shrink-0 rounded-sm ${
+                        isSelected ? "bg-ink" : "bg-text-muted"
+                      }`}
+                    />
                     {tag}
                   </button>
                 );
@@ -279,18 +291,19 @@ export function CreateTaskDialog({
                 setIsDragOver(false);
                 addFiles(event.dataTransfer.files);
               }}
-              className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-4 py-6 text-center outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+              className={`flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                 isDragOver
                   ? "border-ink bg-paper"
                   : "border-border-strong bg-paper hover:border-ink"
               }`}
             >
-              <CloudUpload aria-hidden="true" className="size-5 text-text-muted" />
+              <CloudUpload aria-hidden="true" className="size-6 text-text-muted" />
               <span className="text-small font-medium text-ink">
-                Drop files here
+                Drop Your File Here
               </span>
-              <span className="text-label text-text-muted">
-                or click to browse — up to {MAX_TASK_ATTACHMENTS} files, 25 MB each
+              <span className="max-w-xs text-label text-text-muted">
+                or click to browse — up to {MAX_TASK_ATTACHMENTS} files, 25 MB
+                each
               </span>
             </button>
             <input
@@ -310,13 +323,16 @@ export function CreateTaskDialog({
               </p>
             ) : null}
             {files.length > 0 ? (
-              <ul className="mt-2 flex flex-col gap-1.5">
+              <ul className="mt-3 flex flex-col gap-1.5">
                 {files.map((file, index) => (
                   <li
                     key={`${file.name}-${index}`}
                     className="flex items-center gap-2 rounded-lg border border-border bg-paper px-3 py-2 text-small"
                   >
-                    <FileText aria-hidden="true" className="size-4 shrink-0 text-text-muted" />
+                    <FileText
+                      aria-hidden="true"
+                      className="size-4 shrink-0 text-text-muted"
+                    />
                     <span className="min-w-0 flex-1 truncate">{file.name}</span>
                     <span className="shrink-0 text-label text-text-muted">
                       {formatFileSize(file.size)}
@@ -336,12 +352,16 @@ export function CreateTaskDialog({
           </div>
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
+        <footer className="flex items-center justify-between gap-3 border-t border-border px-6 py-5">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isPending || !title.trim()}>
-            {isPending ? "Creating…" : "Create task"}
+          <Button
+            type="submit"
+            variant="ink"
+            disabled={isPending || !title.trim()}
+          >
+            {isPending ? "Creating…" : "Create Task"}
           </Button>
         </footer>
       </form>
