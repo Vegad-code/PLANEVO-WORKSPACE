@@ -36,6 +36,7 @@ import { PageChromePreview } from "./page-chrome-preview";
 import { RecordPeekPreview } from "./record-peek-preview";
 import { RecordSurfacePreview } from "./record-surface-preview";
 import { CalendarProductPreview } from "./calendar-product-preview";
+import { FilesProductPreview } from "./files-product-preview";
 import { TasksProductPreview } from "./tasks-product-preview";
 import { WorkspacePreview } from "./workspace-preview";
 
@@ -393,6 +394,10 @@ export default function DesignPage() {
 
       <Section title="Calendar product: sidebar, today column, week grid">
         <CalendarProductPreview />
+      </Section>
+
+      <Section title="Files product: cabinet, table, storage meter">
+        <FilesProductPreview />
       </Section>
 
       <Section title="Workspace — switcher, manage, faces">
