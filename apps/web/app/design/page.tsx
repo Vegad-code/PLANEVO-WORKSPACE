@@ -4,7 +4,10 @@ import { NavItem } from "@/features/shell/nav-item";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import { Sidebar } from "@/features/shell/sidebar";
 import { TopBar } from "@/features/shell/top-bar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Select, SelectField } from "@/components/ui/select";
 import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/planevo-icon";
 import { TaskComposer } from "@/features/tasks/task-composer";
@@ -28,6 +31,8 @@ import { CommandBarPreview } from "./command-bar-preview";
 import { DatabaseViewsPreview } from "./database-views-preview";
 import { DeleteControlsPreview } from "./delete-controls-preview";
 import { EditorPreview } from "./editor-preview";
+import { OnboardingPreview } from "./onboarding-preview";
+import { PageChromePreview } from "./page-chrome-preview";
 import { RecordPeekPreview } from "./record-peek-preview";
 import { RecordSurfacePreview } from "./record-surface-preview";
 import { TasksProductPreview } from "./tasks-product-preview";
@@ -348,6 +353,37 @@ export default function DesignPage() {
 
       <Section title="Editor — slash, promote, icon / cover, mentions">
         <EditorPreview />
+      </Section>
+
+      <Section title="Onboarding — routing question (four cards)">
+        <OnboardingPreview />
+      </Section>
+
+      <Section title="Page chrome — top bar, cover, breadcrumb">
+        <PageChromePreview />
+      </Section>
+
+      <Section title="Tasks primitives — Button, Badge, Select">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button>Create task</Button>
+          <Button variant="outline">Cancel</Button>
+          <Button variant="ghost">Ghost</Button>
+          <Button variant="ink">Ink</Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Badge>Default</Badge>
+          <Badge variant="high">High</Badge>
+          <Badge variant="medium">Medium</Badge>
+          <Badge variant="low">Low</Badge>
+          <Badge variant="muted">Muted</Badge>
+        </div>
+        <div className="mt-4 max-w-xs">
+          <SelectField label="Priority" defaultValue="medium">
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </SelectField>
+        </div>
       </Section>
 
       <Section title="Tasks product: task card states and board">
