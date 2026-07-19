@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { stripPageContentForTemplate } from "@planevo/core/mutations/duplicate-page";
-import { promoteBlocksToDatabase } from "@planevo/core/mutations/promote-blocks";
+import { promoteBlocksToRecordsAtomic } from "@planevo/core/mutations/promote-blocks-atomic";
 import { createDatabase } from "@planevo/core/mutations/create-database";
 import { requireDataAccess } from "@/lib/data/access";
+import { createProductTaskFromFields } from "@/lib/tasks/create-product-task";
 import {
   clearRecentItems,
   deleteError,
@@ -69,7 +70,6 @@ export async function savePageContent(
 export async function promoteBlocksToRecords(input: {
   pageId: string;
   databaseId: string;
-  createNewTaskDatabase?: boolean;
   blocks: Array<{
     blockId: string;
     title: string;
@@ -81,6 +81,7 @@ export async function promoteBlocksToRecords(input: {
   ok: boolean;
   databaseId?: string;
   recordIds?: string[];
+  contentJson?: unknown;
   error?: string;
 }> {
   const cleaned = input.blocks
@@ -99,26 +100,9 @@ export async function promoteBlocksToRecords(input: {
   }
 
   try {
-    const { access, pageId: ownedPageId } = await requireOwnedPage(input.pageId);
-    void ownedPageId;
+    const { access } = await requireOwnedPage(input.pageId);
 
-    let databaseId = input.databaseId;
-
-    if (input.createNewTaskDatabase) {
-      const { data: page, error: pageError } = await access.client
-        .from("pages")
-        .select("workspace_id")
-        .eq("id", input.pageId)
-        .maybeSingle();
-      if (pageError) throw pageError;
-      if (!page) return { ok: false, error: "Page not found." };
-
-      const created = await createDatabase(access.client, access.ownerId, {
-        workspaceId: page.workspace_id,
-        templateType: "task",
-      });
-      databaseId = created.databaseId;
-    }
+    const databaseId = input.databaseId;
 
     const { data: database, error: databaseError } = await access.client
       .from("databases")
@@ -129,11 +113,13 @@ export async function promoteBlocksToRecords(input: {
     if (databaseError) throw databaseError;
     if (!database) return { ok: false, error: "Database not found." };
 
-    const result = await promoteBlocksToDatabase(access.client, access.ownerId, {
+    const result = await promoteBlocksToRecordsAtomic(access.client, access.ownerId, {
+      pageId: input.pageId,
       databaseId,
       blocks: cleaned,
     });
 
+    revalidatePath(`/pages/${input.pageId}`);
     revalidatePath("/tasks");
     revalidatePath(`/databases/${databaseId}`);
     revalidatePath("/", "layout");
@@ -142,6 +128,7 @@ export async function promoteBlocksToRecords(input: {
       ok: true,
       databaseId: result.databaseId,
       recordIds: result.recordIds,
+      contentJson: result.contentJson,
     };
   } catch (cause) {
     return {
@@ -152,8 +139,7 @@ export async function promoteBlocksToRecords(input: {
 }
 
 /**
- * Retroactive structure v1 (PRD §5.3 #1, checklist slice): promote written
- * list items into real task records in the workspace's default task database.
+ * Promote written list items into global product tasks on `public.tasks`.
  */
 export async function promoteItemsToTasks(
   pageId: string,
@@ -166,13 +152,8 @@ export async function promoteItemsToTasks(
 
   try {
     await requireOwnedPage(pageId);
-    const { createTaskWithRequiredFoundation } = await import(
-      "@/lib/mutations/create-foundations"
-    );
-    // ponytail: one RPC per item — selections are small; batch RPC if bulk
-    // promotion ever exceeds dozens of items.
     for (const title of cleaned) {
-      await createTaskWithRequiredFoundation({ title });
+      await createProductTaskFromFields({ title });
     }
     revalidatePath("/tasks");
     revalidatePath("/", "layout");

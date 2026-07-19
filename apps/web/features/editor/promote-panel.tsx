@@ -10,8 +10,6 @@ export type PromotableBlock = {
   draft: CapturedRecordDraft;
 };
 
-export const NEW_TASK_DATABASE = "__new_task_database__";
-
 type ColumnKey = "title" | "dueDate" | "priority" | "status";
 type ColumnType = "text" | "date" | "select";
 
@@ -30,7 +28,6 @@ type PromotePanelProps = {
   onConfirm: (input: {
     databaseId: string;
     drafts: PromotableBlock[];
-    createNewTaskDatabase?: boolean;
   }) => void;
 };
 
@@ -117,9 +114,7 @@ export function PromotePanel({
   onConfirm,
 }: PromotePanelProps) {
   const promotable = useMemo(() => blocksToPromotable(blocks), [blocks]);
-  const [databaseId, setDatabaseId] = useState(
-    databaseOptions[0]?.id ?? NEW_TASK_DATABASE,
-  );
+  const [databaseId, setDatabaseId] = useState(databaseOptions[0]?.id ?? "");
   const [drafts, setDrafts] = useState(promotable);
   const [columns, setColumns] = useState(DEFAULT_COLUMNS);
 
@@ -197,7 +192,6 @@ export function PromotePanel({
                 {option.name}
               </option>
             ))}
-            <option value={NEW_TASK_DATABASE}>+ New task database</option>
           </select>
         </label>
       </div>
@@ -293,7 +287,6 @@ export function PromotePanel({
             onConfirm({
               databaseId,
               drafts,
-              createNewTaskDatabase: databaseId === NEW_TASK_DATABASE,
             })
           }
           className="h-8 rounded-lg bg-ink px-4 text-small font-medium text-paper disabled:opacity-50"

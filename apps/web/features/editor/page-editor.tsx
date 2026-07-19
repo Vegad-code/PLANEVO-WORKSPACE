@@ -8,6 +8,7 @@ import {
   savePageContent,
 } from "@/app/(workspace)/pages/[pageId]/actions";
 import { flattenRecordsToLines } from "@/app/(workspace)/pages/[pageId]/flatten-actions";
+import { OnboardingChecklistAnalytics } from "@/features/editor/onboarding-checklist-analytics";
 import { PlanevoEditor } from "@/features/editor/planevo-editor";
 import { PromotePanel } from "@/features/editor/promote-panel";
 import {
@@ -19,16 +20,19 @@ export function PageEditor({
   pageId,
   initialContent,
   databaseOptions,
+  trackOnboardingChecklist = false,
 }: {
   pageId: string;
   initialContent: unknown;
   databaseOptions: { id: string; name: string }[];
+  trackOnboardingChecklist?: boolean;
 }) {
   const editorRef = useRef<PlanevoEditorInstance | null>(null);
   const markDirtyRef = useRef<(() => void) | null>(null);
   const [promoteBlocks, setPromoteBlocks] = useState<PlanevoBlock[] | null>(null);
   const [promoteNotice, setPromoteNotice] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
+  const [analyticsContent, setAnalyticsContent] = useState(initialContent);
 
   useEffect(() => {
     async function onFlatten(event: Event) {
@@ -78,7 +82,6 @@ export function PageEditor({
 
   async function confirmPromote(input: {
     databaseId: string;
-    createNewTaskDatabase?: boolean;
     drafts: Array<{
       block: PlanevoBlock;
       draft: {
@@ -90,15 +93,13 @@ export function PageEditor({
     }>;
   }) {
     const editor = editorRef.current;
-    const markDirtyAndSchedule = markDirtyRef.current;
-    if (!editor || !markDirtyAndSchedule) return;
+    if (!editor) return;
 
     setPromoting(true);
     try {
       const result = await promoteBlocksToRecords({
         pageId,
         databaseId: input.databaseId,
-        createNewTaskDatabase: input.createNewTaskDatabase,
         blocks: input.drafts.map((entry) => ({
           blockId: entry.block.id,
           title: entry.draft.title,
@@ -113,6 +114,7 @@ export function PageEditor({
         return;
       }
 
+      // Server already patched content_json atomically — sync the live editor only.
       editor.replaceBlocks(
         input.drafts.map((entry) => entry.block),
         [
@@ -127,7 +129,6 @@ export function PageEditor({
           },
         ],
       );
-      markDirtyAndSchedule();
       setPromoteBlocks(null);
       setPromoteNotice(
         `Created ${result.recordIds.length} record${result.recordIds.length === 1 ? "" : "s"} and linked them here.`,
@@ -139,6 +140,10 @@ export function PageEditor({
 
   return (
     <div className="flex flex-col gap-3">
+      <OnboardingChecklistAnalytics
+        enabled={trackOnboardingChecklist}
+        content={analyticsContent}
+      />
       {promoteNotice && (
         <p role="status" className="text-small text-text-secondary">
           {promoteNotice}
@@ -148,7 +153,10 @@ export function PageEditor({
         pageId={pageId}
         initialContent={initialContent}
         databaseOptions={databaseOptions}
-        onSave={(content) => savePageContent(pageId, content)}
+        onSave={async (content) => {
+          if (trackOnboardingChecklist) setAnalyticsContent(content);
+          return savePageContent(pageId, content);
+        }}
         onPromoteRequest={(blocks) => {
           setPromoteBlocks(blocks);
           setPromoteNotice(null);
