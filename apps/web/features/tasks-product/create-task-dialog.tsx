@@ -21,10 +21,8 @@ import {
 
 /**
  * Create-task modal matching the Lumis reference (founder override
- * 2026-07-19): narrow content-sized shell, tight vertical rhythm, ink
- * Create Task CTA, title / description / priority / due / estimate /
- * tags / attachments. Presentational — parent owns submission so
- * `/design` can mount a no-op.
+ * 2026-07-19): narrow content-sized shell (~28rem), compressed vertical
+ * rhythm, ink Create Task CTA, corner brackets, dot-grid attachments.
  */
 
 export const TASK_TAGS = [
@@ -155,10 +153,10 @@ export function CreateTaskDialog({
         if (!isPending) onClose();
       }}
       labelledBy="create-task-title"
-      className="m-4 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-surface-raised p-0 text-ink shadow-lg backdrop:bg-ink/30 sm:m-auto"
+      className="m-4 w-[min(100%,28rem)] overflow-hidden rounded-2xl border border-border bg-surface-raised p-0 text-ink shadow-lg backdrop:bg-ink/30 sm:m-auto"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
+        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
           <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden="true"
@@ -190,52 +188,52 @@ export function CreateTaskDialog({
         <CornerBracketFrame
           bracketSize="size-3.5"
           bracketClassName="border-border-strong"
-          className="mb-4 px-6"
+          className="mb-3 px-5"
         >
-          <div className="scrollbar-silent flex max-h-[calc(100dvh-11rem)] flex-col gap-5 overflow-y-auto py-4">
+          <div className="scrollbar-silent flex max-h-[min(58vh,32rem)] flex-col gap-3 overflow-y-auto py-3">
             <label className="block">
-            <span className={labelClassName}>Task title</span>
-            <input
-              autoFocus
-              required
-              maxLength={500}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="e.g. Weekly progress..."
-              className={inputClassName}
-            />
-          </label>
+              <span className={labelClassName}>Task title</span>
+              <input
+                autoFocus
+                required
+                maxLength={500}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="e.g. Weekly progress..."
+                className={inputClassName}
+              />
+            </label>
 
-          <label className="block">
-            <span className={labelClassName}>Description</span>
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              rows={5}
-              maxLength={20_000}
-              placeholder="What does this workflow do end-to-end?"
-              className="w-full resize-none rounded-lg border border-border bg-paper px-3 py-2 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-            />
-          </label>
+            <label className="block">
+              <span className={labelClassName}>Description</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={3}
+                maxLength={20_000}
+                placeholder="What does this workflow do end-to-end?"
+                className="w-full resize-none rounded-lg border border-border bg-paper px-3 py-2 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+              />
+            </label>
 
-          <SelectField
-            label="Priority"
-            labelClassName={labelClassName}
-            selectClassName={selectClassName}
-            value={priority}
-            onChange={(event) =>
-              setPriority(event.target.value as TaskPriority | "")
-            }
-          >
-            <option value="">No priority</option>
-            {TASK_PRIORITIES.map((option) => (
-              <option key={option} value={option}>
-                {PRIORITY_LABELS[option]}
-              </option>
-            ))}
-          </SelectField>
+            <SelectField
+              label="Priority"
+              labelClassName={labelClassName}
+              selectClassName={selectClassName}
+              value={priority}
+              onChange={(event) =>
+                setPriority(event.target.value as TaskPriority | "")
+              }
+            >
+              <option value="">No priority</option>
+              {TASK_PRIORITIES.map((option) => (
+                <option key={option} value={option}>
+                  {PRIORITY_LABELS[option]}
+                </option>
+              ))}
+            </SelectField>
 
-          <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className={labelClassName}>Due date</span>
               <span className="relative block">
@@ -278,7 +276,7 @@ export function CreateTaskDialog({
                     type="button"
                     aria-pressed={isSelected}
                     onClick={() => toggleTag(tag)}
-                    className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-label outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-label outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                       isSelected
                         ? "border-ink bg-paper text-ink"
                         : "border-border bg-paper text-text-secondary hover:border-border-strong hover:text-ink"
@@ -314,16 +312,16 @@ export function CreateTaskDialog({
                 setIsDragOver(false);
                 addFiles(event.dataTransfer.files);
               }}
-              className={`relative flex min-h-32 w-full flex-col overflow-hidden rounded-xl border border-dashed text-center outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+              className={`relative flex min-h-24 w-full flex-col overflow-hidden rounded-xl border border-dashed text-center outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                 isDragOver
                   ? "border-ink bg-paper"
                   : "border-border-strong bg-paper hover:border-ink"
               }`}
             >
-              <span className="relative z-10 flex flex-col items-center justify-center gap-1 px-3 py-8">
+              <span className="relative z-10 flex flex-col items-center justify-center gap-1 px-3 py-4">
                 <CloudUpload
                   aria-hidden="true"
-                  className="size-6 text-text-muted"
+                  className="size-5 text-text-muted"
                 />
                 <span className="text-small font-medium text-ink">
                   Drop Your File Here
@@ -333,7 +331,7 @@ export function CreateTaskDialog({
                   each
                 </span>
               </span>
-              <LumisDotGridBand className="absolute inset-x-0 bottom-0 h-16 rounded-b-xl" />
+              <LumisDotGridBand className="absolute inset-x-0 bottom-0 h-12 rounded-b-xl" />
             </button>
             <input
               ref={fileInputRef}
