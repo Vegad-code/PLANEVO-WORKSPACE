@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   scheduleTask,
@@ -15,6 +15,11 @@ const CLAIM_MIGRATION = readFileSync(
   ),
   "utf8",
 ).toLowerCase();
+
+const CLAIM_ACL_MIGRATION_URL = new URL(
+  "../../../../supabase/migrations/20260718150000_restrict_task_attachment_claim_acl.sql",
+  import.meta.url,
+);
 
 test("scheduleTask creates calendar_event with task_id on the default calendar", async () => {
   const inserts = [];
@@ -173,6 +178,20 @@ test("claim migration locks, verifies, links, and marks the source in one invoke
   assert.match(CLAIM_MIGRATION, /update public\.file_sources/);
   assert.match(CLAIM_MIGRATION, /'task_attachment_state', 'claimed'/);
   assert.match(CLAIM_MIGRATION, /'claimed_task_id', p_task_id/);
+});
+
+test("claim ACL follow-up revokes anonymous execute and preserves authorized grants", () => {
+  assert.ok(existsSync(CLAIM_ACL_MIGRATION_URL), "claim ACL follow-up migration must exist");
+  const migration = readFileSync(CLAIM_ACL_MIGRATION_URL, "utf8").toLowerCase();
+
+  assert.match(
+    migration,
+    /revoke all on function public\.claim_task_attachment\(uuid, uuid, uuid\) from anon/,
+  );
+  assert.match(
+    migration,
+    /grant execute on function public\.claim_task_attachment\(uuid, uuid, uuid\)[\s\S]*to authenticated, service_role/,
+  );
 });
 
 test("linkTaskToWorkspace delegates to linkResourceToWorkspace with resource_type task", async () => {
