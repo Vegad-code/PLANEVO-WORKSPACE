@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties } from "react";
+import { usePathname } from "next/navigation";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
+import { pageBreadcrumbLabels } from "@/lib/onboarding/page-breadcrumb";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import {
   reduceMobileNavigation,
@@ -38,6 +40,7 @@ export function AppShell({
   children: React.ReactNode;
   shell: WorkspaceShellData;
 }) {
+  const pathname = usePathname();
   const [sidebarState, setSidebarState] = useState<SidebarState>(
     createInitialSidebarState(),
   );
@@ -222,6 +225,11 @@ export function AppShell({
     });
   }
 
+  const pageIdMatch = pathname.match(/^\/pages\/([^/]+)/);
+  const pageBreadcrumb = pageIdMatch
+    ? pageBreadcrumbLabels(shell.pages, pageIdMatch[1]!)
+    : undefined;
+
   const sidebarPresentation = getSidebarPresentation(sidebarState);
   const isExpanded = sidebarPresentation.spacer === "expanded";
   const showEdgeTrigger = sidebarState.preference === "hidden";
@@ -287,6 +295,11 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
+          breadcrumb={
+            pageBreadcrumb && pageBreadcrumb.length > 0
+              ? pageBreadcrumb
+              : undefined
+          }
           userDisplayName={shell.userDisplayName}
           userInitials={shell.userInitials}
           menuButtonRef={mobileMenuTrigger}

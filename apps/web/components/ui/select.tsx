@@ -23,11 +23,13 @@ export function SelectField({
   label,
   className,
   labelClassName,
+  selectClassName,
   children,
   ...props
 }: SelectProps & {
   label: string;
   labelClassName?: string;
+  selectClassName?: string;
   className?: string;
 }) {
   return (
@@ -40,7 +42,9 @@ export function SelectField({
       >
         {label}
       </span>
-      <Select {...props}>{children}</Select>
+      <Select className={selectClassName} {...props}>
+        {children}
+      </Select>
     </label>
   );
 }

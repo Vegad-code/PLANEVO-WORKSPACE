@@ -61,14 +61,10 @@ export function TreeNavItem({
         className={`relative flex h-9 min-w-0 items-center gap-3 rounded-lg pr-3 text-small font-medium outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${contentPad} ${
           active
             ? "bg-surface-raised text-ink"
-            : "text-ink hover:bg-surface-raised"
+            : "text-text-secondary hover:bg-surface-raised hover:text-ink"
         }`}
       >
-        {active && (
-          <span className="absolute left-0 h-4 w-0.5 bg-marigold" aria-hidden="true" />
-        )}
-
-        {/* Ancestor vertical spines — border-strong + 2px so they read on sidebar cream */}
+        {/* Ancestor vertical spines */}
         {ancestorSpines.map((continues, ancestorDepth) => {
           if (ancestorDepth >= nestedDepth) return null;
           const left = GUTTER_LEFT[clampDepth(ancestorDepth)];
@@ -79,7 +75,7 @@ export function TreeNavItem({
               aria-hidden="true"
             >
               <span
-                className={`absolute left-0 w-0.5 bg-border-strong ${
+                className={`absolute left-0 border-l border-border ${
                   continues ? "inset-y-0" : "top-0 h-1/2"
                 }`}
               />
@@ -92,9 +88,9 @@ export function TreeNavItem({
           className={`pointer-events-none absolute inset-y-0 ${gutterClass} w-4`}
           aria-hidden="true"
         >
-          <span className="absolute top-0 left-0 h-1/2 w-3.5 rounded-bl-lg border-b-2 border-l-2 border-border-strong" />
+          <span className="absolute top-0 left-0 h-1/2 w-3.5 rounded-bl-lg border-b border-l border-border" />
           {continueSpine && (
-            <span className="absolute top-1/2 bottom-0 left-0 w-0.5 bg-border-strong" />
+            <span className="absolute top-1/2 bottom-0 left-0 border-l border-border" />
           )}
         </span>
 

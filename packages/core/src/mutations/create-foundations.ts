@@ -1,3 +1,7 @@
+import {
+  getDatabaseTemplate,
+  serializeTemplateForRpc,
+} from "../defaults/database-templates.ts";
 import type { Json } from "../types/database.types";
 
 type RpcError = { message: string; code?: string; details?: string; hint?: string };
@@ -108,10 +112,15 @@ export function createFoundationMutations(client: FoundationRpcClient, ownerId: 
       workspaceId: string;
       name?: string;
     }): Promise<DatabaseFoundationResult> {
-      const result = await callRpc(client, "create_task_database_with_views", {
+      // F-11 path — same template machinery as createDatabase()
+      const template = serializeTemplateForRpc(getDatabaseTemplate("task"), {
+        name: input.name?.trim() || "Tasks",
+        createPage: true,
+      });
+      const result = await callRpc(client, "create_database_from_template", {
         p_owner_id: ownerId,
         p_workspace_id: input.workspaceId,
-        p_name: input.name?.trim() || "Tasks",
+        p_template: template,
       });
       return {
         workspaceId: requireId(result.workspace_id, "workspace_id"),
@@ -124,10 +133,24 @@ export function createFoundationMutations(client: FoundationRpcClient, ownerId: 
       workspaceId: string;
       name?: string;
     }): Promise<DatabaseFoundationResult> {
-      const result = await callRpc(client, "create_calendar_database_with_views", {
+      // Calendar face resolves template_type === "calendar"
+      const calendarBase = getDatabaseTemplate("task");
+      const template = serializeTemplateForRpc(calendarBase, {
+        name: input.name?.trim() || "Calendar",
+        icon: "calendar",
+        createPage: true,
+      });
+      template.templateType = "calendar";
+      template.views = (template.views as Array<Record<string, unknown>>).map(
+        (view) => ({
+          ...view,
+          isDefault: view.type === "calendar",
+        }),
+      );
+      const result = await callRpc(client, "create_database_from_template", {
         p_owner_id: ownerId,
         p_workspace_id: input.workspaceId,
-        p_name: input.name?.trim() || "Calendar",
+        p_template: template,
       });
       return {
         workspaceId: requireId(result.workspace_id, "workspace_id"),

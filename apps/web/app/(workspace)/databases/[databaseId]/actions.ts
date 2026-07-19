@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { duplicateDatabaseStructure } from "@planevo/api/rpc";
+import {
+  duplicateDatabaseStructure,
+  duplicateDatabaseWithRecords,
+} from "@planevo/api/rpc";
 import {
   needsRebalance,
   positionBetween,
@@ -555,7 +558,7 @@ export async function convertPropertyType(input: {
 
 export async function duplicateDatabase(databaseId: string): Promise<void> {
   const access = await requireOwnedDatabase(databaseId);
-  const result = await duplicateDatabaseStructure(access.client, {
+  const result = await duplicateDatabaseWithRecords(access.client, {
     ownerId: access.ownerId,
     databaseId,
   });

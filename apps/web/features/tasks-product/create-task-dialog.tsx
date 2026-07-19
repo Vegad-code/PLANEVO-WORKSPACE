@@ -14,12 +14,17 @@ import {
   MAX_TASK_ATTACHMENTS,
 } from "@/lib/tasks/task-attachments";
 import type { TaskBoardStatus } from "./task-board-ordering";
+import {
+  CornerBracketFrame,
+  LumisDotGridBand,
+} from "./create-task-modal-chrome";
 
 /**
  * Create-task modal matching the Lumis reference (founder override
- * 2026-07-19): narrow shell, taller controls, ink Create Task CTA,
- * title / description / priority / due / estimate / tags / attachments.
- * Presentational — parent owns submission so `/design` can mount a no-op.
+ * 2026-07-19): narrow content-sized shell, tight vertical rhythm, ink
+ * Create Task CTA, title / description / priority / due / estimate /
+ * tags / attachments. Presentational — parent owns submission so
+ * `/design` can mount a no-op.
  */
 
 export const TASK_TAGS = [
@@ -88,7 +93,8 @@ export function CreateTaskDialog({
 
   const inputClassName =
     "h-11 w-full rounded-lg border border-border bg-paper px-3 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink";
-  const labelClassName = "mb-2 block text-label uppercase text-text-muted";
+  const labelClassName = "mb-1 block text-label uppercase text-text-muted";
+  const selectClassName = "h-11";
 
   function toggleTag(tag: string) {
     setTags((current) =>
@@ -149,32 +155,45 @@ export function CreateTaskDialog({
         if (!isPending) onClose();
       }}
       labelledBy="create-task-title"
-      className="m-4 max-h-dvh w-auto max-w-md overflow-hidden rounded-2xl border border-border bg-surface-raised p-0 text-ink shadow-lg backdrop:bg-ink/30 sm:m-auto sm:w-full"
+      className="m-4 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-surface-raised p-0 text-ink shadow-lg backdrop:bg-ink/30 sm:m-auto"
     >
-      <form onSubmit={handleSubmit} className="flex max-h-dvh flex-col">
+      <form onSubmit={handleSubmit} className="flex flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden="true"
               className="size-3.5 shrink-0 rounded-sm bg-ink"
             />
-            <h2 id="create-task-title" className="truncate text-h3">
+            <h2
+              id="create-task-title"
+              className="truncate text-h3 font-medium text-ink"
+            >
               Create New Task
             </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isPending}
-            aria-label="Close create task"
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-50"
+          <CornerBracketFrame
+            bracketSize="size-1.5"
+            className="flex size-9 shrink-0 items-center justify-center"
           >
-            <X aria-hidden="true" className="size-4" />
-          </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isPending}
+              aria-label="Close create task"
+              className="flex size-full items-center justify-center text-text-muted outline-none transition-colors hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+            >
+              <X aria-hidden="true" className="size-3 stroke-[1.75]" />
+            </button>
+          </CornerBracketFrame>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-6">
-          <label className="block">
+        <CornerBracketFrame
+          bracketSize="size-3.5"
+          bracketClassName="border-border-strong"
+          className="mb-4 px-6"
+        >
+          <div className="scrollbar-silent flex max-h-[calc(100dvh-11rem)] flex-col gap-5 overflow-y-auto py-4">
+            <label className="block">
             <span className={labelClassName}>Task title</span>
             <input
               autoFocus
@@ -195,12 +214,14 @@ export function CreateTaskDialog({
               rows={5}
               maxLength={20_000}
               placeholder="What does this workflow do end-to-end?"
-              className="min-h-28 w-full resize-y rounded-lg border border-border bg-paper px-3 py-2.5 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+              className="w-full resize-none rounded-lg border border-border bg-paper px-3 py-2 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
             />
           </label>
 
           <SelectField
             label="Priority"
+            labelClassName={labelClassName}
+            selectClassName={selectClassName}
             value={priority}
             onChange={(event) =>
               setPriority(event.target.value as TaskPriority | "")
@@ -232,6 +253,8 @@ export function CreateTaskDialog({
             </label>
             <SelectField
               label="Estimate"
+              labelClassName={labelClassName}
+              selectClassName={selectClassName}
               value={estimate}
               onChange={(event) => setEstimate(event.target.value)}
             >
@@ -245,7 +268,7 @@ export function CreateTaskDialog({
 
           <fieldset>
             <legend className={labelClassName}>Tags</legend>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {TASK_TAGS.map((tag) => {
                 const isSelected = tags.includes(tag);
 
@@ -255,7 +278,7 @@ export function CreateTaskDialog({
                     type="button"
                     aria-pressed={isSelected}
                     onClick={() => toggleTag(tag)}
-                    className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-small outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-label outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                       isSelected
                         ? "border-ink bg-paper text-ink"
                         : "border-border bg-paper text-text-secondary hover:border-border-strong hover:text-ink"
@@ -274,7 +297,7 @@ export function CreateTaskDialog({
             </div>
           </fieldset>
 
-          <div>
+          <div className="relative">
             <p className={labelClassName}>
               Attachments <span className="normal-case">(optional)</span>
             </p>
@@ -291,20 +314,26 @@ export function CreateTaskDialog({
                 setIsDragOver(false);
                 addFiles(event.dataTransfer.files);
               }}
-              className={`flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+              className={`relative flex min-h-32 w-full flex-col overflow-hidden rounded-xl border border-dashed text-center outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                 isDragOver
                   ? "border-ink bg-paper"
                   : "border-border-strong bg-paper hover:border-ink"
               }`}
             >
-              <CloudUpload aria-hidden="true" className="size-6 text-text-muted" />
-              <span className="text-small font-medium text-ink">
-                Drop Your File Here
+              <span className="relative z-10 flex flex-col items-center justify-center gap-1 px-3 py-8">
+                <CloudUpload
+                  aria-hidden="true"
+                  className="size-6 text-text-muted"
+                />
+                <span className="text-small font-medium text-ink">
+                  Drop Your File Here
+                </span>
+                <span className="max-w-xs text-label leading-snug text-text-muted">
+                  or click to browse — up to {MAX_TASK_ATTACHMENTS} files, 25 MB
+                  each
+                </span>
               </span>
-              <span className="max-w-xs text-label text-text-muted">
-                or click to browse — up to {MAX_TASK_ATTACHMENTS} files, 25 MB
-                each
-              </span>
+              <LumisDotGridBand className="absolute inset-x-0 bottom-0 h-16 rounded-b-xl" />
             </button>
             <input
               ref={fileInputRef}
@@ -323,46 +352,58 @@ export function CreateTaskDialog({
               </p>
             ) : null}
             {files.length > 0 ? (
-              <ul className="mt-3 flex flex-col gap-1.5">
-                {files.map((file, index) => (
-                  <li
-                    key={`${file.name}-${index}`}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-paper px-3 py-2 text-small"
-                  >
-                    <FileText
-                      aria-hidden="true"
-                      className="size-4 shrink-0 text-text-muted"
-                    />
-                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                    <span className="shrink-0 text-label text-text-muted">
-                      {formatFileSize(file.size)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      aria-label={`Remove ${file.name}`}
-                      className="flex size-6 shrink-0 items-center justify-center rounded-md text-text-muted outline-none hover:bg-surface-raised hover:text-brick focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+              <div className="mt-3 overflow-hidden rounded-xl border border-border bg-paper">
+                <ul className="flex flex-col divide-y divide-border">
+                  {files.map((file, index) => (
+                    <li
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-2 px-3 py-2 text-small"
                     >
-                      <X aria-hidden="true" className="size-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      <FileText
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-text-muted"
+                      />
+                      <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                      <span className="shrink-0 text-label text-text-muted">
+                        {formatFileSize(file.size)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        aria-label={`Remove ${file.name}`}
+                        className="flex size-6 shrink-0 items-center justify-center rounded-md text-text-muted outline-none hover:bg-surface-raised hover:text-brick focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+                      >
+                        <X aria-hidden="true" className="size-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <LumisDotGridBand className="h-10" />
+              </div>
             ) : null}
           </div>
-        </div>
+          </div>
+        </CornerBracketFrame>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-border px-6 py-5">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="ink"
-            disabled={isPending || !title.trim()}
-          >
-            {isPending ? "Creating…" : "Create Task"}
-          </Button>
+        <footer className="shrink-0 border-t border-border bg-surface-raised">
+          <div className="flex items-end justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="h-11 min-w-[6.75rem] rounded-none rounded-br-none rounded-tl-none rounded-tr-xl rounded-bl-2xl border-0 border-t border-r border-border-strong bg-paper px-5 text-body font-semibold text-ink shadow-none hover:bg-surface-raised"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="ink"
+              disabled={isPending || !title.trim()}
+              className="h-11 min-w-[8.25rem] rounded-none rounded-bl-none rounded-br-2xl rounded-tl-xl border-0 px-5 text-body font-semibold text-paper shadow-none hover:opacity-100 disabled:bg-text-secondary disabled:text-paper disabled:opacity-100"
+            >
+              {isPending ? "Creating…" : "Create Task"}
+            </Button>
+          </div>
         </footer>
       </form>
     </Dialog>

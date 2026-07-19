@@ -60,3 +60,30 @@ export async function duplicateDatabaseStructure(
     databaseId: result.database_id,
   };
 }
+
+/** F-12 full duplicate — structure plus all non-deleted records. */
+export async function duplicateDatabaseWithRecords(
+  client: SupabaseClient<Database>,
+  input: { ownerId: string; databaseId: string; name?: string | null },
+): Promise<DuplicateDatabaseResult> {
+  const { data, error } = await client.rpc("duplicate_database_with_records", {
+    p_owner_id: input.ownerId,
+    p_database_id: input.databaseId,
+    p_name: input.name ?? null,
+  });
+  if (error) throw new Error(error.message);
+  const result = data as Record<string, unknown> | null;
+  if (
+    !result ||
+    typeof result.workspace_id !== "string" ||
+    typeof result.page_id !== "string" ||
+    typeof result.database_id !== "string"
+  ) {
+    throw new Error("The database returned an invalid duplication result.");
+  }
+  return {
+    workspaceId: result.workspace_id,
+    pageId: result.page_id,
+    databaseId: result.database_id,
+  };
+}

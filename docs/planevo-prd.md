@@ -1,37 +1,57 @@
 # Planevo — Product Requirements Document (PRD)
 
-**Version:** 1.0 · **Author:** Anthony (Founder) with AI co-founder support
-**Status:** Approved direction — supersedes all prior Planevo/Plan Pilot specs
+**Version:** 2.0 · **Author:** Anthony (Founder) with AI co-founder support  
+**Status:** Approved direction — **supersedes PRD v1.0 and all prior kernel-first specs**  
+**Date:** July 17, 2026
 
 ---
 
 ## 0. Document Purpose
 
-This PRD is the single source of truth for the Planevo rebuild. It captures every product, design, technical, and business decision made during the July 2026 strategy sessions. Anything not in this document is either undecided or explicitly deferred. When building with AI dev tools (Cursor, Claude Code, Codex), sections of this document can be pasted directly as context.
+This PRD is the single source of truth for the Planevo rebuild. It captures every product, design, technical, and business decision made during the July 2026 strategy sessions, including the **July 17 ecosystem pivot** that retires the universal-kernel model.
 
-**Naming note:** The product ships under the name **Planevo** (domain: planevo.co). The founder has explicitly decided to stop spending time on renaming. A rename remains possible later but is not a blocker or an active workstream.
+Anything not in this document is either undecided or explicitly deferred. When building with AI dev tools (Cursor, Claude Code, Codex), sections of this document can be pasted directly as context.
+
+**What changed in v2.0:** Planevo is no longer "one kernel expressing tasks, calendar, and files." It is a **productivity ecosystem** — separate first-class products (Tasks, Calendar, Files, Workspace) that handshake through a thin linking layer, the way Apple devices work together without being the same device.
+
+**Naming note:** The product ships under the name **Planevo** (domain: planevo.co). The founder has explicitly decided to stop spending time on renaming.
+
+**Companion doc:** `planevo-feature-spec.md` (build-ready feature definitions with stable `F-##` IDs).
 
 ---
 
 ## 1. Product Vision & Thesis
 
 ### 1.1 One-sentence thesis
-Planevo is the workspace that's ready before you are: Notion-caliber structural power (blocks, databases, views, relations) with none of the setup tax — structure grows around your work instead of being demanded before it.
+
+Planevo is the **Work OS for normal people** — a productivity ecosystem where Tasks, Calendar, Files, and Workspace each do their own job brilliantly, connect seamlessly without setup, and never make you earn the product before you can use it.
 
 ### 1.2 The problem
-Powerful workspace tools (Notion, Coda, Tana) make users earn the product before they can use it: hours of tutorials, template shopping, schema design, and dashboard decoration before real work happens. People spend so long building their productivity system that the system becomes the productivity. Many users — including the founder — bounce off Notion entirely because of this setup burden, despite wanting what it offers. Others report spending years "building their Notion life."
+
+Powerful workspace tools (Notion, Coda, Tana) make users earn the product before they can use it: hours of tutorials, template shopping, schema design, and dashboard decoration before real work happens. People spend so long building their productivity system that the system becomes the productivity.
+
+Separately, task apps, calendar apps, and file apps force a false choice: **simple-but-rigid** or **powerful-but-DIY**. Users outgrow the simple tool and migrate to the powerful one — starting over.
 
 ### 1.3 The position
+
 - **Planevo is its own product** — never marketed as a Notion alternative, wrapper, or clone. No competitor comparisons appear anywhere on the website or in-app.
-- **AI is present, not pushy.** Planevo is NOT positioned as an AI app (users are fatigued by AI-first products — "you're making another AI" was the consistent negative reaction to earlier framings). But AI is not hidden under the hood either. The final position, modeled partly on Sana: AI is a first-class, visible, welcoming surface that the user *chooses* to open — never the front door they're pushed through. The Notion-style workspace layer is the product; the AI layer is present, capable, and always optional.
+- **An ecosystem, not an engine.** Tasks feels like a task app. Calendar feels like a calendar. Files feels like the best file cabinet in the world. Workspace is the Notion-grade block canvas for people who want structure — and it **embeds** the other products instead of swallowing them. They connect; they are not the same thing underneath.
+- **AI is present, not pushy.** AI is a first-class, visible, welcoming surface the user *chooses* to open — never the front door they're pushed through.
 - **"You are in charge"** is the core trust promise, cashed out concretely (see §9).
 
-### 1.4 Core principles (every feature decision checks against these)
+### 1.4 The Apple analogy (founder framing — use this when making tradeoffs)
+
+AirPods, iPhone, and MacBook are different products with different jobs. Continuity makes switching feel magical — not because they share one database, but because they **handshake**. Planevo's magic is the same: create a task in Tasks, tap once to surface it in a School workspace page, schedule it on Calendar, attach a PDF from Files — one source of truth per feature, zero sync configuration.
+
+### 1.5 Core principles (every feature decision checks against these)
+
 1. **Manual-first:** every single thing the AI can do, a user can do by hand in the UI. If the AI layer disappeared, Planevo would still be a complete product.
-2. **Structure is never a prerequisite:** structure is something the workspace grows around work already happening (retroactive structure, silent inference, born-with-views).
-3. **Progressive disclosure:** advanced power (formulas, rollups, complex relations, schema editors) is hidden behind simple defaults. Residents never see it; architects can always reach it.
-4. **Present, not pushy AI:** AI surfaces are findable in seconds by those who want them and ignorable forever by those who don't. No sparkle-emoji buttons begging for clicks in core flows.
-5. **Exploration over confinement:** users get real builders (agents, databases, views), not locked galleries. Confining users kills the discovery that makes them love tools.
+2. **Zero configuration at the surface:** Tasks ships with board/list/table, statuses, priorities, due dates. Calendar ships with your week at a glance. Files ships organized the moment you upload. Structure is never homework.
+3. **Progressive disclosure:** power (custom workspace databases, properties, relations, agents) is hidden behind simple defaults. Residents never see it; builders can always reach it — **inside Workspace**, not by reimplementing Tasks.
+4. **Present, not pushy AI:** AI surfaces are findable in seconds and ignorable forever. No sparkle-emoji buttons in core flows.
+5. **Exploration over confinement:** users get real builders (agents, workspace databases, views), not locked galleries.
+6. **Global first, context optional:** Tasks, Calendar, and Files belong to the **user's life**, not duplicated per workspace. Workspace context filters and links — it does not own the data.
+7. **Suggest, don't shove:** when workspace context could help (linking a new task to School), offer a calm one-tap toast — never auto-link, never modal, never blocking.
 
 ---
 
@@ -41,316 +61,336 @@ Modeled on Notion's internal framing (residents / gardeners / builders / archite
 
 | Persona | Behavior | What Planevo gives them |
 |---|---|---|
-| **Residents** | Never touch a property editor. Use what exists. | Pre-built Tasks/Calendar/Files that work instantly; templates; silent AI-shaped defaults. |
-| **Gardeners** | Tend what exists: add a property, tweak a view, duplicate a template. | Inline property editing, born-with-views, duplicate-and-strip, retroactive structure. |
-| **Builders** | Design databases, relations, multi-view systems. | Full database kernel, relation tools, agent builder, integrations. |
-| **Architects** | The small % wanting formulas, rollups, nested systems. | Fast-follow formulas/rollups, advanced config panels (hidden by default). |
+| **Residents** | Never touch a property editor. Use what exists. | Tasks/Calendar/Files that work instantly; Home hub; silent defaults; optional workspace linking. |
+| **Gardeners** | Tend what exists: tweak views, link items across features, organize files. | Native cross-feature buttons, workspace embeds, filter toggles, duplicate-and-strip in Workspace. |
+| **Builders** | Design workspace databases, relations, multi-view systems, agents. | Full workspace database builder (Notion-style), relation tools, agent builder, integrations. |
+| **Architects** | Formulas, rollups, nested systems. | Fast-follow formulas/rollups on **workspace databases**; advanced config panels (hidden by default). |
 
-**GTM reality:** the product serves all four from day one, but the realistic first 10–20 real users — reached via solo-founder channels (X, Reddit, Product Hunt, dev-journey content, TikTok/IG) — will skew **builder/gardener**. That is the practical feedback beachhead, not a product restriction. Launch, learn from whoever shows up, expand.
+**GTM reality:** the product serves all four from day one, but the realistic first 10–20 real users will skew **builder/gardener**. That is the feedback beachhead, not a product restriction.
 
 ---
 
 ## 3. Strategic Analysis (settled conclusions)
 
 ### 3.1 Moat — the honest answer
+
 There is **no hard technical moat**. Two real advantages:
-1. **Agent-native architecture head start.** Every action — human or agent — flows through the same propose → confirm → execute → audit-log path from day one. Notion retrofits AI onto a decade-old block editor and must protect millions of existing workspaces; Planevo builds agentic schema mutation as a first-class primitive. This is a speed/architecture advantage, not an impossibility for Notion.
-2. **Focus gap.** Notion's growth motion is enterprise-first (org wikis, admin controls, enterprise AI search). Five-minute solo-user onboarding is not where their incentives point. Planevo owns the individual/small-user setup-pain wedge.
 
-**Conclusion:** Planevo wins on execution, speed, and user love — not defensibility. No complacency once it works.
+1. **Ecosystem-native architecture head start.** Cross-feature linking, global products with workspace composition, and agent actions across Tasks/Calendar/Files/Workspace are designed in from day one — not retrofitted onto a single database engine pretending to be four apps.
+2. **Focus gap.** Notion's growth motion is enterprise-first. Five-minute solo-user onboarding is not where their incentives point. Planevo owns the individual/small-user **setup-pain wedge** with a Work OS that actually feels like separate tools working together.
 
-### 3.2 "Why won't Notion just ship progressive disclosure?"
-They could, technically. But changing defaults risks breaking muscle memory for millions of power users and invalidating their template/education ecosystem. For them it's a risky redesign; for Planevo it's the default with zero legacy users to disrupt.
+**Conclusion:** Planevo wins on execution, speed, and user love — not defensibility.
 
-### 3.3 Migration
-**Notion import (Markdown/CSV export ingestion) is a committed feature** — most realistic early adopters have existing Notion workspaces. Import must land *organized, not dumped* (see ease feature #7). Scheduled for Phase 5 (see roadmap) — not needed for the founder-dogfood gate, required before public launch.
+### 3.2 Migration from v1 kernel architecture
+
+The codebase may temporarily contain kernel-era patterns (`template_type` faces, `DatabaseFace`, per-workspace task databases). **These are deprecated.** Migration follows a **strangler pattern** (see §8): ship real product surfaces alongside legacy routes, then delete faces feature by feature. No production user data crisis — early stage.
+
+### 3.3 Notion import
+
+**Notion import remains a committed feature** — organized, not dumped. Workspace pages and workspace databases import through the block/database path; tasks may map to the Tasks product tables where appropriate. Scheduled for Phase 5.
 
 ---
 
-## 4. The Object Model
+## 4. The Object Model — Ecosystem Architecture
 
-### 4.1 Hierarchy
+### 4.1 Hierarchy (v2 — replaces kernel-first model)
+
 ```
-Workspace → Pages → Databases → Views → Records → Agents
+Planevo Account (user)
+├── Tasks          ← global product, own tables & UI
+├── Calendar       ← global product, own tables & UI
+├── Files          ← global product, own tables & UI
+├── Workspace(s)   ← context + Notion-style block canvas
+│   ├── Pages (blocks, embeds)
+│   └── Workspace Databases (custom DBs — Projects, CRM, etc.)
+├── Ecosystem Link Layer
+│   ├── workspace_links (item ↔ workspace)
+│   ├── cross-feature links (task ↔ event, file ↔ task, …)
+│   └── live embed blocks (BlockNote references)
+├── Planevo AI
+└── Agents
 ```
-- **Pages** are the canvas (BlockNote-style block editor, infinitely nestable).
-- **Databases** are the structure (typed properties).
-- **Views** shape the same data (table, board, calendar, list).
-- **Records** are the items.
-- **Agents** operate on all of the above when invited, with confirmation.
 
-There are **no standalone apps** for tasks/calendar/notes/files/CRM. One kernel expresses all of them. Sidebar entries (Tasks, Calendar, Files) are native-feeling entry points into the same kernel (see §5.2).
+**There is no universal kernel.** Tasks are not records in a template database. Calendar is not a calendar-view over all records. Files is not a Documents database. Those are **products**.
 
-### 4.2 Database schema (Supabase / Postgres)
+**Workspace databases** are the Notion-style builder substrate — scoped to a workspace, created inside pages, never powering the Tasks/Calendar/Files sidebar products.
+
+### 4.2 Scope model — Hybrid (founder decision)
+
+| Layer | Scope | Meaning |
+|---|---|---|
+| Tasks, Calendar, Files | **Global (user-owned)** | One task board for your life; one file library; calendars you own. |
+| Workspace | **Context** | School vs Work vs Personal — filters views, toast targets, embed destinations. |
+| Workspace databases | **Workspace-scoped** | Custom structure inside the Notion clone only. |
+| View filter preference | **Client-cached** | "All" ↔ "This workspace" per product — `localStorage` / `user_preferences` UI blob only. **Never stored on task/event/file rows.** |
+
+**Creation rule:** new tasks, events, and files are **global by default**. Workspace context does not auto-mutate data. A calm toast may offer: *"Add to [Workspace]?"* → one tap creates a `workspace_link` **and** a live embed block on the current page.
+
+### 4.3 Database schema (Supabase / Postgres) — v2
+
+**Global products (new / elevated):**
 
 ```sql
-workspaces          id, owner_id, name, icon, created_at
-pages               id, workspace_id, parent_page_id (nullable self-ref), title, icon,
-                    content_json (BlockNote JSONB), database_id (nullable), position,
-                    is_archived, created_at, updated_at
-databases           id, workspace_id, page_id, name, icon,
-                    template_type (task|notes|project|files|custom), created_at
-database_properties id, database_id, name, type (TEXT column — NOT a Postgres ENUM),
-                    config_json, position, is_primary, created_at
-records             id, database_id, position, created_by, created_at, updated_at
-record_values       id, record_id, property_id, value_json
-                    UNIQUE(record_id, property_id)
-relations           id, source_record_id, source_property_id, target_record_id, created_at
-                    INDEX (source_record_id, source_property_id); INDEX (target_record_id)
-views               id, database_id, type (table|board|calendar|list), name,
-                    config_json (filters, sorts, group_by_property_id, visible_properties),
-                    position, is_default
-agent_actions       id, workspace_id, session_id, action_type, target_type, target_id,
-                    payload_json, status (proposed|confirmed|executed|rejected),
-                    created_at, confirmed_at
-agent_sessions      id, workspace_id, user_id, context_page_id, context_database_id, created_at
-agents              id, workspace_id, name, icon, description, instructions,
-                    model_config_json, knowledge_scope_json, workflow_config_json,
-                    visibility, is_active, created_at
-credit_ledger       id, user_id, delta, reason (message|agent_run|describe_build|grant|reset),
-                    model_used, created_at
+-- TASKS PRODUCT
+tasks                 id, user_id, title, status, priority, due_at, description_json,
+                      position, completed_at, created_at, updated_at
+task_subtasks         id, task_id, title, is_done, position, created_at
+
+-- CALENDAR PRODUCT
+calendars             id, user_id, name, color, is_visible, position, created_at
+calendar_events       id, calendar_id, user_id, title, starts_at, ends_at, all_day,
+                      location, description_json, task_id (nullable FK → tasks),
+                      google_event_id (nullable), source, created_at, updated_at
+
+-- FILES PRODUCT (elevate existing)
+file_sources          id, user_id, name, storage_path, mime_type, size_bytes,
+                      ingestion_status, metadata_json, tags_json, created_at, updated_at
+file_links            id, file_source_id, target_type, target_id, created_at
+source_chunks         (existing — AI citations)
+
+-- ECOSYSTEM LINK LAYER
+workspace_links       id, workspace_id, resource_type (task|calendar_event|file|…),
+                      resource_id, created_by, created_at
+                      UNIQUE(workspace_id, resource_type, resource_id)
 ```
 
-### 4.3 Schema decisions that protect the future (do not violate)
-1. **`database_properties.type` is plain TEXT with app-level validation** — never a native Postgres ENUM. Adding `formula` and `rollup` later must be a code-only, zero-migration change. Reserve those names in the TypeScript union now as "not yet implemented."
-2. **Relations are a dedicated join table from day one** (never JSONB arrays of IDs), with an indexed reverse lookup — this is what makes rollups cheap when they arrive.
-3. **`config_json` shapes reserved:** future formula = `{expression, return_type}`; future rollup = `{relation_property_id, target_property_id, aggregation: sum|count|avg|min|max}`.
-4. **Property types in V1 (8):** text, number, select, multi-select, date, checkbox, relation, person/owner. Formula + rollup are the committed fast-follow after the core is stable.
-5. **Relations are one-directional in V1.** Bidirectional sync (dual-write consistency, cascade deletes) is deferred deliberately.
-6. **Open question deferred to the formulas fast-follow:** read-time computation vs. cached-with-invalidation. Do not decide prematurely.
-7. **Multi-tenant from day one:** real Supabase Auth + RLS on every table. Never hardcode the founder's user ID.
+**Workspace (Notion clone — largely existing, clarified scope):**
+
+```sql
+workspaces            id, owner_id, name, icon, settings_json, created_at
+pages                 id, workspace_id, parent_page_id, title, icon, content_json, …
+databases             id, workspace_id, page_id, name, icon, template_type, created_at
+                      -- template_type for workspace DBs only: project|notes|custom|…
+                      -- NOT used for Tasks/Calendar/Files products
+database_properties   id, database_id, name, type, config_json, …
+records               id, database_id, position, created_by, …
+record_values         id, record_id, property_id, value_json
+relations             id, source_record_id, source_property_id, target_record_id, …
+views                 id, database_id, type, name, config_json, …
+```
+
+**AI, agents, billing (unchanged in spirit):**
+
+```sql
+ai_conversations, ai_messages, agents, agent_actions, agent_sessions,
+credit_ledger, integration_connections, user_preferences, onboarding_progress
+```
+
+**Deprecated (remove after strangler migration):**
+- `databases.template_type IN ('task', 'calendar', 'files')` as product backing
+- `workspaces.settings_json.default_task_database_id` and siblings as product pointers
+- Face-database resolution (`getTaskFaceBundle`, etc.)
+
+### 4.4 Schema decisions that protect the future (do not violate)
+
+1. **`database_properties.type` is plain TEXT** — applies to **workspace databases only**. Formula/rollup reserved in TypeScript union.
+2. **Cross-feature links use dedicated join tables** — never JSONB arrays of IDs on product rows for primary relationships.
+3. **View filter state is never persisted on domain tables** — client cache only.
+4. **Multi-tenant from day one:** Supabase Auth + RLS on every table.
+5. **Product tables are user-scoped** (`user_id`); workspace tables are workspace-scoped (`workspace_id`). Link layer bridges them explicitly.
 
 ---
 
 ## 5. Feature Specifications — V1
 
-### 5.1 Workspace (the canvas)
-- BlockNote block editor: rich text, headings, lists, toggles, embeds.
-- Nested page tree with dnd-kit drag-reorder.
-- Databases embeddable inline in any page.
-- Never forces a blank start: templates, describe-to-build, and pre-populated starters all available — blank is a choice, not a hazing ritual.
+### 5.1 Home (launch hub)
 
-### 5.2 Native-feeling entry points (one kernel underneath)
-- **Tasks** (sidebar): opens the default Task database directly in board/list view. Feels like a task app; is a database. Priorities, statuses, due dates work with zero configuration.
-- **Calendar** (sidebar): renders every date-carrying record across the workspace plus Google Calendar events (via integration) in one calendar. Creating an event creates a record; there is no sync problem because there are never two systems. Ships with **one clean calendar view in V1** — selectable visual skins (Sunsama-style / Google-style / Notion-Calendar-style) are a **post-V1 fast-follow**, not V1 scope.
-- **Files** (sidebar): a Documents database. Uploads (Supabase Storage) are records — searchable, taggable, relatable to tasks/projects. Every file automatically becomes a **source** for Planevo AI. V1 file features: upload, organize, attach, preview. The full NotebookLM-style Q&A layer lives in Planevo AI (§5.4) and ships in Phase 5.
-- **Workspace** (sidebar): the open canvas where all of the above already lives and can be freely rearranged.
+- Calm launch hub per founder override (Acme AI layout reference for **Home only**): greeting, filter chips, action cards, bottom composer.
+- Cards route to **real products** (`/tasks`, `/calendar`, `/files`, `/workspace`) — never to database faces.
+- Home does not render Tasks, Calendar, or Files inline.
 
-### 5.3 The eight "always easier" mechanics
-These are ongoing-ease features (not onboarding tricks) that make the fiftieth workspace as fast as the first. All eight are committed; build order is tiered:
+### 5.2 Tasks (sidebar product)
 
-**Tier 1 — built into the kernel from the start (data-model level):**
-1. **Retroactive structure** *(the flagship identity feature)*: any written text/bullets can be promoted into records or a whole database after the fact ("make this a task list" → records, properties, views appear around existing content). Structure as enhancement, never homework. Must be designed into how blocks and records relate before the editor is built.
-2. **Born-with-views:** creating a database never yields a bare table. Task DBs are born with board+list+calendar views, sensible statuses, default sort; Notes DBs with gallery+recent list. Users delete what they don't want instead of building what they do. Pure code, zero AI.
-3. **Duplicate-and-strip:** any database/page re-instantiates as a clean skeleton (same properties/views/layout, no records) via first-class right-click action. "Your fourth project is the template for your fifth."
+- **Own product.** Lumis-craft reference for board UI: priorities, statuses, due dates, subtasks, assignees — **zero configuration**.
+- Board (default), list, and table views at launch. Not a `DatabaseFace`.
+- Global task store (`tasks` table). "Real database wearing a task app's clothes" means **fixed schema at the surface** with optional power later — not routing through the workspace kernel.
+- Native actions: **Schedule** (→ Calendar), **Attach file** (→ Files), **Add to workspace** (→ link + embed).
+- Filter toggle: **All ↔ This workspace** (client-cached preference).
 
-**Tier 2 — layered on once kernel is stable:**
-4. **Natural-language quick capture:** "Physics homework friday 6pm #school" parsed deterministically (date/time/target database inferred) — no LLM, zero marginal cost, works in a global quick-add input.
-5. **Typed import:** Notion import + CSV/Drive/Canvas ingestion lands *organized* — columns mapped to property types, dates recognized, files landing as sources. Bar: "works the moment it arrives, nothing to define."
+### 5.3 Calendar (sidebar product)
 
-**Tier 3 — the silent-noticing layer (needs real usage data; built last by design):**
-6. **Structure detection:** quiet, dismissible, non-modal suggestions when repetition is detected ("these three similar pages could be one Projects database — convert?"). Heuristics first; small model calls only when heuristics are confident. Never nags.
-7. **Cross-database autolinking:** when a record's text mentions another record's name, quietly offer the relation link. String-matching heuristics cover the base case; no LLM required.
+- **Own product.** Sunsama/Frappe-style reference: Today column + week grid, multiple calendars, clean organization.
+- Own tables: `calendars`, `calendar_events`.
+- **Calendar ↔ Tasks (founder decision):**
+  - Tasks with `due_at` **auto-appear** on Calendar.
+  - **Drag** task onto grid → scheduled time block linked to task.
+  - **Native buttons** on each page — no cross-navigation required.
+- Google Calendar events ingest into `calendar_events` (same table, `source = google`).
+- Optional workspace toast + embed on event creation (same rules as Tasks).
+- Filter toggle: **All ↔ This workspace** (client-cached).
 
-**Flagged for careful design (build after Tier 2, deliberately):**
-8. **"Is-a" object types** (Tana-supertag-style): typing `#task` anywhere makes that line a Task with inherited fields, joining the right database. **Open design question:** which database does `#task` route to when multiple task databases exist? Likely answer: a "default database per type" workspace setting. If it fights the kernel, features #1+#4 together cover most of its job — this is the only one of the eight allowed to be dropped if necessary.
+### 5.4 Files (sidebar product)
 
-### 5.4 Planevo AI (the visible AI surface)
-A full chat workspace (Sana-style presence — welcoming, first-class, optional), NOT a buried command bar and NOT the app's front door.
+- **Own product.** Untitled UI / CloudNest craft reference: upload dropzone, table, filters, folders/collections, storage meter.
+- Backbone: `file_sources` + `source_chunks` (already in codebase).
+- Upload → organized, searchable, taggable. **Every file is automatically an AI source** — no knowledge-base setup step.
+- Native actions: **Attach to task**, **Link to event**; reciprocal buttons on Tasks and Calendar.
+- Optional workspace toast + embed on upload.
+- Filter toggle: **All ↔ This workspace** (client-cached).
 
-**Capabilities:**
-- Answer questions grounded in the user's workspace + uploaded file sources, with citations (the NotebookLM feature set: multi-document Q&A, study cards, cross-document summaries).
-- Web search.
-- Write reports, decks, essays grounded in the user's files.
-- Create/edit tasks, calendar events, pages, databases, views, records.
-- **Describe-to-build:** generate an entire workspace/database from a one-line description — always rendered as an editable **preview** (mock table with real property types + example rows) that the user can rename/edit inline before confirming. When output is wrong, the fix path is the same natural-language loop; the schema editor underneath remains for builders.
-- Rich in-chat rendering (diagrams, tables, formatted documents).
-- **Template/workspace design generation:** trained/prompted on **original Planevo-made template designs only.** ⚠️ **Hard rule: never train on or ingest paid third-party Notion templates — IP risk, permanently prohibited.** Image assets for templates may be generated via image APIs (e.g., Gemini image generation).
+### 5.5 Workspace (sidebar product — the Notion clone)
 
-**Model strategy (multi-model, tiered):**
-- One gateway (OpenRouter or Vercel AI Gateway) + Vercel AI SDK. Never four direct SDK integrations.
-- Free: auto-routed cheap models only (DeepSeek/Kimi/GLM-class). No model picker.
-- Plus: mid-tier models + auto-routing.
-- Pro: frontier models (Anthropic, OpenAI, Gemini, xAI) with pick-your-model, plus auto.
-- No custom API-key BYOK in V1.
+- BlockNote block editor: **everything is a block** (Notion parity).
+- Nested page tree, describe-to-build, templates, never-blank starters.
+- **Workspace-scoped custom databases** inline in pages (Projects, Reading list, CRM) — the builder path.
+- **Live embed blocks** for ecosystem products: task board slice, calendar strip, file list, single linked items.
+- Workspace switcher: create/rename/delete workspaces. Switching sets **context** for filters, toasts, and embeds — not a full data swap.
+- **Retroactive structure (F-12)** applies to **workspace pages and workspace databases** — not to the Tasks product tables.
 
-### 5.5 Agents
-Sana-style agent **builder** open to every user from day one (not a locked template gallery — confinement kills exploration). Builder flow, four steps:
-1. **Persona** — name, icon, description, custom instructions.
-2. **Knowledge** — which pages, databases, files, integrations this agent can see (scoped).
-3. **Workflows** — what it may do and on what trigger (manual invoke, on-schedule, on-event e.g. "new file uploaded").
-4. **Visibility** — where it appears.
+### 5.6 Ecosystem linking layer
 
-Plus a **first-party agent template library** (built by Planevo) for one-click users: e.g., Daily Digest (what's due today, from your own data), Weekly Review (done vs. planned), Workspace Cleanup (propose-only auditor). These three are the launch set — patterns validated by the top of Notion's agent-marketplace usage data (scheduled digests dominate real usage).
+- **`workspace_links`:** explicit association between a global item and a workspace. Created by toast confirm or "Add to workspace" action.
+- **Live embed blocks:** BlockNote blocks referencing `resource_type` + `resource_id`; render in sync with source product.
+- **Cross-feature links:** `task_id` on `calendar_events`; `file_links` for file ↔ task/event.
+- **Unified search (V1 basic):** command bar searches tasks, events, files, pages by title.
+- **No sync jobs** between products — one write path per product, links are pointers.
 
-**Permission & safety model (applies to ALL agent and AI actions):**
-- Pattern: **propose → confirm → execute → audit log.**
-- Tier 1 auto-execute: single-record create/edit within an explicitly open/invited context.
-- Tier 2 confirm required: any schema change (create/delete database or property), any bulk operation (>1 record), any delete.
-- Tier 3 hard-blocked in V1: cross-workspace actions; anything touching billing/auth.
-- Every action writes to `agent_actions` (visible, plain-language audit trail — a trust feature, not just debugging).
-- Scheduled agent jobs run via Inngest/Trigger.dev; reads are free-form, writes still require stored user confirmation rules.
+### 5.7 The ease mechanics (re-scoped for ecosystem)
 
-### 5.6 Integrations
-- **Composio is the integration infrastructure** — built as real working infra in V1 (managed auth, tool-calling loop). One API surface, never N direct OAuth implementations.
-- **V1 ships exactly 4 live integrations:** Gmail, Google Calendar, Google Drive, Canvas LMS.
-  - Canvas is included specifically for the founder's own student use (honest founder-personal-use rationale, not persona-fit rationale).
-  - Gmail/Calendar justified by evidence: email digest + calendar agents are the most-used agent categories in Notion's marketplace data.
-- **Deferred to demand-driven fast-follow:** Slack, Monday.com, Linear, GitHub — added when real users ask, which the existing Composio plumbing makes fast (weeks, not months).
-- ⚠️ Pre-launch verification: Gmail restricted OAuth scopes normally require Google security verification (slow for solo devs). Confirm exactly how Composio's managed auth handles this before promising Gmail at launch.
+**Tier 1 — workspace & products:**
+1. **Retroactive structure** *(workspace flagship)*: promote blocks → workspace database records. Structure as enhancement inside Workspace.
+2. **Born-with-views:** workspace databases ship with sensible views (F-11). Tasks/Calendar/Files ship with **product defaults** in their own schemas — not template databases.
+3. **Duplicate-and-strip:** workspace databases and pages (F-12).
 
-### 5.7 Onboarding (the fused flow — Notion + Airtable + Linear patterns)
-1. **One routing question** (Notion pattern): "What are you organizing?" — Work / Personal / School / Something else. One tap, no wizard.
-2. **Land in a living workspace** (pre-population + Airtable's silent AI): user lands *inside* a working workspace matched to their answer — Tasks populated, Calendar wired, Notes page, Files area. Names and seed content silently adapted (a School user's board says Assignments/Exams/Readings). **No AI announcement, no sparkle buttons, no "personalize with AI" prompt** — any inference runs invisibly at fraction-of-a-cent cost. Everything editable in place.
-3. **First tasks ARE the onboarding** (Linear pattern): the starter task board contains 4–5 real checkable items: Rename this workspace → Add your first real task → Drag it to Done → Connect Google Calendar → Import from Notion. Activation metrics fall out of this for free in PostHog.
-4. **Describe-to-build lives where all AI lives:** present in the template picker as one option among "template / blank / describe it" — findable in ten seconds by those who want it, invisible to those who don't. Rate-limited on Free.
+**Tier 2:**
+4. **Natural-language quick capture** (F-13): global quick-add → `tasks` table (deterministic parser, no LLM).
+5. **Typed import** (F-14): Notion/CSV → workspace pages + workspace DBs + optional task/file mapping.
 
-Onboarding path costs ≈ zero tokens per free signup by design.
+**Tier 3:**
+6. **Structure detection** (F-15): workspace pages only.
+7. **Cross-link suggestions** (F-16): offer task/file/event links from writing — not kernel record autolinking.
 
-### 5.8 Design & Brand
-- **Aesthetic bar:** the Dribbble "Acme AI"/"Lumis" mockups' craft — premium spacing, card treatment (icon + title + one-line subtitle), dotted/grid background textures, restrained near-monochrome with one dark accent, soft-not-childish radii, confident type hierarchy. "Open it on a laptop in a cafe and look productive."
-- **IA correction vs. those mockups:** they are agent-first ("Start Chat" as hero CTA); Planevo's home leads with the user's own workspace (recent pages, continue-where-you-left-off, entry-point cards). Agent reachable, never the front door.
-- **Landing page embraces color;** in-app stays calm (paper+ink doing 90% of the work) with meaningful accents; a user-facing **minimal mode** setting mutes accent tokens.
-- **Reference products for feel:** Wispr Flow, Sana Labs.
-- **Proposed token system (PROVISIONAL — founder must see it rendered before committing):**
-  - Colors: `paper` #F5F3ED · `ink` #1A1915 · `marigold` #E4A62F · `brick` #D14B32 · `meadow` #5E8A54 · `slate` #93A9BB. Principle: the brand palette IS the illustration palette.
-  - Type: Display = Sentient or Gambetta (Fontshare, landing headlines only) · UI/body = General Sans · Utility/data = Geist Mono.
-- **Illustration system:** colorful flat geometric vector (Darya Semenova–inspired GENRE, never her actual images — style isn't copyrightable, images are). Path: prototype with Recraft.ai now → commission an artist before launch (est. few hundred–low four figures) for an owned 6–10 piece set + character guide. Distinct from Notion's B&W sketch style by genre.
-- **Brand signature law:** *line art = structure; filled color = your life and work.* Applies to illustrations, logo, and UI moments (empty database renders as faint line-art scaffolding that fills with color as records arrive). Landing hero: a figure in motion carried by hairline structure (the "cyclist" concept).
-- **Mascot:** no AI-chatbot persona (Bruno is permanently dead). Notion-adjacent illustrated-people warmth, in Planevo's own colorful vector genre.
-- **Logo:** minimal line-art mark obeying the signature law, generated via Recraft + refined; must survive at 16px. Wordmark: General Sans, lowercase.
+**At risk:**
+8. **"Is-a" object types** (F-17): may drop if routing stays unclear.
+
+### 5.8 Planevo AI (the visible AI surface)
+
+Unchanged in spirit from v1. Updated scope:
+
+- Grounded in **tasks, calendar events, files (`source_chunks`), and workspace pages** via retrieval — not "dump the kernel."
+- Describe-to-build generates **workspace pages and workspace databases** — previews before commit.
+- Can create/edit tasks, events, files, pages through the same APIs the UI uses.
+- Multi-model gateway, credit tiers — as v1.
+
+### 5.9 Agents
+
+Unchanged in spirit. Knowledge scope includes: workspace pages, workspace databases, **Tasks, Calendar, Files** (via product APIs), integrations.
+
+First-party library: Daily Digest, Weekly Review, Workspace Cleanup.
+
+Permission model: propose → confirm → execute → audit log.
+
+### 5.10 Integrations
+
+Composio infrastructure. **V1: Gmail, Google Calendar, Google Drive, Canvas.**
+
+Integrations feed **product tables**, not a universal kernel:
+- Google Calendar → `calendar_events`
+- Drive → `file_sources`
+- Gmail digest → tasks or workspace pages (agent-driven)
+- Canvas assignments → `tasks`
+
+### 5.11 Onboarding (updated for ecosystem)
+
+1. **One routing question:** Work / Personal / School / Something else.
+2. **Land in a living workspace:** Getting Started page, workspace pages seeded — **not** three template databases as canonical Tasks/Calendar/Files.
+3. **Global products auto-exist:** user's task board, default calendar, and file library are created on signup (empty, configured, ready).
+4. **First tasks ARE the onboarding:** starter tasks in the **Tasks product** teach the flow; workspace Getting Started page embeds/links them.
+5. **Describe-to-build** in template picker — optional, rate-limited on Free.
+
+### 5.12 Design & Brand
+
+Unchanged from v1 PRD §5.8 with these IA corrections:
+
+- **Tasks reference:** Lumis board craft (card treatment, priority badges, subtask progress).
+- **Calendar reference:** dark Today + week grid mockup (connected to Tasks, own chrome).
+- **Files reference:** Untitled UI + CloudNest (table, upload, folders).
+- **Workspace reference:** Notion block canvas — craft-only for spacing/type, not IA clone.
+- **Home reference:** Acme AI layout (founder override — Home only).
+- Token system, illustration law, no competitor names — unchanged.
 
 ---
 
 ## 6. Pricing, Credits & Economics
 
-### 6.1 Tiers
+Unchanged from v1 PRD §6 with one line edit:
+
 | | Free | Plus $10/mo | Pro $20/mo |
 |---|---|---|---|
-| Workspace kernel (all views, templates, all 8 ease features) | Full | Full | Full |
-| AI credits/mo (internal currency) | ~100 | ~1,500 | ~5,000 (fair-use) |
-| Models | Auto-routed cheap only | Mid-tier + auto | Frontier + pick-your-model |
-| Describe-to-build | Few/month | Regular | Effectively unlimited (fair-use) |
-| Agents | 1 active, templates only | 3–5 active, full builder | Unlimited-ish + scheduled workflows |
-| Integrations | 1 connection | All 4 | All 4 + priority new |
-| File sources | ~50MB | ~1–5GB | ~10GB+ |
+| **All products** (Tasks, Calendar, Files, Workspace, ease mechanics) | Full | Full | Full |
+| AI credits, models, agents, integrations, storage | (as v1) | (as v1) | (as v1) |
 
-**Principle: the workspace itself is never paywalled.** Charge for AI horsepower and automation. Founder accepts early losses; prices adjust with real data. First lever if economics tighten: make Plus more tempting (margin lives there), not shrinking Free.
-
-### 6.2 Credit system (applies to Planevo AI + agents, one shared pool)
-- Every AI action burns credits. Multiplier = (model's real token cost ÷ cheapest model's cost), so margin per credit is identical across models; Pro users choosing frontier models cannot wreck unit economics.
-- Cheap message = 1 credit; frontier message = 5–10; heavy agent workflow = 20+.
-- **Free users never see numbers** — ChatGPT-style: "you've reached your AI limit, resets Tuesday." No meter, no anxiety.
-- **Plus/Pro see a simple meter.**
-- "Unlimited" always means generous soft cap / fair use. Never literal.
-- Hard ceiling by construction: max token spend = users × cap × cost-per-credit.
-
-### 6.3 Cost ledger
-**Fixed (monthly):** Supabase Pro $25 + Vercel Pro $20 + domain ~$2.50 → **~$50 at launch**, growing to ~$150/mo around 1k users as Resend (~$20), Upstash (~$10), Sentry (~$26), Inngest (~$20), Composio (verify pricing) exit free tiers. PostHog free to 1M events.
-**Variable per user:** Free ≤ $0.25/mo (capped); Plus ~$2.50/mo; Pro ~$6/mo typical. Gateway adds ~5% on raw token prices. Stripe: 2.9% + $0.30/transaction.
-**Founder personal dev costs:** Cursor ~$20 + Claude ~$20 + ChatGPT ~$20 ≈ $40–60/mo. Apple Developer $99/yr deferred (no mobile V1).
-**One-time/later:** Nevada LLC ~$425 (+~$350/yr) around the time real money flows; lawyer consult pre-launch.
-
-### 6.4 Scenarios (Plus $10 / Pro $20)
-| Scenario | Revenue | Costs (tokens+infra) | Profit/mo |
-|---|---|---|---|
-| Fear case: 500 free / 15 Plus / 5 Pro | $250 | ~$260 | ≈ breakeven |
-| Modest: 1,000 free / 40 Plus / 15 Pro | $700 | ~$540 | ≈ +$160 |
-| Healthy: 2,000 free / 100 Plus / 40 Pro | $1,800 | ~$1,140 | ≈ +$660 |
-
-Breakeven ≈ 10 paying users against launch fixed costs. Freemium conversion industry norm: 2–5% — the model needs volume, not a better rate. Free users are capped-cost marketing (the Notion/Figma playbook). Track **cost-per-user per tier in PostHog from day one.**
-
-### 6.5 Template marketplace (phased — NOT V1)
-1. **V1:** free first-party template library (8–12 excellent templates) as an adoption weapon. No paywall.
-2. **Once real user base exists:** premium first-party template **drops** at $2–10 (quality drops when ready — never a weekly-cadence promise; a weekly treadmill produces filler and is incompatible with solo building).
-3. **Future phase:** open marketplace — users publish/sell templates and agents, Planevo takes a cut. Requires trust/review layer + legal review of money flows first.
+**Principle: the Work OS is never paywalled.** Charge for AI horsepower, automation, and storage — not for Tasks, Calendar, or Workspace.
 
 ---
 
 ## 7. Technical Architecture
 
-### 7.1 Monorepo (web-first — the settled answer to "build once, expand easily")
-Rationale: Planevo's heart is a Notion-grade block editor; all serious block-editor libraries (BlockNote/TipTap/ProseMirror) require the browser DOM (`contenteditable`, selection APIs). Building that natively in React Native is famously brutal (Notion itself wrapped web views for years). Therefore:
+### 7.1 Monorepo
 
-```
-planevo/
-├─ apps/
-│  ├─ web/        Next.js App Router + TS strict + Tailwind  ← THE product
-│  ├─ desktop/    Tauri wrapping the web app (Mac/Windows, weeks not months)
-│  └─ mobile/     Expo/React Native, added later; block editor via web view initially
-├─ packages/
-│  ├─ core/       Platform-agnostic: types, API client, Supabase queries,
-│  │              agent tool definitions, state, validation (~60–70% of real code)
-│  └─ api/        Next.js API routes + Supabase edge functions serving every client
-```
+Unchanged from v1 §7.1. Web-first; `packages/core` holds product queries, link layer, workspace DB logic, agent tools.
 
-### 7.2 Final tech stack
-| Layer | Choice | Notes |
-|---|---|---|
-| Frontend | Next.js App Router, TypeScript strict, Tailwind | |
-| Editor | BlockNote (+ dnd-kit page tree) | Proven in prior build |
-| Backend/DB/Auth/Storage | Supabase (Postgres, Auth, RLS, Storage) | **WorkOS CUT** — enterprise SSO only when enterprise exists |
-| AI | Vercel AI SDK + gateway (OpenRouter or Vercel AI Gateway) → Anthropic, OpenAI, Gemini, xAI + cheap open models | One key, one bill, unified routing. Never 4 direct SDKs |
-| Integrations | Composio | Managed auth + tools; Gmail/GCal/Drive/Canvas |
-| Background jobs | Inngest or Trigger.dev (+ pg_cron for trivial crons) | Required for scheduled agents |
-| Email | Resend | Transactional |
-| Rate limiting/cache | Upstash Redis | Protects free tier from abuse |
-| Payments | Stripe | ⚠️ Minor/entity issue must be resolved first (§9) |
-| Analytics / Errors | PostHog / Sentry | Cost-per-user instrumentation day one |
-| Hosting / VCS / Design | Vercel / GitHub / Figma | |
-| Image gen | Gemini image API ("nano banana") for original template artwork | |
-| Dev tools | Cursor, Claude Code, Codex — **pick ONE primary driver**; others are second opinions | Three-tool ping-pong causes architectural drift |
+### 7.2 Tech stack
 
-### 7.3 Old Planevo carryover
-Fresh repo; only concepts carry over: the propose→confirm→execute→audit pattern (from old `executeAction.ts`), BlockNote + dnd-kit as chosen libraries, the name/domain. Everything else (Bruno persona, calendar-canonical data model, old onboarding, old task state machine) is dead.
+Unchanged from v1 §7.2.
+
+### 7.3 Migration from kernel-era code
+
+**Strangler pattern (mandatory):**
+
+| Phase | Action |
+|---|---|
+| A | Add product tables + link layer migrations |
+| B | Ship Lumis Tasks UI on `tasks` table; `/tasks` stops using `DatabaseFace` |
+| C | Ship Calendar product UI on `calendar_events` |
+| D | Ship Files cabinet on `file_sources` |
+| E | Workspace embed blocks + link toast |
+| F | Delete face-databases, template seed for task/calendar/files DBs |
+
+**Carryover from old build:** BlockNote, dnd-kit, RLS patterns, `file_sources`, propose→confirm→execute, design tokens. **Dead:** Bruno, calendar-as-records product path, face-database routes as final architecture.
 
 ---
 
-## 8. Roadmap — Phases
+## 8. Roadmap — Phases (v2)
 
-Planevo V1 is scoped as a focused **12–16 week build** using Cursor, Codex, and Claude Code. The phases below define build order and gates, not fixed calendar deadlines.
-
-- **Phase 0 — Foundation:** monorepo scaffold, Supabase schema + RLS, design tokens in Figma, logo v1, landing page + waitlist live.
-- **Phase 1 — Kernel:** pages/blocks editor, database CRUD, properties, records, table view. *Gate: founder can build a real database by hand.*
-- **Phase 2 — Views & Ease Tier 1:** board/calendar/list views, born-with-views, duplicate-and-strip, retroactive structure v1, 4 starter templates. **Dogfood Gate #1:** founder moves his real life into Planevo and does not advance until he'd rather use Planevo than Notion/Todoist for his own tasks.
-- **Phase 3 — Planevo AI + credits:** gateway, chat surface, describe-to-build preview flow, credit system + tiers (no Stripe yet), NL quick capture.
-- **Phase 4 — Agents + integrations:** agent builder (4-step), first-party agent library (Daily Digest, Weekly Review, Cleanup), Inngest scheduled jobs, Composio: Gmail, GCal, Drive, Canvas.
-- **Phase 5 — Import, onboarding, files-AI, polish:** Notion/typed import, onboarding fusion, NotebookLM-style file Q&A, structure detection + autolinking v1, minimal mode.
-- **Phase 6 — Beta & Launch:** 10–20 closed-beta users, waitlist to 500, Stripe + LLC/legal resolution, Product Hunt launch.
-
-### 8.1 Post-V1 expansion (committed order, demand-gated)
-1. **Fast-follow wave 1:** formulas + rollups; calendar view skins; bidirectional relations; next 2 integrations by user vote (likely GitHub/Linear given beachhead).
-2. **Wave 2:** premium template drops; "is-a" object types (if design resolves); Slack/Monday integrations; mobile app (Expo, web-view editor).
-3. **Wave 3:** team collaboration (shared workspaces, permissions, presence, conflict resolution — a distinct architecture project, never bolted on casually); desktop apps via Tauri earlier if demand.
-4. **Wave 4:** open marketplace (templates + user-published agents, revenue share); enterprise features (then WorkOS returns).
+- **Phase 0 — Foundation:** monorepo, Supabase, tokens, landing. *(largely done)*
+- **Phase 1 — Ecosystem foundation:** product schema migrations, link layer, global product creation on signup, deprecate face routes behind flags.
+- **Phase 2 — Tasks product:** Lumis UI, board/list/table, native cross-feature buttons, strangler cutover for `/tasks`. **Dogfood Gate #1.**
+- **Phase 3 — Calendar + Files products:** week grid, multi-calendar, file cabinet UI, cross-links, strangler cutover.
+- **Phase 4 — Workspace composition:** embed blocks, link toast, workspace DB polish, retroactive structure on workspace content.
+- **Phase 5 — Planevo AI + credits:** gateway, chat, describe-to-build (workspace), grounded Q&A on files, credit system.
+- **Phase 6 — Agents + integrations:** builder, first-party agents, Composio (Gmail, GCal, Drive, Canvas).
+- **Phase 7 — Import, onboarding v2, polish:** Notion import, onboarding fusion (ecosystem), structure detection, minimal mode.
+- **Phase 8 — Beta & Launch:** closed beta, Stripe + legal, Product Hunt.
 
 ---
 
 ## 9. Trust, Legal & Compliance
 
-**"You are in charge" — concrete commitments:**
-- Full data export anytime, open formats (Markdown + JSON, mirroring what import accepts).
-- Every agent action visible and reversible (plain-language audit log in-product).
-- Manual parity: anything AI can do, a human can do by hand — checked per feature shipped.
-- No training on user data without explicit opt-in — stated plainly wherever AI is discussed.
-- **Not promised in V1:** local-first/offline (CRDT-scale project). Keep out of marketing copy.
-
-**Legal flags (pre-launch checklist, not optional):**
-1. Founder is a minor; Stripe requires 18+ — resolve via properly structured entity/guardian arrangement + lawyer consult BEFORE the Stripe integration is built (Phase 6 blocker).
-2. Nevada LLC (~$425 + ~$350/yr) around the time real money flows.
-3. Never train on paid third-party templates (restated because it will be tempting).
-4. Marketplace revenue-share phase requires its own legal review of money flows.
-5. Privacy Policy / Terms / Cookie Policy must be consistent (prior build had advertising boilerplate contradicting the no-advertising cookie policy — do not repeat).
+Unchanged from v1 PRD §9.
 
 ---
 
 ## 10. Success Metrics
-- **North star:** a new user reaches a genuinely useful, personalized workspace in **< 5 minutes without a tutorial** (measured via onboarding-task completion in PostHog).
-- Activation: % completing the Linear-style starter tasks.
-- Dogfood gate: founder's own daily use (binary, honest).
-- Retention: D7/D30 of beta cohort.
-- Economics: cost-per-user per tier, weekly; conversion to paid (expect 2–5%).
-- Launch: 500 waitlist pre-launch; Product Hunt day performance.
 
-## 11. Non-Goals (V1) — restated to prevent relitigating
-No team collaboration/permissions · no custom LLM/BYOK · no workflow-automation canvas · no enterprise pricing/SSO · no meeting-notes product · no full mobile app · no open marketplace · no formulas/rollups at launch · no local-first promise · no calendar skins at launch · no competitor comparisons in marketing · no weekly-template-cadence promise · no more than 4 integrations at launch · no second AI surface beyond Planevo AI + inline previews.
+- **North star:** a new user has **working Tasks, Calendar, and Files** and a **seeded Workspace** in **< 5 minutes without a tutorial**.
+- Activation: starter task completion (Tasks product), first file upload, first workspace link accepted.
+- Dogfood gate: founder uses Tasks + Calendar daily; Workspace for notes/projects.
+- Retention: D7/D30 of beta cohort.
+- Economics: cost-per-user per tier.
+
+---
+
+## 11. Non-Goals (V1)
+
+No team collaboration/permissions · no custom LLM/BYOK · no workflow-automation canvas · no enterprise SSO · no full mobile app · no open marketplace · no formulas/rollups at launch · no local-first · no calendar skins at launch · no competitor comparisons · no more than 4 integrations · **no universal kernel / database-face architecture** · no auto-linking items to workspace without user consent.
+
+**Permanent rules:**
+- Never train on paid third-party templates.
+- Manual parity on every feature.
+- View filter preferences never stored on product domain rows.
+- No sparkle buttons in core flows.
+
+---
+
+*Planevo PRD v2.0 · July 17, 2026 · Supersedes v1.0*

@@ -7,7 +7,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import { RectangleGroupIcon } from "@heroicons/react/24/outline";
+import { LayoutGrid } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import { toast } from "@/components/ui/toast";
@@ -101,7 +101,7 @@ export function TasksEmptyState({
         aria-hidden="true"
         className="flex size-16 items-center justify-center rounded-card border border-dashed border-border bg-paper text-text-muted"
       >
-        <RectangleGroupIcon className="size-10" />
+        <LayoutGrid aria-hidden="true" className="size-10" />
       </span>
       <h2 className="mt-5 text-h2">A clear place for every task</h2>
       <p className="mt-2 max-w-md text-body text-text-secondary">

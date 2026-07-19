@@ -28,9 +28,6 @@ export function WorkspaceNavGroup({
           : "text-text-secondary hover:bg-surface-raised hover:text-ink"
       }`}
     >
-      {active && (
-        <span className="absolute left-0 h-4 w-0.5 bg-marigold" aria-hidden="true" />
-      )}
       <Link
         href={href}
         onNavigate={onNavigate}

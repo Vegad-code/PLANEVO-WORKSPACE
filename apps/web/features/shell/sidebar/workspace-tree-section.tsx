@@ -30,7 +30,7 @@ export function WorkspaceTreeSection({
         <nav
           id="workspace-page-tree"
           aria-label="Workspace pages"
-          className="relative mt-0.5 flex flex-col"
+          className="relative mt-1 flex flex-col gap-0.5"
           data-testid="workspace-page-tree"
         >
           <PageTreeDnd pages={pages} onNavigate={onNavigate} dndId={dndId} />

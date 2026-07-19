@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import {
   TASK_PRIORITIES,
@@ -142,9 +142,7 @@ export function TaskTable({ tasks, onTaskSelect }: TaskTableProps) {
               const isActive = sort.key === column.key;
               const ariaSort = isActive ? sort.direction : "none";
               const SortIcon =
-                sort.direction === "ascending"
-                  ? ChevronUpIcon
-                  : ChevronDownIcon;
+                sort.direction === "ascending" ? ChevronUp : ChevronDown;
 
               return (
                 <th

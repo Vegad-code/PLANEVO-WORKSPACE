@@ -226,6 +226,16 @@ export function WorkspaceSwitcher({
             <button
               type="button"
               role="menuitem"
+              title="Invite members — coming soon"
+              disabled
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-small text-text-muted opacity-60"
+            >
+              <Icon name="invite" className="size-4 shrink-0" />
+              Invite members
+            </button>
+            <button
+              type="button"
+              role="menuitem"
               onClick={() => {
                 closeMenus();
                 onOpenSettings?.();
@@ -234,16 +244,6 @@ export function WorkspaceSwitcher({
             >
               <Icon name="settings" className="size-4 shrink-0 text-text-secondary" />
               Settings
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              title="Invite members — coming soon"
-              disabled
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-small text-text-muted opacity-60"
-            >
-              <Icon name="invite" className="size-4 shrink-0" />
-              Invite members
             </button>
 
             <div className="my-1 border-t border-border" />

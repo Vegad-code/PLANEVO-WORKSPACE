@@ -163,3 +163,24 @@ body {
   }
 }
 
+/* Lumis create-task modal fine detail — token-only dot grid */
+.lumis-dot-grid {
+  background-color: var(--color-paper);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-border-strong) 70%, transparent) 0.65px,
+    transparent 0.65px
+  );
+  background-size: 7px 7px;
+  mask-image: linear-gradient(to top, black 78%, transparent);
+}
+
+/* Scrollable regions that stay usable without showing a track/thumb */
+.scrollbar-silent {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-silent::-webkit-scrollbar {
+  display: none;
+}
+
