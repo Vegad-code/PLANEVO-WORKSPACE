@@ -34,6 +34,32 @@ sign-offs in `.superpowers/ecosystem-phase-2/dogfood-log.md`.
 
 All four commit objects were resolved fresh with `git show -s` on 2026-07-18.
 
+## 2026-07-19 audit remediation evidence
+
+Remediation commits (`ab25dcd` through `9a34344`):
+
+| Slice | Commit | Deliverable |
+|---|---|---|
+| Migration gate re-verify | `ab25dcd` | RPC/ACL proof + ledger repair |
+| Kernel write path removal | `7028002` | Home composer + promote → `public.tasks` |
+| Ordering + attachment cap | `7f20a79` | Peek status via `move_task_ordered` |
+| Lucide + shadcn primitives | `b4eb271` | Button/Badge/Select + `/design` preview |
+| Lumis board/card polish | `7096b24` | 4-column spacing, file-box illustration, Lucide toolbar |
+| Create modal + peek parity | `23b3a21` | Tags/estimate in peek, Lucide cross-links |
+| View consistency + boundaries | `9a34344` | `activeTasks` in list/table, workspace toast, loading/error |
+
+Fresh automated gates on 2026-07-19:
+
+| Gate | Command | Exact result |
+|---|---|---|
+| Core tests | `cd packages/core && npm test` | exit `0`; `157` tests, `157` passed |
+| Web tests | `cd apps/web && npm test` | exit `0`; `48` tests, `48` passed |
+| Web TypeScript | `cd apps/web && npx tsc --noEmit` | exit `0`; no output |
+| Production build | `cd apps/web && npm run build` | exit `0`; `/tasks` registered |
+| Tasks kernel grep (expanded) | `rg 'createTaskWithRequiredFoundation\|DatabaseFace\|getTaskFaceBundle\|NEW_TASK_DATABASE' apps/web/features/tasks apps/web/features/tasks-product apps/web/features/editor/promote-panel.tsx apps/web/app/(workspace)/tasks` | no output; ripgrep exit `1` |
+
+Browser Lumis fidelity and Task 14 founder sign-off remain open — see checklists below.
+
 ## Fresh automated evidence
 
 These commands were run from the paths shown on 2026-07-18; no result is copied from a
