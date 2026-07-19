@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AdjustmentsHorizontalIcon,
-  ListBulletIcon,
-  TableCellsIcon,
-  ViewColumnsIcon,
-} from "@heroicons/react/24/outline";
+  Columns3,
+  LayoutGrid,
+  List,
+  Plus,
+  SlidersHorizontal,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/planevo-icon";
 import type { TasksScope } from "@/lib/tasks/scope-prefs";
 
@@ -30,9 +32,9 @@ const VIEW_LABELS: Record<TasksView, string> = {
 };
 
 const VIEW_ICONS = {
-  board: ViewColumnsIcon,
-  list: ListBulletIcon,
-  table: TableCellsIcon,
+  board: Columns3,
+  list: List,
+  table: LayoutGrid,
 } as const;
 
 const SCOPE_OPTIONS = [
@@ -68,7 +70,7 @@ export function TasksToolbar({
     <div
       role="toolbar"
       aria-label="Tasks controls"
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-center gap-3"
     >
       <div
         role="group"
@@ -107,7 +109,7 @@ export function TasksToolbar({
           onClick={() => setFilterOpen((open) => !open)}
           className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-raised px-3 py-2 text-small font-medium text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
-          <AdjustmentsHorizontalIcon aria-hidden="true" className="size-4" />
+          <SlidersHorizontal aria-hidden="true" className="size-4" />
           Filter
           <Icon name="chevron-down" className="size-3.5" />
         </button>
@@ -166,19 +168,16 @@ export function TasksToolbar({
         ) : null}
       </div>
 
-      <button
+      <Button
         type="button"
         aria-haspopup="dialog"
         onClick={onCreateTask}
-        className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2 text-small font-medium outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
-          isCreateDialogOpen
-            ? "bg-ink text-paper hover:opacity-85"
-            : "bg-marigold text-ink hover:bg-marigold-tint"
-        }`}
+        variant={isCreateDialogOpen ? "ink" : "default"}
+        className="shrink-0"
       >
-        <Icon name="plus" className="size-4" />
+        <Plus aria-hidden="true" className="size-4" />
         Create task
-      </button>
+      </Button>
     </div>
   );
 }

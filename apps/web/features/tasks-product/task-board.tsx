@@ -29,7 +29,7 @@ import {
   TASK_STATUS_LABELS,
   type TaskStatus,
 } from "@planevo/core/types/tasks";
-import { Icon } from "@/components/ui/planevo-icon";
+import { Plus } from "lucide-react";
 import { TaskCard } from "./task-card";
 import {
   resolveTaskBoardDrop,
@@ -132,7 +132,7 @@ function TaskColumn({
     <section
       ref={setNodeRef}
       aria-labelledby={headingId}
-      className={`flex w-72 shrink-0 flex-col rounded-xl border bg-sidebar p-2 transition-colors motion-reduce:transition-none xl:w-auto ${
+      className={`flex min-h-[70vh] w-72 shrink-0 flex-col rounded-2xl border bg-sidebar p-4 transition-colors motion-reduce:transition-none xl:w-auto ${
         isOver ? "border-ink" : "border-border"
       }`}
     >
@@ -156,7 +156,7 @@ function TaskColumn({
             onClick={() => onCreateTask(status)}
             className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border bg-paper text-text-secondary outline-none hover:border-border-strong hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
-            <Icon name="plus" className="size-4" />
+            <Plus aria-hidden="true" className="size-4" />
           </button>
         ) : null}
       </div>
@@ -165,7 +165,7 @@ function TaskColumn({
         items={tasks.map((task) => task.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="mt-2 flex min-h-32 flex-1 flex-col gap-2">
+        <div className="mt-3 flex min-h-32 flex-1 flex-col gap-3">
           {tasks.map((task) => (
             <SortableTaskCard
               key={task.id}
@@ -284,9 +284,9 @@ export function TaskBoard({
       <div
         role="region"
         aria-label="Task board"
-        className="overflow-x-auto rounded-card border border-border bg-paper p-2 pb-4"
+        className="overflow-x-auto rounded-card border border-border bg-paper p-4 pb-6"
       >
-        <div className="flex min-w-max items-stretch gap-2 xl:grid xl:min-w-0 xl:grid-cols-4">
+        <div className="flex min-w-max items-stretch gap-4 xl:grid xl:min-w-0 xl:grid-cols-4 xl:gap-6">
           {columns.map((column) => (
             <TaskColumn
               key={column.status}

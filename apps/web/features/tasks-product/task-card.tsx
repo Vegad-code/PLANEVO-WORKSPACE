@@ -1,9 +1,10 @@
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import type { TaskPriority } from "@planevo/core/types/tasks";
 import type { Ref } from "react";
-import { ArchiveBoxIcon, TagIcon } from "@heroicons/react/24/outline";
-import { Icon } from "@/components/ui/planevo-icon";
+import { Calendar, FileText, GripVertical, Tag } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { taskDueState } from "@/lib/tasks/task-due-state";
+import { TaskFileBoxIllustration } from "./task-file-box-illustration";
 
 type TaskCardProps = {
   task: TaskWithMeta;
@@ -26,20 +27,11 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
 
 const PRIORITY_STYLES: Record<
   TaskPriority,
-  { label: string; className: string }
+  { label: string; variant: "high" | "medium" | "low" }
 > = {
-  high: {
-    label: "High",
-    className: "border-brick bg-brick-tint text-ink",
-  },
-  medium: {
-    label: "Medium",
-    className: "border-border-strong bg-surface-raised text-ink",
-  },
-  low: {
-    label: "Low",
-    className: "border-meadow bg-meadow-tint text-ink",
-  },
+  high: { label: "High", variant: "high" },
+  medium: { label: "Medium", variant: "medium" },
+  low: { label: "Low", variant: "low" },
 };
 
 function dueDateDetails(task: TaskWithMeta): {
@@ -60,7 +52,7 @@ function taskTags(task: TaskWithMeta): string[] {
   return tags.filter((tag): tag is string => typeof tag === "string").slice(0, 6);
 }
 
-function taskMonogram(title: string): string {
+function taskInitials(title: string): string {
   const words = title.split(/\s+/).filter(Boolean);
   if (words.length > 1) {
     return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toLocaleUpperCase();
@@ -76,7 +68,7 @@ export function TaskCard({
   onOpen,
 }: TaskCardProps) {
   const title = task.title.trim() || "Untitled task";
-  const monogram = taskMonogram(title);
+  const initials = taskInitials(title);
   const priority = task.priority ? PRIORITY_STYLES[task.priority] : null;
   const due = dueDateDetails(task);
   const tags = taskTags(task);
@@ -86,16 +78,17 @@ export function TaskCard({
 
   return (
     <article
-      className={`rounded-xl border border-border bg-surface-raised p-3 text-ink transition-colors hover:border-border-strong motion-reduce:transition-none ${
+      className={`rounded-xl border border-border bg-surface-raised p-4 text-ink transition-colors hover:border-border-strong motion-reduce:transition-none ${
         isDragging ? "opacity-40" : ""
       }`}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
+          title="Task initials"
           className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-sidebar font-mono text-label text-text-secondary"
         >
-          {monogram}
+          {initials}
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-small font-medium">
@@ -124,12 +117,20 @@ export function TaskCard({
           </p>
         </div>
         {priority ? (
-          <span
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-label ${priority.className}`}
-          >
+          <Badge variant={priority.variant} className="shrink-0">
+            <span
+              aria-hidden="true"
+              className={`size-1.5 rounded-full ${
+                priority.variant === "high"
+                  ? "bg-brick"
+                  : priority.variant === "medium"
+                    ? "bg-text-secondary"
+                    : "bg-meadow"
+              }`}
+            />
             <span className="sr-only">Priority: </span>
             {priority.label}
-          </span>
+          </Badge>
         ) : null}
         {dragHandleProps ? (
           <button
@@ -139,42 +140,37 @@ export function TaskCard({
             aria-label={`Move task: ${title}`}
             className="touch-none flex size-7 shrink-0 cursor-grab items-center justify-center rounded-lg text-text-muted outline-none hover:bg-sidebar hover:text-ink active:cursor-grabbing focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
-            <Icon name="menu" className="size-4" />
+            <GripVertical aria-hidden="true" className="size-4" />
           </button>
         ) : null}
       </div>
 
-      <div className="mt-3 flex h-20 items-center justify-center rounded-lg border border-border bg-paper">
-        <ArchiveBoxIcon
-          aria-hidden="true"
-          className={`size-12 ${
-            task.fileCount > 0 ? "text-text-secondary" : "text-text-muted"
-          }`}
-        />
+      <div className="mt-4 flex min-h-20 items-center justify-center rounded-lg border border-border bg-paper">
+        <TaskFileBoxIllustration active={task.fileCount > 0} />
       </div>
 
       {tags.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Tags">
+        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Tags">
           {tags.map((tag) => (
             <li
               key={tag}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-paper px-2 py-0.5 text-label text-text-secondary"
             >
-              <TagIcon aria-hidden="true" className="size-3 shrink-0" />
+              <Tag aria-hidden="true" className="size-3 shrink-0" />
               {tag}
             </li>
           ))}
         </ul>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border pt-2 text-label">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border pt-3 text-label">
         <span className="flex items-center gap-1.5 text-text-secondary">
-          <Icon name="document" className="size-3.5 shrink-0" />
+          <FileText aria-hidden="true" className="size-3.5 shrink-0" />
           {String(task.fileCount).padStart(2, "0")} {fileLabel}
         </span>
         <span className="ml-auto flex items-center gap-1.5 text-text-secondary">
-          <Icon
-            name="calendar"
+          <Calendar
+            aria-hidden="true"
             className={`size-3.5 shrink-0 ${due?.isOverdue ? "text-brick" : ""}`}
           />
           {due ? (
@@ -183,7 +179,8 @@ export function TaskCard({
               aria-label={`${due.isOverdue ? "Overdue. Due" : "Due"} ${LONG_DATE_FORMATTER.format(due.date)}`}
               className={due.isOverdue ? "font-medium text-ink" : ""}
             >
-              {due.isOverdue ? "Overdue" : "Due"} {SHORT_DATE_FORMATTER.format(due.date)}
+              {due.isOverdue ? "Overdue" : "Due"}{" "}
+              {SHORT_DATE_FORMATTER.format(due.date)}
             </time>
           ) : (
             <span>No due date</span>
