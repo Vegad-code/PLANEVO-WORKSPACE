@@ -322,7 +322,7 @@ export function CommandBar({
             onClick: () => {
               startTransition(async () => {
                 try {
-                  await undoQuickCapture(result.id);
+                  await undoQuickCapture(result.id, result.kind);
                 } catch (cause) {
                   toast(cause instanceof Error ? cause.message : "Undo failed.", {
                     tone: "error",

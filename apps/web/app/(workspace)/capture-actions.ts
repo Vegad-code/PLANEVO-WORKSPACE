@@ -2,16 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { parseQuickCapture } from "@planevo/core/parsing/natural-capture";
+import { quickCaptureToTaskInsert } from "@planevo/core/parsing/quick-capture-to-task";
+import { createTask, deleteTask } from "@planevo/core/mutations/product-tasks";
 import { fuzzyMatch } from "@planevo/core/search/fuzzy";
 import { loadDatabaseBundle } from "@planevo/core/queries/records";
 import { findPropertyByRole } from "@planevo/core/types/property-roles";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { requireMutationDataAccess } from "@/lib/data/access";
-import { createTaskWithRequiredFoundation } from "@/lib/mutations/create-foundations";
 
 export type QuickCaptureResult = {
   id: string;
   databaseName: string;
+  kind: "task" | "record";
 };
 
 function mergeDueDateTime(
@@ -98,57 +100,61 @@ async function createRecordInDatabase(
     await writeRoleValue(access.client, record.id, dueProperty.id, due);
   }
 
-  return { id: record.id, databaseName: bundle.database.name };
+  return { id: record.id, databaseName: bundle.database.name, kind: "record" };
 }
 
 async function resolveTargetDatabase(
   client: Awaited<ReturnType<typeof requireMutationDataAccess>>["client"],
   workspaceId: string,
-  databaseToken: string | null,
-): Promise<{ id: string; name: string; templateType: string }> {
+  databaseToken: string,
+): Promise<{ id: string; name: string }> {
   const { data: databases, error } = await client
     .from("databases")
-    .select("id,name,template_type")
+    .select("id,name")
     .eq("workspace_id", workspaceId);
   if (error) throw error;
   const rows = databases ?? [];
   if (rows.length === 0) throw new Error("No databases in this workspace.");
 
-  if (databaseToken) {
-    const scored = rows
-      .map((database) => ({
-        database,
-        match: fuzzyMatch(databaseToken, database.name),
-      }))
-      .filter((row): row is { database: (typeof rows)[number]; match: NonNullable<ReturnType<typeof fuzzyMatch>> } =>
+  const scored = rows
+    .map((database) => ({
+      database,
+      match: fuzzyMatch(databaseToken, database.name),
+    }))
+    .filter(
+      (row): row is { database: (typeof rows)[number]; match: NonNullable<ReturnType<typeof fuzzyMatch>> } =>
         row.match !== null,
-      )
-      .sort((a, b) => b.match.score - a.match.score);
-    if (scored[0]) {
-      return {
-        id: scored[0].database.id,
-        name: scored[0].database.name,
-        templateType: scored[0].database.template_type,
-      };
-    }
-    throw new Error(`No database matches "${databaseToken}".`);
-  }
+    )
+    .sort((a, b) => b.match.score - a.match.score);
+  if (!scored[0]) throw new Error(`No database matches "${databaseToken}".`);
 
-  const taskDatabase =
-    rows.find((database) => database.template_type === "task") ?? rows[0]!;
-  return {
-    id: taskDatabase.id,
-    name: taskDatabase.name,
-    templateType: taskDatabase.template_type,
-  };
+  return { id: scored[0].database.id, name: scored[0].database.name };
 }
 
+/**
+ * F-15 quick capture. Default capture writes a real row in the `tasks` table
+ * (the Tasks product), so it works with or without a workspace and never
+ * touches the kernel. Only an explicit #database token routes into a
+ * workspace database.
+ */
 export async function quickCapture(raw: string): Promise<QuickCaptureResult> {
   const draft = parseQuickCapture(raw);
   const title = draft.title.trim();
   if (!title) throw new Error("Add a title before capturing.");
 
   const access = await requireMutationDataAccess();
+
+  if (!draft.databaseToken) {
+    const payload = quickCaptureToTaskInsert(draft);
+    const task = await createTask(access.client, access.ownerId, {
+      ...payload,
+      title,
+    });
+    revalidatePath("/", "layout");
+    revalidatePath("/tasks");
+    return { id: task.id, databaseName: "Tasks", kind: "task" };
+  }
+
   const current = await getCurrentWorkspace();
   if (!current) throw new Error("Workspace not found.");
 
@@ -157,44 +163,38 @@ export async function quickCapture(raw: string): Promise<QuickCaptureResult> {
     current.workspace.id,
     draft.databaseToken,
   );
-
-  let result: QuickCaptureResult;
-
-  if (target.templateType === "task") {
-    const created = await createTaskWithRequiredFoundation({
-      workspaceId: current.workspace.id,
-      title,
-      priority: draft.priority ?? undefined,
-      dueDate: mergeDueDateTime(draft.dueDate, draft.time),
-      status: draft.status ?? undefined,
-    });
-    result = { id: created.recordId, databaseName: target.name };
-  } else {
-    result = await createRecordInDatabase(access, target.id, draft);
-  }
+  const result = await createRecordInDatabase(access, target.id, draft);
 
   revalidatePath("/", "layout");
-  revalidatePath("/tasks");
   revalidatePath(`/databases/${target.id}`);
   return result;
 }
 
-export async function undoQuickCapture(recordId: string): Promise<void> {
+export async function undoQuickCapture(
+  id: string,
+  kind: QuickCaptureResult["kind"] = "record",
+): Promise<void> {
   const access = await requireMutationDataAccess();
+
+  if (kind === "task") {
+    await deleteTask(access.client, access.ownerId, id);
+    revalidatePath("/", "layout");
+    revalidatePath("/tasks");
+    return;
+  }
 
   const { data: record, error: recordError } = await access.client
     .from("records")
     .select("id,database_id,databases!inner(workspace_id,workspaces!inner(owner_id))")
-    .eq("id", recordId)
+    .eq("id", id)
     .eq("databases.workspaces.owner_id", access.ownerId)
     .maybeSingle();
   if (recordError) throw recordError;
   if (!record) throw new Error("Record not found.");
 
-  const { error } = await access.client.from("records").delete().eq("id", recordId);
+  const { error } = await access.client.from("records").delete().eq("id", id);
   if (error) throw error;
 
   revalidatePath("/", "layout");
-  revalidatePath("/tasks");
   revalidatePath(`/databases/${record.database_id}`);
 }
