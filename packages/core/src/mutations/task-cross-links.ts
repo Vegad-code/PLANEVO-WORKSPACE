@@ -7,38 +7,12 @@ type CalendarEventRow = Database["public"]["Tables"]["calendar_events"]["Row"];
 const UNIQUE_VIOLATION = "23505";
 
 export type ScheduleTaskInput = {
+  operationKey: string;
   taskId: string;
   title: string;
   startsAt: string;
   endsAt: string;
 };
-
-/**
- * Resolve the user's default (oldest) calendar. Onboarding's
- * create_user_products seeds exactly one "My Calendar" per user, so this
- * always finds a row for an onboarded user; a missing calendar means
- * onboarding never ran and is surfaced as a clear error rather than silently
- * forking a second calendar-defaults path.
- */
-async function resolveDefaultCalendarId(
-  client: SupabaseClient<Database>,
-  userId: string,
-): Promise<string> {
-  const { data, error } = await client
-    .from("calendars")
-    .select("id")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) {
-    throw new Error(
-      "No calendar found for this user; onboarding seeds a default calendar.",
-    );
-  }
-  return data.id;
-}
 
 /**
  * Cross-feature "Schedule": write a calendar_events row on the user's default
@@ -49,26 +23,25 @@ export async function scheduleTask(
   userId: string,
   input: ScheduleTaskInput,
 ): Promise<CalendarEventRow> {
-  const calendarId = await resolveDefaultCalendarId(client, userId);
-  const { data, error } = await client
-    .from("calendar_events")
-    .insert({
-      calendar_id: calendarId,
-      user_id: userId,
-      title: input.title,
-      starts_at: input.startsAt,
-      ends_at: input.endsAt,
-      task_id: input.taskId,
-    })
-    .select()
-    .single();
-  if (error) throw error;
+  const { data, error } = await client.rpc("schedule_task_idempotent", {
+    p_owner_id: userId,
+    p_task_id: input.taskId,
+    p_operation_key: input.operationKey,
+    p_title: input.title,
+    p_starts_at: input.startsAt,
+    p_ends_at: input.endsAt,
+  });
+  if (error) throw new Error(error.message);
   return data;
 }
 
 export type AttachFileToTaskInput = {
   taskId: string;
   fileSourceId: string;
+};
+
+export type ClaimTaskAttachmentInput = AttachFileToTaskInput & {
+  operationKey: string;
 };
 
 /**
@@ -98,12 +71,13 @@ export async function attachFileToTask(
 export async function claimTaskAttachment(
   client: SupabaseClient<Database>,
   userId: string,
-  input: AttachFileToTaskInput,
+  input: ClaimTaskAttachmentInput,
 ): Promise<void> {
   const { error } = await client.rpc("claim_task_attachment", {
     p_owner_id: userId,
     p_file_source_id: input.fileSourceId,
     p_task_id: input.taskId,
+    p_operation_key: input.operationKey,
   });
   if (error) throw new Error(error.message);
 }

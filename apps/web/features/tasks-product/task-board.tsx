@@ -35,6 +35,7 @@ import {
   resolveTaskBoardDrop,
   type TaskBoardStatus,
 } from "./task-board-ordering";
+import { taskBoardAnnouncement } from "./task-board-a11y";
 
 export type { TaskBoardStatus } from "./task-board-ordering";
 
@@ -249,6 +250,36 @@ export function TaskBoard({
       onDragStart={handleDragStart}
       onDragCancel={() => setActiveTaskId(null)}
       onDragEnd={handleDragEnd}
+      accessibility={{
+        announcements: {
+          onDragStart({ active }) {
+            return taskBoardAnnouncement(tasks, "start", String(active.id), null, null);
+          },
+          onDragOver({ active, over }) {
+            const status = over?.data.current?.status;
+            return taskBoardAnnouncement(
+              tasks,
+              "over",
+              String(active.id),
+              isBoardStatus(status) ? status : null,
+              over ? String(over.id) : null,
+            );
+          },
+          onDragEnd({ active, over }) {
+            const status = over?.data.current?.status;
+            return taskBoardAnnouncement(
+              tasks,
+              "drop",
+              String(active.id),
+              isBoardStatus(status) ? status : null,
+              over ? String(over.id) : null,
+            );
+          },
+          onDragCancel({ active }) {
+            return taskBoardAnnouncement(tasks, "cancel", String(active.id), null, null);
+          },
+        },
+      }}
     >
       <div
         role="region"

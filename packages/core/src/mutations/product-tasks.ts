@@ -6,6 +6,7 @@ import { positionBetween } from "../ordering/fractional.ts";
 type SubtaskRow = Database["public"]["Tables"]["task_subtasks"]["Row"];
 
 export type CreateTaskInput = {
+  operationKey: string;
   title: string;
   status?: TaskStatus;
   priority?: TaskPriority | null;
@@ -34,26 +35,16 @@ export async function createTask(
   userId: string,
   input: CreateTaskInput,
 ): Promise<TaskRow> {
-  const { data, error } = await client
-    .from("tasks")
-    .insert({
-      user_id: userId,
-      title: input.title,
-      status: input.status ?? "not_started",
-      priority: input.priority ?? null,
-      due_at: input.due_at ?? null,
-      // New tasks append without an extra max(position) read. As with
-      // subtasks below, millisecond positions keep independent creation paths
-      // (modal and quick capture) out of the database's shared zero default.
-      position: Date.now(),
-      ...(input.description_json !== undefined
-        ? { description_json: input.description_json as Json }
-        : {}),
-    })
-    .select()
-    .single();
+  const { data, error } = await client.rpc("create_task_ordered", {
+    p_owner_id: userId,
+    p_operation_key: input.operationKey,
+    p_title: input.title,
+    p_status: input.status ?? "not_started",
+    p_priority: input.priority ?? null,
+    p_due_at: input.due_at ?? null,
+    p_description_json: (input.description_json ?? {}) as Json,
+  });
   if (error) throw error;
-  // ponytail: DB CHECK constraints guarantee status/priority match the enums.
   return data as unknown as TaskRow;
 }
 
@@ -168,17 +159,41 @@ export async function moveTaskAndStatus(
   if (error) throw error;
 }
 
+/** Locked lane mutation with adjacency validation and deterministic DB ordering. */
+export async function moveTaskOrdered(
+  client: SupabaseClient<Database>,
+  userId: string,
+  taskId: string,
+  status: TaskStatus,
+  beforeTaskId: string | null,
+  afterTaskId: string | null,
+): Promise<void> {
+  let attempts = 0;
+  while (attempts < 2) {
+    const { error } = await client.rpc("move_task_ordered", {
+      p_owner_id: userId,
+      p_task_id: taskId,
+      p_status: status,
+      p_before_task_id: beforeTaskId,
+      p_after_task_id: afterTaskId,
+    });
+    if (!error) return;
+    attempts += 1;
+    if (error.code !== "40001" || attempts >= 2) throw error;
+  }
+}
+
 export async function deleteTask(
   client: SupabaseClient<Database>,
   userId: string,
   taskId: string,
 ): Promise<void> {
-  const { error } = await client
-    .from("tasks")
-    .delete()
-    .eq("id", taskId)
-    .eq("user_id", userId);
+  const { data, error } = await client.rpc("delete_task_cascade", {
+    p_owner_id: userId,
+    p_task_id: taskId,
+  });
   if (error) throw error;
+  if (!data) throw new Error("Task not found.");
 }
 
 // Subtasks: scoped by the task's RLS policy (no user_id column), so these

@@ -74,6 +74,7 @@ export function CreateTaskDialog({
   initialStatus = "not_started",
 }: CreateTaskDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const operationKeyRef = useRef<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority | "">("");
@@ -127,6 +128,8 @@ export function CreateTaskDialog({
     if (!trimmedTitle) return;
 
     const formData = new FormData();
+    operationKeyRef.current ??= crypto.randomUUID();
+    formData.set("operationKey", operationKeyRef.current);
     formData.set("title", trimmedTitle);
     formData.set("status", initialStatus);
     formData.set("description", description.trim());
@@ -141,7 +144,9 @@ export function CreateTaskDialog({
   return (
     <Dialog
       open
-      onClose={onClose}
+      onClose={() => {
+        if (!isPending) onClose();
+      }}
       labelledBy="create-task-title"
       className="m-4 max-h-dvh w-auto max-w-lg overflow-hidden rounded-card border border-border bg-surface-raised p-0 text-ink backdrop:bg-ink/30 sm:m-auto sm:w-full"
     >
@@ -156,8 +161,9 @@ export function CreateTaskDialog({
           <button
             type="button"
             onClick={onClose}
+            disabled={isPending}
             aria-label="Close create task"
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="close" className="size-4" />
           </button>

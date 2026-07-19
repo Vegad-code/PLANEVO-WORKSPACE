@@ -8,6 +8,7 @@ export type UploadedTaskAttachment = {
   name: string;
   mimeType: string;
   sizeBytes: number;
+  claimOperationKey: string;
 };
 
 export type TaskAttachmentSourceMetadata = {

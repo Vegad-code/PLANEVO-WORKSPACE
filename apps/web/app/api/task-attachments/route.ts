@@ -14,10 +14,10 @@ import {
   MAX_TASK_ATTACHMENTS,
   TASK_ATTACHMENT_BUCKET,
   taskAttachmentObjectName,
-  taskAttachmentSourceMetadata,
 } from "@/lib/tasks/task-attachments";
 
 const uploadTargetSchema = z.object({
+  operationKey: z.string().uuid(),
   name: z.string().trim().min(1).max(255),
   mimeType: z.string().max(255),
   sizeBytes: z
@@ -55,6 +55,16 @@ const discardUploadsSchema = z.object({
         storagePaths.add(upload.storagePath);
       }
     }),
+});
+
+const recoverySchema = z.object({
+  dryRun: z.boolean().default(true),
+  limit: z.number().int().min(1).max(100).default(50),
+});
+
+const reservationResultSchema = z.object({
+  id: z.string().uuid(),
+  storage_path: z.string(),
 });
 
 function cleanFileName(name: string): string {
@@ -96,23 +106,24 @@ export async function POST(request: Request) {
     }
 
     requireTaskAttachmentSize(parsed.data.sizeBytes);
-    const storagePath = `${current.workspace.id}/${randomUUID()}-${cleanFileName(parsed.data.name)}`;
-    const { data: source, error: sourceError } = await access.client
-      .from("file_sources")
-      .insert({
-        workspace_id: current.workspace.id,
-        created_by: access.ownerId,
-        user_id: access.ownerId,
-        storage_path: storagePath,
-        name: parsed.data.name,
-        mime_type: parsed.data.mimeType || null,
-        size_bytes: parsed.data.sizeBytes,
-        ingestion_status: "pending",
-        metadata_json: taskAttachmentSourceMetadata(storagePath),
-      })
-      .select("id")
-      .single();
+    const proposedPath = `${current.workspace.id}/${randomUUID()}-${cleanFileName(parsed.data.name)}`;
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { data: reservation, error: sourceError } = await access.client.rpc(
+      "reserve_task_attachment",
+      {
+        p_owner_id: access.ownerId,
+        p_workspace_id: current.workspace.id,
+        p_operation_key: parsed.data.operationKey,
+        p_storage_path: proposedPath,
+        p_name: parsed.data.name,
+        p_mime_type: parsed.data.mimeType,
+        p_size_bytes: parsed.data.sizeBytes,
+        p_expires_at: expiresAt,
+      },
+    );
     if (sourceError) throw sourceError;
+    const source = reservationResultSchema.parse(reservation);
+    const storagePath = source.storage_path;
 
     const target = {
       sourceId: source.id,
@@ -176,59 +187,20 @@ export async function DELETE(request: Request) {
 
     if (uploads.length === 0) return NextResponse.json({ removed: 0 });
 
-    const sourceIds = uploads.map((upload) => upload.sourceId);
-    const { data: sources, error: sourcesError } = await access.client
-      .from("file_sources")
-      .select("id,workspace_id,storage_path,metadata_json")
-      .eq("user_id", access.ownerId)
-      .in("id", sourceIds);
-    if (sourcesError) throw sourcesError;
-
-    const sourcesById = new Map(
-      (sources ?? []).map((source) => [source.id, source]),
-    );
-    for (const upload of uploads) {
-      const source = sourcesById.get(upload.sourceId);
-      if (
-        !source ||
-        source.workspace_id !== current.workspace.id ||
-        source.storage_path !== upload.storagePath
-      ) {
-        return NextResponse.json(
-          { error: "Attachment cleanup target was not found." },
-          { status: 409 },
-        );
-      }
-      try {
-        requireTaskAttachmentCleanupCandidate(source.metadata_json);
-      } catch (cause) {
-        return NextResponse.json(
-          {
-            error:
-              cause instanceof Error
-                ? cause.message
-                : "Attachment cannot be cleaned up.",
-          },
-          { status: 409 },
-        );
-      }
-    }
-
-    const { data: links, error: linksError } = await access.client
-      .from("file_links")
-      .select("file_source_id")
-      .in("file_source_id", sourceIds);
-    if (linksError) throw linksError;
-    if ((links ?? []).length > 0) {
-      return NextResponse.json(
-        { error: "A claimed attachment cannot be cleaned up." },
-        { status: 409 },
-      );
-    }
-
     const outcomes = [];
     for (const upload of uploads) {
-      outcomes.push(await cleanupOwnedTaskAttachment(access, upload));
+      try {
+        outcomes.push(await cleanupOwnedTaskAttachment(access, upload));
+      } catch (cause) {
+        outcomes.push({
+          ok: false as const,
+          target: upload,
+          stage: "database" as const,
+          operation: "mark_pending" as const,
+          error: cause instanceof Error ? cause.message : "Cleanup failed.",
+          cleanupPending: true as const,
+        });
+      }
     }
     const failures = outcomes.filter((outcome) => !outcome.ok);
     if (failures.length > 0) {
@@ -245,5 +217,38 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ removed: outcomes.length });
   } catch (cause) {
     return routeError(cause, "Could not discard the attachment upload.");
+  }
+}
+
+/** Inventory or reap this user's expired reservations; safe for operator retry. */
+export async function PATCH(request: Request) {
+  try {
+    const access = await requireMutationDataAccess();
+    const current = await getCurrentWorkspace();
+    if (!current || current.access.ownerId !== access.ownerId) {
+      return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
+    }
+    const parsed = recoverySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "Invalid recovery request." }, { status: 400 });
+    const { data, error } = await access.client
+      .from("file_sources")
+      .select("id,storage_path,metadata_json,reservation_expires_at")
+      .eq("user_id", access.ownerId)
+      .eq("workspace_id", current.workspace.id)
+      .lte("reservation_expires_at", new Date().toISOString())
+      .order("reservation_expires_at", { ascending: true })
+      .limit(parsed.data.limit);
+    if (error) throw error;
+    const targets = (data ?? [])
+      .filter((row) => {
+        try { requireTaskAttachmentCleanupCandidate(row.metadata_json); return true; } catch { return false; }
+      })
+      .map((row) => ({ sourceId: row.id, storagePath: row.storage_path }));
+    if (parsed.data.dryRun) return NextResponse.json({ dryRun: true, count: targets.length, targets });
+    const outcomes = [];
+    for (const target of targets) outcomes.push(await cleanupOwnedTaskAttachment(access, target));
+    return NextResponse.json({ dryRun: false, count: targets.length, outcomes });
+  } catch (cause) {
+    return routeError(cause, "Could not recover abandoned attachments.");
   }
 }

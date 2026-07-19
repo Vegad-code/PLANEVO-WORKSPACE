@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { parseQuickCapture } from "@planevo/core/parsing/natural-capture";
 import { quickCaptureToTaskInsert } from "@planevo/core/parsing/quick-capture-to-task";
@@ -149,6 +150,7 @@ export async function quickCapture(raw: string): Promise<QuickCaptureResult> {
     const task = await createTask(access.client, access.ownerId, {
       ...payload,
       title,
+      operationKey: randomUUID(),
     });
     revalidatePath("/", "layout");
     revalidatePath("/tasks");

@@ -3,6 +3,7 @@ import type { TaskPriority } from "@planevo/core/types/tasks";
 import type { Ref } from "react";
 import { ArchiveBoxIcon, TagIcon } from "@heroicons/react/24/outline";
 import { Icon } from "@/components/ui/planevo-icon";
+import { taskDueState } from "@/lib/tasks/task-due-state";
 
 type TaskCardProps = {
   task: TaskWithMeta;
@@ -45,15 +46,11 @@ function dueDateDetails(task: TaskWithMeta): {
   date: Date;
   isOverdue: boolean;
 } | null {
-  if (!task.due_at) return null;
-
-  const date = new Date(task.due_at);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const isFinished = task.status === "done" || task.status === "cancelled";
+  const due = taskDueState(task.due_at, task.status);
+  if (!due) return null;
   return {
-    date,
-    isOverdue: !isFinished && date.getTime() < Date.now(),
+    date: due.date,
+    isOverdue: due.kind === "overdue",
   };
 }
 

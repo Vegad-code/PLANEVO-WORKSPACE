@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import {
   TASK_STATUS_LABELS,
-  TASK_STATUSES,
   type TaskPriority,
-  type TaskStatus,
 } from "@planevo/core/types/tasks";
 import { Icon } from "@/components/ui/planevo-icon";
+import {
+  groupTasksForList,
+  type TaskListGrouping,
+  type TaskListGroupKey,
+} from "@/lib/tasks/task-view-state";
 
 type TaskListProps = {
   tasks: TaskWithMeta[];
@@ -109,23 +113,30 @@ function TaskListRow({
   );
 }
 
-function TaskStatusGroup({
-  status,
+function groupLabel(key: TaskListGroupKey, grouping: TaskListGrouping): string {
+  if (grouping === "status") return TASK_STATUS_LABELS[key as keyof typeof TASK_STATUS_LABELS];
+  return key === "none" ? "No priority" : PRIORITY_LABELS[key as TaskPriority];
+}
+
+function TaskGroup({
+  groupKey,
+  grouping,
   tasks,
   onTaskSelect,
 }: {
-  status: TaskStatus;
+  groupKey: TaskListGroupKey;
+  grouping: TaskListGrouping;
   tasks: TaskWithMeta[];
   onTaskSelect?: (taskId: string) => void;
 }) {
-  const headingId = `task-list-${status}`;
+  const headingId = `task-list-${grouping}-${groupKey}`;
   const countLabel = `${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`;
 
   return (
     <section aria-labelledby={headingId}>
       <div className="flex items-center justify-between gap-3 border-b border-border bg-sidebar px-3 py-2">
         <h3 id={headingId} className="text-small font-medium text-ink">
-          {TASK_STATUS_LABELS[status]}
+          {groupLabel(groupKey, grouping)}
         </h3>
         <span
           aria-label={countLabel}
@@ -144,18 +155,35 @@ function TaskStatusGroup({
 }
 
 export function TaskList({ tasks, onTaskSelect }: TaskListProps) {
+  const [grouping, setGrouping] = useState<TaskListGrouping>("status");
+  const groups = groupTasksForList(tasks, grouping);
+
   return (
     <div
       role="region"
       aria-label="Tasks list"
       className="overflow-x-auto rounded-card border border-border bg-paper"
     >
+      <div className="flex justify-end border-b border-border bg-paper px-3 py-2">
+        <label className="flex items-center gap-2 text-small text-text-secondary">
+          Group by
+          <select
+            value={grouping}
+            onChange={(event) => setGrouping(event.target.value as TaskListGrouping)}
+            className="rounded-lg border border-border-strong bg-paper px-2 py-1 text-small text-ink outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            <option value="status">Status</option>
+            <option value="priority">Priority</option>
+          </select>
+        </label>
+      </div>
       <div className="min-w-max">
-        {TASK_STATUSES.map((status) => (
-          <TaskStatusGroup
-            key={status}
-            status={status}
-            tasks={orderedTasks(tasks.filter((task) => task.status === status))}
+        {groups.map((group) => (
+          <TaskGroup
+            key={group.key}
+            groupKey={group.key}
+            grouping={grouping}
+            tasks={orderedTasks(group.tasks)}
             onTaskSelect={onTaskSelect}
           />
         ))}

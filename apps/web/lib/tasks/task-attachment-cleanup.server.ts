@@ -20,7 +20,7 @@ async function sourceRecord(
 ): Promise<{
   metadata: Record<string, Json | undefined>;
   storagePath: string;
-}> {
+} | null> {
   const { data, error } = await access.client
     .from("file_sources")
     .select("metadata_json,storage_path")
@@ -28,7 +28,7 @@ async function sourceRecord(
     .eq("user_id", access.ownerId)
     .maybeSingle();
   if (error) throw error;
-  if (!data) throw new Error("Attachment source is unavailable for cleanup.");
+  if (!data) return null;
   return {
     metadata: jsonObject(data.metadata_json),
     storagePath: data.storage_path,
@@ -38,27 +38,16 @@ async function sourceRecord(
 function cleanupOperations(access: DataAccess): TaskAttachmentCleanupOperations {
   return {
     async markPending(target, failureStage, failureMessage) {
-      const { metadata } = await sourceRecord(access, target.sourceId);
-      const nextMetadata = {
-        ...metadata,
-        source_kind: "task-attachment",
-        bucket: TASK_ATTACHMENT_BUCKET,
-        path: target.storagePath,
-        cleanup_required: true,
-        task_attachment_state: "cleanup_pending",
-        failure_stage: failureStage,
-        failure_message: failureMessage ?? null,
-      } as Json;
-      const { data, error } = await access.client
-        .from("file_sources")
-        .update({
-          ingestion_status: "failed",
-          metadata_json: nextMetadata,
-        })
-        .eq("id", target.sourceId)
-        .eq("user_id", access.ownerId)
-        .select("id")
-        .maybeSingle();
+      const { data, error } = await access.client.rpc(
+        "begin_task_attachment_cleanup",
+        {
+          p_owner_id: access.ownerId,
+          p_file_source_id: target.sourceId,
+          p_storage_path: target.storagePath,
+          p_failure_stage: failureStage,
+          p_failure_message: failureMessage ?? null,
+        },
+      );
       if (error) throw error;
       if (!data) throw new Error("Attachment cleanup marker was not persisted.");
     },
@@ -67,27 +56,38 @@ function cleanupOperations(access: DataAccess): TaskAttachmentCleanupOperations 
         .from(TASK_ATTACHMENT_BUCKET)
         .remove([target.storagePath]);
       if (error) throw error;
+      if (await storageObjectExists(access, target.storagePath)) {
+        throw new Error("Attachment object still exists after cleanup.");
+      }
     },
     async deleteSource(target) {
-      const { data, error } = await access.client
-        .from("file_sources")
-        .delete()
-        .eq("id", target.sourceId)
-        .eq("user_id", access.ownerId)
-        .select("id");
+      const { data, error } = await access.client.rpc(
+        "finalize_task_attachment_cleanup",
+        {
+          p_owner_id: access.ownerId,
+          p_file_source_id: target.sourceId,
+          p_storage_path: target.storagePath,
+        },
+      );
       if (error) throw error;
-      if ((data ?? []).some((row) => row.id === target.sourceId)) return true;
-
-      const { data: remaining, error: confirmError } = await access.client
-        .from("file_sources")
-        .select("id")
-        .eq("id", target.sourceId)
-        .eq("user_id", access.ownerId)
-        .maybeSingle();
-      if (confirmError) throw confirmError;
-      return remaining === null;
+      return data;
     },
   };
+}
+
+async function storageObjectExists(
+  access: DataAccess,
+  storagePath: string,
+): Promise<boolean> {
+  const separator = storagePath.lastIndexOf("/");
+  if (separator < 1) throw new Error("Attachment cleanup path is invalid.");
+  const folder = storagePath.slice(0, separator);
+  const name = storagePath.slice(separator + 1);
+  const { data, error } = await access.client.storage
+    .from(TASK_ATTACHMENT_BUCKET)
+    .list(folder, { limit: 2, search: name });
+  if (error) throw error;
+  return (data ?? []).some((entry) => entry.name === name);
 }
 
 export async function cleanupOwnedTaskAttachment(
@@ -95,6 +95,18 @@ export async function cleanupOwnedTaskAttachment(
   target: TaskAttachmentCleanupTarget,
 ): Promise<TaskAttachmentCleanupResult> {
   const source = await sourceRecord(access, target.sourceId);
+  if (!source) {
+    return (await storageObjectExists(access, target.storagePath))
+      ? {
+          ok: false,
+          target,
+          stage: "database",
+          operation: "mark_pending",
+          error: "Attachment source is absent while its object remains.",
+          cleanupPending: true,
+        }
+      : { ok: true, target };
+  }
   if (source.storagePath !== target.storagePath) {
     throw new Error("Attachment cleanup path does not match its reservation.");
   }

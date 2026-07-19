@@ -31,6 +31,7 @@ import {
   setTasksScope,
   type TasksScope,
 } from "@/lib/tasks/scope-prefs";
+import { activeTasks } from "@/lib/tasks/task-view-state";
 
 type TasksProductViewProps = {
   initialTasks: TaskWithMeta[];
@@ -139,6 +140,7 @@ export function TasksProductView({
   const selectedTask = selectedTaskId
     ? tasks.find((task) => task.id === selectedTaskId) ?? null
     : null;
+  const boardTasks = activeTasks(tasks);
 
   const closePeek = useCallback(() => setSelectedTaskId(null), []);
 
@@ -283,7 +285,7 @@ export function TasksProductView({
     <TasksEmptyState onCreateTask={() => openCreate()} />
   ) : view === "board" ? (
     <TaskBoard
-      tasks={tasks}
+      tasks={boardTasks}
       onStatusChange={moveTask}
       onTaskSelect={setSelectedTaskId}
       onCreateTask={openCreate}

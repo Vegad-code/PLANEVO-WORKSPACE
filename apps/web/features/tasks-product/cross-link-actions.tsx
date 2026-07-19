@@ -332,6 +332,7 @@ export function TaskCrossLinkActions({
   const filesTitleId = useId();
   const workspaceTitleId = useId();
   const requestId = useRef(0);
+  const scheduleOperationKey = useRef<string | null>(null);
   const [activePanel, setActivePanel] = useState<CrossLinkPanel | null>(null);
   const [options, setOptions] = useState<TaskCrossLinkOptions | null>(null);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
@@ -351,6 +352,7 @@ export function TaskCrossLinkActions({
     setIsLoadingOptions(false);
     setLoadError(null);
     setActionError(null);
+    scheduleOperationKey.current = null;
   }
 
   function openSchedule() {
@@ -402,12 +404,18 @@ export function TaskCrossLinkActions({
     setActionError(null);
     setPendingAction("schedule");
     try {
-      const result = await scheduleProductTaskAction({ taskId, ...range });
+      scheduleOperationKey.current ??= crypto.randomUUID();
+      const result = await scheduleProductTaskAction({
+        taskId,
+        operationKey: scheduleOperationKey.current,
+        ...range,
+      });
       if (!result.ok) {
         setActionError(result.error);
         return;
       }
       requestId.current += 1;
+      scheduleOperationKey.current = null;
       setActivePanel(null);
       toast("Scheduled on your calendar");
       router.refresh();

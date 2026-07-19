@@ -12,6 +12,7 @@ import {
 const TASK_ID = "11111111-1111-4111-8111-111111111111";
 const FILE_ID = "22222222-2222-4222-8222-222222222222";
 const WORKSPACE_ID = "33333333-3333-4333-8333-333333333333";
+const OPERATION_KEY = "44444444-4444-4444-8444-444444444444";
 
 test("scheduleRangeFromLocalInputs converts a valid local range to ISO timestamps", () => {
   const result = scheduleRangeFromLocalInputs({
@@ -58,6 +59,7 @@ test("scheduleTaskActionInputSchema requires offset ISO timestamps in forward or
   assert.equal(
     scheduleTaskActionInputSchema.safeParse({
       taskId: TASK_ID,
+      operationKey: OPERATION_KEY,
       startsAt: "2026-07-20T16:00:00.000Z",
       endsAt: "2026-07-20T17:00:00.000Z",
     }).success,
@@ -66,6 +68,7 @@ test("scheduleTaskActionInputSchema requires offset ISO timestamps in forward or
   assert.equal(
     scheduleTaskActionInputSchema.safeParse({
       taskId: TASK_ID,
+      operationKey: OPERATION_KEY,
       startsAt: "2026-07-20T17:00:00.000Z",
       endsAt: "2026-07-20T16:00:00.000Z",
     }).success,
@@ -74,6 +77,7 @@ test("scheduleTaskActionInputSchema requires offset ISO timestamps in forward or
   assert.equal(
     scheduleTaskActionInputSchema.safeParse({
       taskId: TASK_ID,
+      operationKey: OPERATION_KEY,
       startsAt: "2026-07-20 09:00",
       endsAt: "2026-07-20 10:00",
     }).success,

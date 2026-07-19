@@ -22,65 +22,40 @@ const CLAIM_ACL_MIGRATION_URL = new URL(
 );
 
 test("scheduleTask creates calendar_event with task_id on the default calendar", async () => {
-  const inserts = [];
+  let captured = null;
   const client = {
-    from(table) {
-      return {
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              limit: () => ({
-                maybeSingle: async () => ({ data: { id: "cal-1" }, error: null }),
-              }),
-            }),
-          }),
-        }),
-        insert(row) {
-          inserts.push({ table, row });
-          return {
-            select: () => ({
-              single: async () => ({ data: { id: "evt-1", ...row }, error: null }),
-            }),
-          };
-        },
-      };
+    async rpc(name, args) {
+      captured = { name, args };
+      return { data: { id: "evt-1" }, error: null };
     },
   };
   const event = await scheduleTask(client, "user-1", {
+    operationKey: "operation-1",
     taskId: "task-1",
     title: "Review PRD",
     startsAt: "2026-07-20T14:00:00.000Z",
     endsAt: "2026-07-20T15:00:00.000Z",
   });
-  assert.equal(inserts[0].table, "calendar_events");
-  assert.equal(inserts[0].row.task_id, "task-1");
-  assert.equal(inserts[0].row.calendar_id, "cal-1");
-  assert.equal(inserts[0].row.user_id, "user-1");
-  assert.equal(inserts[0].row.title, "Review PRD");
-  assert.equal(inserts[0].row.starts_at, "2026-07-20T14:00:00.000Z");
-  assert.equal(inserts[0].row.ends_at, "2026-07-20T15:00:00.000Z");
+  assert.equal(captured.name, "schedule_task_idempotent");
+  assert.equal(captured.args.p_task_id, "task-1");
+  assert.equal(captured.args.p_owner_id, "user-1");
+  assert.equal(captured.args.p_operation_key, "operation-1");
+  assert.equal(captured.args.p_title, "Review PRD");
+  assert.equal(captured.args.p_starts_at, "2026-07-20T14:00:00.000Z");
+  assert.equal(captured.args.p_ends_at, "2026-07-20T15:00:00.000Z");
   assert.equal(event.id, "evt-1");
 });
 
 test("scheduleTask throws a clear error when the user has no calendar", async () => {
   const client = {
-    from() {
-      return {
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              limit: () => ({
-                maybeSingle: async () => ({ data: null, error: null }),
-              }),
-            }),
-          }),
-        }),
-      };
+    async rpc() {
+      return { data: null, error: { code: "P0001", message: "calendar not found" } };
     },
   };
   await assert.rejects(
     () =>
       scheduleTask(client, "user-1", {
+        operationKey: "operation-2",
         taskId: "task-1",
         title: "Review PRD",
         startsAt: "2026-07-20T14:00:00.000Z",
@@ -137,6 +112,7 @@ test("claimTaskAttachment delegates the owned source and task to one RPC", async
   await claimTaskAttachment(client, "user-1", {
     taskId: "task-1",
     fileSourceId: "file-9",
+    operationKey: "operation-3",
   });
 
   assert.deepEqual(captured, {
@@ -145,6 +121,7 @@ test("claimTaskAttachment delegates the owned source and task to one RPC", async
       p_owner_id: "user-1",
       p_file_source_id: "file-9",
       p_task_id: "task-1",
+      p_operation_key: "operation-3",
     },
   });
 });
@@ -163,6 +140,7 @@ test("claimTaskAttachment surfaces an atomic RPC failure", async () => {
     claimTaskAttachment(client, "user-1", {
       taskId: "task-1",
       fileSourceId: "file-9",
+      operationKey: "operation-4",
     }),
     /not claimable/,
   );

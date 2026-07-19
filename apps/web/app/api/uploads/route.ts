@@ -57,6 +57,7 @@ export async function POST(request: Request) {
         const { error: rowError } = await access.client.from("file_sources").insert({
           workspace_id: current.workspace.id,
           created_by: access.ownerId,
+          user_id: access.ownerId,
           storage_path: `${BUCKET}:${storagePath}`,
           name: file.name,
           mime_type: file.type || null,

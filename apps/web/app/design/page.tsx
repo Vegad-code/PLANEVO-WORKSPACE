@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { MinimalModeSwitch, ThemeButtonGroup } from "@/components/ui/theme-controls";
 import { NavItem } from "@/features/shell/nav-item";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
@@ -332,7 +333,9 @@ export default function DesignPage() {
       </Section>
 
       <Section title="Database views — tabs, config bar, table / board / list">
-        <DatabaseViewsPreview />
+        <Suspense fallback={<p className="text-small text-text-muted">Loading database preview…</p>}>
+          <DatabaseViewsPreview />
+        </Suspense>
       </Section>
 
       <Section title="Record surface — page and peek variants">

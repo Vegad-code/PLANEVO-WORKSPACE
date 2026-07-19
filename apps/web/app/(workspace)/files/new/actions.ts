@@ -41,6 +41,7 @@ export async function uploadWorkspaceFile(formData: FormData): Promise<void> {
   const { error: rowError } = await access.client.from("file_sources").insert({
     workspace_id: workspaceId,
     created_by: access.ownerId,
+    user_id: access.ownerId,
     storage_path: storagePath,
     name: file.name,
     mime_type: file.type || null,
@@ -66,6 +67,7 @@ export async function createPlanevoDocument(formData: FormData): Promise<void> {
     workspace_id: workspaceId,
     page_id: document.pageId,
     created_by: access.ownerId,
+    user_id: access.ownerId,
     storage_path: `page:${document.pageId}`,
     name: title,
     mime_type: "application/x-planevo-page",

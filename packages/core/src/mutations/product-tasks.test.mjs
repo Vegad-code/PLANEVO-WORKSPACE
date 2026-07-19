@@ -41,52 +41,40 @@ function taskUpdateHarness(initialRow, failure = null) {
 }
 
 test("createTask inserts with defaults", async () => {
-  let inserted = null;
+  let captured = null;
   const client = {
-    from() {
-      return {
-        insert(row) {
-          inserted = row;
-          return {
-            select: () => ({
-              single: async () => ({ data: { id: "new-id", ...row }, error: null }),
-            }),
-          };
-        },
-      };
+    async rpc(name, args) {
+      captured = { name, args };
+      return { data: { id: "new-id", ...args }, error: null };
     },
   };
-  const task = await createTask(client, "user-1", { title: "Ship Phase 2" });
-  assert.equal(inserted.title, "Ship Phase 2");
-  assert.equal(inserted.status, "not_started");
-  assert.equal(inserted.user_id, "user-1");
-  assert.equal(typeof inserted.position, "number");
-  assert.ok(inserted.position > 0);
-  assert.equal(inserted.description_json, undefined);
+  const task = await createTask(client, "user-1", {
+    operationKey: "operation-1",
+    title: "Ship Phase 2",
+  });
+  assert.equal(captured.name, "create_task_ordered");
+  assert.equal(captured.args.p_title, "Ship Phase 2");
+  assert.equal(captured.args.p_status, "not_started");
+  assert.equal(captured.args.p_owner_id, "user-1");
+  assert.equal(captured.args.p_operation_key, "operation-1");
+  assert.deepEqual(captured.args.p_description_json, {});
   assert.equal(task.id, "new-id");
 });
 
 test("createTask passes description_json through when provided", async () => {
-  let inserted = null;
+  let captured = null;
   const client = {
-    from() {
-      return {
-        insert(row) {
-          inserted = row;
-          return {
-            select: () => ({
-              single: async () => ({ data: { id: "new-id", ...row }, error: null }),
-            }),
-          };
-        },
-      };
+    async rpc(name, args) {
+      captured = { name, args };
+      return { data: { id: "new-id", ...args }, error: null };
     },
   };
   await createTask(client, "user-1", {
+    operationKey: "operation-2",
     title: "Ship Phase 2",
     description_json: { text: "Board parity", tags: ["Product"], estimateMinutes: 60 },
   });
-  assert.deepEqual(inserted.description_json, {
+  assert.deepEqual(captured.args.p_description_json, {
     text: "Board parity",
     tags: ["Product"],
     estimateMinutes: 60,

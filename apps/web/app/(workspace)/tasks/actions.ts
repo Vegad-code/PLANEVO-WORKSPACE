@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
@@ -7,7 +8,7 @@ import {
   createTask,
   deleteSubtask,
   deleteTask,
-  moveTaskAndStatus,
+  moveTaskOrdered,
   toggleSubtask,
   updateTaskAndStatus,
 } from "@planevo/core/mutations/product-tasks";
@@ -49,7 +50,7 @@ import {
 
 export type TaskActionResult<T = undefined> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code?: string; correlationId?: string };
 
 const taskIdSchema = z.string().uuid();
 const boardStatusSchema = z.enum([
@@ -71,9 +72,11 @@ const uploadedAttachmentSchema = z.object({
     .int()
     .positive()
     .max(MAX_TASK_ATTACHMENT_BYTES),
+  claimOperationKey: z.string().uuid(),
 });
 
 const createProductTaskSchema = z.object({
+  operationKey: z.string().uuid(),
   title: z.string().trim().min(1).max(500),
   description: z.string().trim().max(20_000),
   status: boardStatusSchema,
@@ -152,9 +155,13 @@ type OwnedTask = Pick<
 >;
 
 function actionError(cause: unknown, fallback: string): TaskActionResult<never> {
+  const correlationId = randomUUID();
+  console.error(`[tasks:${correlationId}]`, cause);
   return {
     ok: false,
-    error: cause instanceof Error ? cause.message : fallback,
+    code: "TASK_ACTION_FAILED",
+    error: fallback,
+    correlationId,
   };
 }
 
@@ -292,22 +299,6 @@ async function requireOwnedSubtask(
   await requireOwnedTask(access, data.task_id);
 }
 
-async function resolveNeighborPosition(
-  access: DataAccess,
-  neighborId: string | null,
-  movingTaskId: string,
-  targetStatus: z.infer<typeof boardStatusSchema>,
-): Promise<number | null> {
-  if (!neighborId) return null;
-  if (neighborId === movingTaskId) throw new Error("Invalid board neighbor.");
-
-  const neighbor = await requireOwnedTask(access, neighborId);
-  if (neighbor.status !== targetStatus) {
-    throw new Error("The task board changed. Refresh and try the move again.");
-  }
-  return neighbor.position;
-}
-
 function uploadedAttachmentValues(formData: FormData): unknown[] {
   return formData.getAll("attachments").map((entry) => {
     if (typeof entry !== "string") return null;
@@ -406,6 +397,7 @@ async function registerUploadedAttachment(
     await claimTaskAttachment(access.client, access.ownerId, {
       taskId,
       fileSourceId: attachment.sourceId,
+      operationKey: attachment.claimOperationKey,
     });
   } catch (cause) {
     const { data: links, error: confirmationError } = await access.client
@@ -453,6 +445,7 @@ export async function createProductTaskAction(
     const dueAtValue = formData.get("dueAt");
     const estimateValue = formData.get("estimateMinutes");
     const parsed = createProductTaskSchema.safeParse({
+      operationKey: formData.get("operationKey"),
       title: formData.get("title"),
       description: formData.get("description") ?? "",
       status: formData.get("status") || "not_started",
@@ -491,6 +484,7 @@ export async function createProductTaskAction(
     }
 
     const task = await createTask(access.client, access.ownerId, {
+      operationKey: parsed.data.operationKey,
       title: parsed.data.title,
       status: parsed.data.status,
       priority: parsed.data.priority,
@@ -588,31 +582,13 @@ export async function moveProductTaskAction(input: {
     const parsed = moveProductTaskSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Invalid task move." };
     await requireOwnedTask(access, parsed.data.taskId);
-    const [before, after] = await Promise.all([
-      resolveNeighborPosition(
-        access,
-        parsed.data.beforeTaskId,
-        parsed.data.taskId,
-        parsed.data.status,
-      ),
-      resolveNeighborPosition(
-        access,
-        parsed.data.afterTaskId,
-        parsed.data.taskId,
-        parsed.data.status,
-      ),
-    ]);
-    if (before !== null && after !== null && before >= after) {
-      throw new Error("The task board changed. Refresh and try the move again.");
-    }
-
-    await moveTaskAndStatus(
+    await moveTaskOrdered(
       access.client,
       access.ownerId,
       parsed.data.taskId,
-      before,
-      after,
       parsed.data.status,
+      parsed.data.beforeTaskId,
+      parsed.data.afterTaskId,
     );
     revalidatePath("/tasks");
     return { ok: true, data: undefined };
@@ -689,6 +665,7 @@ export async function deleteProductSubtaskAction(input: {
 
 export async function scheduleProductTaskAction(input: {
   taskId: string;
+  operationKey: string;
   startsAt: string;
   endsAt: string;
 }): Promise<TaskActionResult<{ eventId: string }>> {
@@ -705,6 +682,7 @@ export async function scheduleProductTaskAction(input: {
     const task = await requireOwnedTask(access, parsed.data.taskId);
     const event = await scheduleTask(access.client, access.ownerId, {
       taskId: task.id,
+      operationKey: parsed.data.operationKey,
       title: task.title,
       startsAt: parsed.data.startsAt,
       endsAt: parsed.data.endsAt,

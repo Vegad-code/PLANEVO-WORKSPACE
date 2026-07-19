@@ -33,6 +33,7 @@ async function requestUploadTarget(file: File): Promise<{
       name: file.name,
       mimeType: file.type,
       sizeBytes: file.size,
+      operationKey: crypto.randomUUID(),
     }),
   });
   const payload = (await response.json().catch(() => null)) as
@@ -90,6 +91,7 @@ export async function uploadTaskAttachments(
         name: file.name,
         mimeType: file.type,
         sizeBytes: file.size,
+        claimOperationKey: crypto.randomUUID(),
       });
     }
     return uploaded;

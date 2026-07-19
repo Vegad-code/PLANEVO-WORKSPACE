@@ -11,6 +11,7 @@ export const taskCrossLinkOptionsInputSchema = z
 export const scheduleTaskActionInputSchema = z
   .object({
     taskId: resourceIdSchema,
+    operationKey: resourceIdSchema,
     startsAt: offsetDateTimeSchema,
     endsAt: offsetDateTimeSchema,
   })
