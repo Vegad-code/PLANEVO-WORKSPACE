@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   scheduleTask,
   attachFileToTask,
+  claimTaskAttachment,
   linkTaskToWorkspace,
 } from "./task-cross-links.ts";
+
+const CLAIM_MIGRATION = readFileSync(
+  new URL(
+    "../../../../supabase/migrations/20260718140000_task_attachment_claim.sql",
+    import.meta.url,
+  ),
+  "utf8",
+).toLowerCase();
 
 test("scheduleTask creates calendar_event with task_id on the default calendar", async () => {
   const inserts = [];
@@ -108,6 +118,61 @@ test("attachFileToTask treats a duplicate attachment as idempotent success", asy
   };
   // Re-attaching an already-linked file must not throw.
   await attachFileToTask(client, { taskId: "task-1", fileSourceId: "file-9" });
+});
+
+test("claimTaskAttachment delegates the owned source and task to one RPC", async () => {
+  let captured = null;
+  const client = {
+    async rpc(name, args) {
+      captured = { name, args };
+      return { data: null, error: null };
+    },
+  };
+
+  await claimTaskAttachment(client, "user-1", {
+    taskId: "task-1",
+    fileSourceId: "file-9",
+  });
+
+  assert.deepEqual(captured, {
+    name: "claim_task_attachment",
+    args: {
+      p_owner_id: "user-1",
+      p_file_source_id: "file-9",
+      p_task_id: "task-1",
+    },
+  });
+});
+
+test("claimTaskAttachment surfaces an atomic RPC failure", async () => {
+  const client = {
+    async rpc() {
+      return {
+        data: null,
+        error: { code: "P0001", message: "attachment source not claimable" },
+      };
+    },
+  };
+
+  await assert.rejects(
+    claimTaskAttachment(client, "user-1", {
+      taskId: "task-1",
+      fileSourceId: "file-9",
+    }),
+    /not claimable/,
+  );
+});
+
+test("claim migration locks, verifies, links, and marks the source in one invoker transaction", () => {
+  assert.match(CLAIM_MIGRATION, /create or replace function public\.claim_task_attachment/);
+  assert.match(CLAIM_MIGRATION, /security invoker/);
+  assert.match(CLAIM_MIGRATION, /from public\.file_sources[\s\S]*for update/);
+  assert.match(CLAIM_MIGRATION, /user_id = p_owner_id/);
+  assert.match(CLAIM_MIGRATION, /from public\.tasks[\s\S]*user_id = p_owner_id/);
+  assert.match(CLAIM_MIGRATION, /insert into public\.file_links/);
+  assert.match(CLAIM_MIGRATION, /update public\.file_sources/);
+  assert.match(CLAIM_MIGRATION, /'task_attachment_state', 'claimed'/);
+  assert.match(CLAIM_MIGRATION, /'claimed_task_id', p_task_id/);
 });
 
 test("linkTaskToWorkspace delegates to linkResourceToWorkspace with resource_type task", async () => {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { Icon } from "@/components/ui/planevo-icon";
+import { isVisibleFileSourceMetadata } from "@/lib/tasks/task-attachments";
 
 type Result = { id: string; title: string; kind: "Page" | "Database" | "File"; href: string };
 
@@ -15,12 +16,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     const [{ data: pages }, { data: databases }, { data: files }] = await Promise.all([
       access.client.from("pages").select("id,title").eq("workspace_id", workspace.id).eq("is_archived", false).ilike("title", `%${query}%`).limit(8),
       access.client.from("databases").select("id,name").eq("workspace_id", workspace.id).ilike("name", `%${query}%`).limit(8),
-      access.client.from("file_sources").select("id,name,page_id").eq("workspace_id", workspace.id).ilike("name", `%${query}%`).limit(8),
+      access.client.from("file_sources").select("id,name,page_id,metadata_json").eq("workspace_id", workspace.id).ilike("name", `%${query}%`).limit(32),
     ]);
+    const visibleFiles = (files ?? [])
+      .filter((file) => isVisibleFileSourceMetadata(file.metadata_json))
+      .slice(0, 8);
     results = [
       ...(pages ?? []).map((page) => ({ id: page.id, title: page.title, kind: "Page" as const, href: `/pages/${page.id}` })),
       ...(databases ?? []).map((database) => ({ id: database.id, title: database.name, kind: "Database" as const, href: `/databases/${database.id}` })),
-      ...(files ?? []).map((file) => ({ id: file.id, title: file.name, kind: "File" as const, href: file.page_id ? `/pages/${file.page_id}` : "/files" })),
+      ...visibleFiles.map((file) => ({ id: file.id, title: file.name, kind: "File" as const, href: file.page_id ? `/pages/${file.page_id}` : "/files" })),
     ];
   }
 

@@ -26,9 +26,9 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
 };
 
 const PRIORITY_STYLES: Record<TaskPriority, string> = {
-  high: "border-brick bg-brick-tint text-brick",
+  high: "border-brick bg-brick-tint text-ink",
   medium: "border-border-strong bg-paper text-ink",
-  low: "border-meadow bg-meadow-tint text-meadow",
+  low: "border-meadow bg-meadow-tint text-ink",
 };
 
 function orderedTasks(tasks: TaskWithMeta[]): TaskWithMeta[] {
@@ -96,12 +96,12 @@ function TaskListRow({
           type="button"
           onClick={() => onTaskSelect(task.id)}
           aria-label={`Open task: ${title}`}
-          className="flex w-full min-w-max items-center gap-4 px-4 py-3 text-left outline-none transition-colors hover:bg-paper focus-visible:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"
+          className="flex w-full min-w-max items-center gap-4 bg-surface-raised px-3 py-2.5 text-left outline-none transition-colors hover:bg-paper focus-visible:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"
         >
           {rowContent}
         </button>
       ) : (
-        <div className="flex min-w-max items-center gap-4 px-4 py-3">
+        <div className="flex min-w-max items-center gap-4 bg-surface-raised px-3 py-2.5">
           {rowContent}
         </div>
       )}
@@ -123,7 +123,7 @@ function TaskStatusGroup({
 
   return (
     <section aria-labelledby={headingId}>
-      <div className="flex items-center justify-between gap-3 border-b border-border bg-paper px-4 py-2">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-sidebar px-3 py-2">
         <h3 id={headingId} className="text-small font-medium text-ink">
           {TASK_STATUS_LABELS[status]}
         </h3>
@@ -137,7 +137,7 @@ function TaskStatusGroup({
       {tasks.length > 0 ? (
         <ul>{tasks.map((task) => <TaskListRow key={task.id} task={task} onTaskSelect={onTaskSelect} />)}</ul>
       ) : (
-        <p className="px-4 py-3 text-small text-text-muted">No tasks in this group.</p>
+        <p className="bg-surface-raised px-3 py-3 text-small text-text-muted">No tasks in this group.</p>
       )}
     </section>
   );
@@ -148,7 +148,7 @@ export function TaskList({ tasks, onTaskSelect }: TaskListProps) {
     <div
       role="region"
       aria-label="Tasks list"
-      className="overflow-x-auto rounded-card border border-border bg-surface-raised"
+      className="overflow-x-auto rounded-card border border-border bg-paper"
     >
       <div className="min-w-max">
         {TASK_STATUSES.map((status) => (

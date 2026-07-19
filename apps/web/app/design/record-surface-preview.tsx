@@ -1,8 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { DatabasePropertyRow } from "@planevo/core/types/database.types";
 import type { Json } from "@planevo/core/types/database.types";
-import { RecordSurface } from "@/features/database/record-surface";
+
+const RecordSurface = dynamic(
+  () =>
+    import("@/features/database/record-surface").then(
+      (module) => module.RecordSurface,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-6 text-small text-text-secondary">
+        Loading record preview…
+      </div>
+    ),
+  },
+);
 
 const SAMPLE_PROPERTIES: DatabasePropertyRow[] = [
   {

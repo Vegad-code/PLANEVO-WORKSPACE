@@ -1,6 +1,10 @@
 import { positionBetween } from "@planevo/core/ordering/fractional";
 
-export type TaskBoardStatus = "not_started" | "in_progress" | "done";
+export type TaskBoardStatus =
+  | "not_started"
+  | "in_progress"
+  | "in_review"
+  | "done";
 
 type TaskBoardOrderItem = {
   id: string;

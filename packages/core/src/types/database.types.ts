@@ -483,6 +483,14 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      claim_task_attachment: {
+        Args: {
+          p_owner_id: string;
+          p_file_source_id: string;
+          p_task_id: string;
+        };
+        Returns: undefined;
+      };
       create_planevo_workspace: {
         Args: { p_owner_id: string; p_name: string; p_icon?: string | null };
         Returns: Json;

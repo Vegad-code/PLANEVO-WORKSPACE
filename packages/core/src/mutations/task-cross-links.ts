@@ -90,6 +90,24 @@ export async function attachFileToTask(
   if (error && error.code !== UNIQUE_VIOLATION) throw error;
 }
 
+/**
+ * Atomically turn an upload reservation into a task attachment. The database
+ * function locks and verifies both owned records, inserts file_links, and marks
+ * the source claimed in one transaction.
+ */
+export async function claimTaskAttachment(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: AttachFileToTaskInput,
+): Promise<void> {
+  const { error } = await client.rpc("claim_task_attachment", {
+    p_owner_id: userId,
+    p_file_source_id: input.fileSourceId,
+    p_task_id: input.taskId,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export type LinkTaskToWorkspaceInput = {
   taskId: string;
   workspaceId: string;

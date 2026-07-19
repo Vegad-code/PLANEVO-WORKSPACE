@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import {
   TASK_PRIORITIES,
@@ -53,6 +54,12 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: "High",
   medium: "Medium",
   low: "Low",
+};
+
+const PRIORITY_STYLES: Record<TaskPriority, string> = {
+  high: "border-brick bg-brick-tint text-ink",
+  medium: "border-border-strong bg-paper text-ink",
+  low: "border-meadow bg-meadow-tint text-ink",
 };
 
 const STATUS_ORDER = new Map(TASK_STATUSES.map((status, index) => [status, index]));
@@ -126,21 +133,25 @@ export function TaskTable({ tasks, onTaskSelect }: TaskTableProps) {
       role="region"
       aria-label="Tasks table. Scroll horizontally to see all columns."
       tabIndex={0}
-      className="overflow-x-auto rounded-card border border-border bg-surface-raised outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+      className="overflow-x-auto rounded-card border border-border bg-paper outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
     >
       <table className="min-w-full border-collapse text-left">
-        <thead className="bg-paper">
+        <thead className="bg-sidebar">
           <tr>
             {COLUMNS.map((column) => {
               const isActive = sort.key === column.key;
               const ariaSort = isActive ? sort.direction : "none";
+              const SortIcon =
+                sort.direction === "ascending"
+                  ? ChevronUpIcon
+                  : ChevronDownIcon;
 
               return (
                 <th
                   key={column.key}
                   scope="col"
                   aria-sort={ariaSort}
-                  className={`border-b border-border px-4 py-3 text-label uppercase text-text-muted ${
+                  className={`border-b border-border px-3 py-2.5 text-label uppercase text-text-muted ${
                     column.key === "title" ? "min-w-64" : "whitespace-nowrap"
                   }`}
                 >
@@ -151,9 +162,7 @@ export function TaskTable({ tasks, onTaskSelect }: TaskTableProps) {
                   >
                     {column.label}
                     {isActive ? (
-                      <span aria-hidden="true">
-                        {sort.direction === "ascending" ? "↑" : "↓"}
-                      </span>
+                      <SortIcon aria-hidden="true" className="size-3.5" />
                     ) : null}
                     <span className="sr-only">
                       {isActive
@@ -172,8 +181,8 @@ export function TaskTable({ tasks, onTaskSelect }: TaskTableProps) {
             const due = dueTimestamp(task.due_at);
 
             return (
-              <tr key={task.id} className="border-b border-border last:border-b-0 hover:bg-paper">
-                <th scope="row" className="px-4 py-3 text-body font-medium text-ink">
+              <tr key={task.id} className="border-b border-border bg-surface-raised last:border-b-0 hover:bg-paper">
+                <th scope="row" className="px-3 py-2.5 text-body font-medium text-ink">
                   {onTaskSelect ? (
                     <button
                       type="button"
@@ -187,25 +196,31 @@ export function TaskTable({ tasks, onTaskSelect }: TaskTableProps) {
                     title
                   )}
                 </th>
-                <td className="whitespace-nowrap px-4 py-3 text-small text-text-secondary">
+                <td className="whitespace-nowrap px-3 py-2.5 text-small text-text-secondary">
                   {TASK_STATUS_LABELS[task.status]}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-small text-text-secondary">
-                  {task.priority ? PRIORITY_LABELS[task.priority] : "No priority"}
+                <td className="whitespace-nowrap px-3 py-2.5 text-small text-text-secondary">
+                  {task.priority ? (
+                    <span className={`rounded-full border px-2 py-0.5 text-label ${PRIORITY_STYLES[task.priority]}`}>
+                      {PRIORITY_LABELS[task.priority]}
+                    </span>
+                  ) : (
+                    "No priority"
+                  )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-small text-text-secondary">
+                <td className="whitespace-nowrap px-3 py-2.5 text-small text-text-secondary">
                   {due !== null ? (
                     <time dateTime={new Date(due).toISOString()}>
                       {DATE_FORMATTER.format(due)}
                     </time>
                   ) : (
-                    "—"
+                    "None"
                   )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-mono text-text-secondary">
+                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-mono text-text-secondary">
                   {task.subtaskDone} / {task.subtaskTotal}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-mono text-text-secondary">
+                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-mono text-text-secondary">
                   {task.fileCount}
                 </td>
               </tr>

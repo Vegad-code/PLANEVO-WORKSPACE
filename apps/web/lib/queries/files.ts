@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
+import { isVisibleFileSourceMetadata } from "@/lib/tasks/task-attachments";
 
 export type FileSourceItem = {
   id: string;
@@ -25,14 +26,18 @@ export async function loadFilesData(): Promise<FilesData> {
 
   const { data: rows, error } = await access.client
     .from("file_sources")
-    .select("id,name,mime_type,size_bytes,ingestion_status,created_at,page_id,storage_path")
+    .select(
+      "id,name,mime_type,size_bytes,ingestion_status,created_at,page_id,storage_path,metadata_json",
+    )
     .eq("workspace_id", workspace.id)
     .order("created_at", { ascending: false })
     // ponytail: newest 100 files; add paging when a library outgrows this.
     .limit(100);
   if (error) throw error;
 
-  const fileRows = rows ?? [];
+  const fileRows = (rows ?? []).filter((row) =>
+    isVisibleFileSourceMetadata(row.metadata_json),
+  );
   const storageRows = fileRows.filter((row) => !row.page_id);
   const signedUrls = new Map<string, string>();
   if (storageRows.length) {

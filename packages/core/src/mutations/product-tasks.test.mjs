@@ -2,10 +2,43 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createTask,
+  moveTaskAndStatus,
+  updateTaskAndStatus,
   updateTaskStatus,
   reorderTask,
   createSubtask,
 } from "./product-tasks.ts";
+
+function taskUpdateHarness(initialRow, failure = null) {
+  const row = { ...initialRow };
+  const patches = [];
+  const client = {
+    from(table) {
+      assert.equal(table, "tasks");
+      return {
+        update(patch) {
+          patches.push(patch);
+          return {
+            eq(column, value) {
+              assert.equal(column, "id");
+              assert.equal(value, "task-1");
+              return {
+                async eq(ownerColumn, ownerId) {
+                  assert.equal(ownerColumn, "user_id");
+                  assert.equal(ownerId, "user-1");
+                  if (failure) return { error: failure };
+                  Object.assign(row, patch);
+                  return { error: null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  return { client, row, patches };
+}
 
 test("createTask inserts with defaults", async () => {
   let inserted = null;
@@ -27,6 +60,8 @@ test("createTask inserts with defaults", async () => {
   assert.equal(inserted.title, "Ship Phase 2");
   assert.equal(inserted.status, "not_started");
   assert.equal(inserted.user_id, "user-1");
+  assert.equal(typeof inserted.position, "number");
+  assert.ok(inserted.position > 0);
   assert.equal(inserted.description_json, undefined);
   assert.equal(task.id, "new-id");
 });
@@ -123,6 +158,91 @@ test("reorderTask sets midpoint position via fractional ordering", async () => {
   await reorderTask(client, "user-1", "task-1", 2, 4);
   assert.equal(patch.position, 3);
   assert.ok(patch.updated_at);
+});
+
+test("updateTaskAndStatus commits fields, status, and completion in one update", async () => {
+  const harness = taskUpdateHarness({
+    title: "Old title",
+    status: "in_progress",
+    completed_at: null,
+  });
+
+  await updateTaskAndStatus(harness.client, "user-1", "task-1", {
+    title: "Ready to ship",
+    priority: "high",
+    due_at: "2026-07-30T19:00:00.000Z",
+    description_json: { text: "Final pass" },
+    status: "done",
+  });
+
+  assert.equal(harness.patches.length, 1);
+  assert.equal(harness.row.title, "Ready to ship");
+  assert.equal(harness.row.priority, "high");
+  assert.equal(harness.row.status, "done");
+  assert.ok(harness.row.completed_at);
+});
+
+test("updateTaskAndStatus failure leaves every logical field unchanged", async () => {
+  const initial = {
+    title: "Old title",
+    priority: "low",
+    status: "in_progress",
+    completed_at: null,
+  };
+  const harness = taskUpdateHarness(initial, new Error("database unavailable"));
+
+  await assert.rejects(
+    updateTaskAndStatus(harness.client, "user-1", "task-1", {
+      title: "New title",
+      status: "done",
+    }),
+    /database unavailable/,
+  );
+
+  assert.equal(harness.patches.length, 1);
+  assert.deepEqual(harness.row, initial);
+});
+
+test("moveTaskAndStatus commits position and clears completion in one update", async () => {
+  const harness = taskUpdateHarness({
+    position: 1,
+    status: "done",
+    completed_at: "2026-07-20T19:00:00.000Z",
+  });
+
+  await moveTaskAndStatus(
+    harness.client,
+    "user-1",
+    "task-1",
+    2,
+    4,
+    "in_review",
+  );
+
+  assert.equal(harness.patches.length, 1);
+  assert.equal(harness.row.position, 3);
+  assert.equal(harness.row.status, "in_review");
+  assert.equal(harness.row.completed_at, null);
+});
+
+test("moveTaskAndStatus failure leaves both position and status unchanged", async () => {
+  const initial = { position: 1, status: "not_started", completed_at: null };
+  const harness = taskUpdateHarness(initial, new Error("write rejected"));
+
+  await assert.rejects(
+    moveTaskAndStatus(
+      harness.client,
+      "user-1",
+      "task-1",
+      2,
+      4,
+      "done",
+    ),
+    /write rejected/,
+  );
+
+  assert.equal(harness.patches.length, 1);
+  assert.deepEqual(harness.row, initial);
 });
 
 test("createSubtask inserts into task_subtasks", async () => {

@@ -20,6 +20,10 @@ export type UpdateTaskInput = {
   description_json?: Record<string, unknown>;
 };
 
+export type UpdateTaskAndStatusInput = UpdateTaskInput & {
+  status: TaskStatus;
+};
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -38,6 +42,10 @@ export async function createTask(
       status: input.status ?? "not_started",
       priority: input.priority ?? null,
       due_at: input.due_at ?? null,
+      // New tasks append without an extra max(position) read. As with
+      // subtasks below, millisecond positions keep independent creation paths
+      // (modal and quick capture) out of the database's shared zero default.
+      position: Date.now(),
       ...(input.description_json !== undefined
         ? { description_json: input.description_json as Json }
         : {}),
@@ -66,6 +74,32 @@ export async function updateTask(
         ? { description_json: input.description_json as Json }
         : {}),
       updated_at: nowIso(),
+    })
+    .eq("id", taskId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+/** Apply editable fields and status/completion semantics in one row update. */
+export async function updateTaskAndStatus(
+  client: SupabaseClient<Database>,
+  userId: string,
+  taskId: string,
+  input: UpdateTaskAndStatusInput,
+): Promise<void> {
+  const timestamp = nowIso();
+  const { error } = await client
+    .from("tasks")
+    .update({
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      ...(input.due_at !== undefined ? { due_at: input.due_at } : {}),
+      ...(input.description_json !== undefined
+        ? { description_json: input.description_json as Json }
+        : {}),
+      status: input.status,
+      completed_at: input.status === "done" ? timestamp : null,
+      updated_at: timestamp,
     })
     .eq("id", taskId)
     .eq("user_id", userId);
@@ -106,6 +140,29 @@ export async function reorderTask(
   const { error } = await client
     .from("tasks")
     .update({ position: positionBetween(before, after), updated_at: nowIso() })
+    .eq("id", taskId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+/** Apply board position and status/completion semantics in one row update. */
+export async function moveTaskAndStatus(
+  client: SupabaseClient<Database>,
+  userId: string,
+  taskId: string,
+  before: number | null,
+  after: number | null,
+  status: TaskStatus,
+): Promise<void> {
+  const timestamp = nowIso();
+  const { error } = await client
+    .from("tasks")
+    .update({
+      position: positionBetween(before, after),
+      status,
+      completed_at: status === "done" ? timestamp : null,
+      updated_at: timestamp,
+    })
     .eq("id", taskId)
     .eq("user_id", userId);
   if (error) throw error;
