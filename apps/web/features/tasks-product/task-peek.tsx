@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Square, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import {
@@ -10,6 +11,8 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "@planevo/core/types/tasks";
+import { Button } from "@/components/ui/button";
+import { SelectField } from "@/components/ui/select";
 import { Icon } from "@/components/ui/planevo-icon";
 import { Dialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
@@ -20,6 +23,10 @@ import {
   toggleProductSubtaskAction,
   updateProductTaskAction,
 } from "@/app/(workspace)/tasks/actions";
+import {
+  ESTIMATE_OPTIONS,
+  TASK_TAGS,
+} from "./create-task-dialog";
 import { TaskCrossLinkActions } from "./cross-link-actions";
 
 type TaskPeekProps = {
@@ -50,6 +57,17 @@ function dueAtFromDateInput(value: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function taskTags(task: TaskWithMeta): string[] {
+  const tags = task.description_json.tags;
+  if (!Array.isArray(tags)) return [];
+  return tags.filter((tag): tag is string => typeof tag === "string");
+}
+
+function taskEstimateMinutes(task: TaskWithMeta): string {
+  const value = task.description_json.estimateMinutes;
+  return typeof value === "number" && value > 0 ? String(value) : "";
+}
+
 export function TaskPeek({ task, onClose }: TaskPeekProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -58,7 +76,17 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
   const [priority, setPriority] = useState<TaskPriority | "">(task.priority ?? "");
   const [dueDate, setDueDate] = useState(dateInputValue(task.due_at));
   const [description, setDescription] = useState(descriptionText(task));
+  const [tags, setTags] = useState<string[]>(taskTags(task));
+  const [estimate, setEstimate] = useState(taskEstimateMinutes(task));
   const [subtaskTitle, setSubtaskTitle] = useState("");
+
+  function toggleTag(tag: string) {
+    setTags((current) =>
+      current.includes(tag)
+        ? current.filter((existing) => existing !== tag)
+        : [...current, tag],
+    );
+  }
 
   function refreshAfter(message: string) {
     toast(message);
@@ -74,6 +102,8 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
         priority: priority || null,
         dueAt: dueAtFromDateInput(dueDate),
         description,
+        tags,
+        estimateMinutes: estimate ? Number.parseInt(estimate, 10) : null,
       });
       if (!result.ok) {
         toast(result.error, { tone: "error" });
@@ -167,7 +197,7 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          <div className="space-y-5">
+          <div className="flex flex-col gap-5">
             <label className="block">
               <span className="mb-2 block text-label uppercase text-text-muted">Title</span>
               <input
@@ -179,46 +209,80 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
             </label>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-label uppercase text-text-muted">Status</span>
-                <select
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value as TaskStatus)}
-                  className={inputClassName}
-                >
-                  {TASK_STATUSES.map((option) => (
-                    <option key={option} value={option}>
-                      {TASK_STATUS_LABELS[option]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-label uppercase text-text-muted">Priority</span>
-                <select
-                  value={priority}
-                  onChange={(event) => setPriority(event.target.value as TaskPriority | "")}
-                  className={inputClassName}
-                >
-                  <option value="">No priority</option>
-                  {TASK_PRIORITIES.map((option) => (
-                    <option key={option} value={option}>
-                      {PRIORITY_LABELS[option]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SelectField
+                label="Status"
+                value={status}
+                onChange={(event) => setStatus(event.target.value as TaskStatus)}
+              >
+                {TASK_STATUSES.map((option) => (
+                  <option key={option} value={option}>
+                    {TASK_STATUS_LABELS[option]}
+                  </option>
+                ))}
+              </SelectField>
+              <SelectField
+                label="Priority"
+                value={priority}
+                onChange={(event) =>
+                  setPriority(event.target.value as TaskPriority | "")
+                }
+              >
+                <option value="">No priority</option>
+                {TASK_PRIORITIES.map((option) => (
+                  <option key={option} value={option}>
+                    {PRIORITY_LABELS[option]}
+                  </option>
+                ))}
+              </SelectField>
             </div>
 
-            <label className="block">
-              <span className="mb-2 block text-label uppercase text-text-muted">Due date</span>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-                className={inputClassName}
-              />
-            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-label uppercase text-text-muted">Due date</span>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) => setDueDate(event.target.value)}
+                  className={inputClassName}
+                />
+              </label>
+              <SelectField
+                label="Estimate"
+                value={estimate}
+                onChange={(event) => setEstimate(event.target.value)}
+              >
+                {ESTIMATE_OPTIONS.map((option) => (
+                  <option key={option.label} value={option.minutes}>
+                    {option.label}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+
+            <fieldset>
+              <legend className="mb-2 block text-label uppercase text-text-muted">Tags</legend>
+              <div className="flex flex-wrap gap-2">
+                {TASK_TAGS.map((tag) => {
+                  const isSelected = tags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => toggleTag(tag)}
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-small outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+                        isSelected
+                          ? "border-ink bg-paper text-ink"
+                          : "border-border bg-paper text-text-secondary hover:border-border-strong hover:text-ink"
+                      }`}
+                    >
+                      <Square aria-hidden="true" className="size-3 shrink-0" />
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
 
             <label className="block">
               <span className="mb-2 block text-label uppercase text-text-muted">Description</span>
@@ -246,7 +310,7 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
                 </span>
               </div>
 
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-3 flex flex-col gap-2">
                 {task.subtasks.map((subtask) => (
                   <li
                     key={subtask.id}
@@ -300,22 +364,23 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             disabled={isPending}
             onClick={removeTask}
-            className="rounded-lg px-3 py-2 text-small font-medium text-brick outline-none hover:bg-brick-tint focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-brick disabled:opacity-50"
+            className="text-brick hover:bg-brick-tint"
           >
             Delete task
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ink"
             disabled={isPending || !title.trim()}
             onClick={saveTask}
-            className="rounded-lg bg-ink px-4 py-2 text-small font-medium text-paper outline-none hover:opacity-85 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50"
           >
             {isPending ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </footer>
       </div>
     </Dialog>

@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  CalendarDaysIcon,
-  PaperClipIcon,
-  Squares2X2Icon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+  Calendar,
+  LayoutGrid,
+  Paperclip,
+  X,
+} from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -57,7 +57,7 @@ function CrossLinkActionButtons({
         onClick={onSchedule}
         className={actionButtonClassName}
       >
-        <CalendarDaysIcon aria-hidden="true" className="size-5 text-text-muted" />
+        <Calendar aria-hidden="true" className="size-5 text-text-muted" />
         <span>Schedule</span>
       </button>
       <button
@@ -67,7 +67,7 @@ function CrossLinkActionButtons({
         onClick={onAttachFile}
         className={actionButtonClassName}
       >
-        <PaperClipIcon aria-hidden="true" className="size-5 text-text-muted" />
+        <Paperclip aria-hidden="true" className="size-5 text-text-muted" />
         <span>
           Attach file
           <span className="ml-1 font-mono text-mono text-text-muted">
@@ -82,7 +82,7 @@ function CrossLinkActionButtons({
         onClick={onAddToWorkspace}
         className={actionButtonClassName}
       >
-        <Squares2X2Icon aria-hidden="true" className="size-5 text-text-muted" />
+        <LayoutGrid aria-hidden="true" className="size-5 text-text-muted" />
         <span>Add to workspace</span>
       </button>
     </div>
@@ -181,7 +181,7 @@ function FileOptionsList({
               className="flex w-full items-center gap-3 rounded-card border border-border bg-paper p-3 text-left outline-none hover:border-border-strong hover:bg-surface-raised focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50"
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-muted">
-                <PaperClipIcon aria-hidden="true" className="size-4" />
+                <Paperclip aria-hidden="true" className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-small font-medium text-ink">
@@ -236,7 +236,7 @@ function WorkspaceOptionsList({
               className="flex w-full items-center gap-3 rounded-card border border-border bg-paper p-3 text-left outline-none hover:border-border-strong hover:bg-surface-raised focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-muted">
-                <Squares2X2Icon aria-hidden="true" className="size-4" />
+                <LayoutGrid aria-hidden="true" className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-small font-medium text-ink">
@@ -303,7 +303,7 @@ function DialogHeader({
         aria-label={`Close ${title.toLowerCase()}`}
         className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50"
       >
-        <XMarkIcon aria-hidden="true" className="size-4" />
+        <X aria-hidden="true" className="size-4" />
       </button>
     </header>
   );

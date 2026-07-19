@@ -115,6 +115,8 @@ const updateProductTaskSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).nullable(),
   dueAt: dueAtSchema,
   description: z.string().max(20_000),
+  tags: z.array(z.string().trim().min(1).max(50)).max(8).optional(),
+  estimateMinutes: z.number().int().positive().nullable().optional(),
 });
 
 const moveProductTaskSchema = z
@@ -537,6 +539,8 @@ export async function updateProductTaskAction(input: {
   priority: (typeof TASK_PRIORITIES)[number] | null;
   dueAt: string | null;
   description: string;
+  tags?: string[];
+  estimateMinutes?: number | null;
 }): Promise<TaskActionResult> {
   try {
     const access = await requireMutationDataAccess();
@@ -552,6 +556,20 @@ export async function updateProductTaskAction(input: {
       descriptionJson.text = parsed.data.description;
     } else {
       delete descriptionJson.text;
+    }
+    if (parsed.data.tags !== undefined) {
+      if (parsed.data.tags.length > 0) {
+        descriptionJson.tags = parsed.data.tags;
+      } else {
+        delete descriptionJson.tags;
+      }
+    }
+    if (parsed.data.estimateMinutes !== undefined) {
+      if (parsed.data.estimateMinutes) {
+        descriptionJson.estimateMinutes = parsed.data.estimateMinutes;
+      } else {
+        delete descriptionJson.estimateMinutes;
+      }
     }
 
     if (parsed.data.status !== current.status) {

@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { TagIcon } from "@heroicons/react/24/outline";
+import { CloudUpload, FileText, Square, X } from "lucide-react";
 import {
   TASK_PRIORITIES,
   type TaskPriority,
 } from "@planevo/core/types/tasks";
+import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Icon } from "@/components/ui/planevo-icon";
+import { SelectField } from "@/components/ui/select";
 import {
   MAX_TASK_ATTACHMENT_BYTES,
   MAX_TASK_ATTACHMENTS,
@@ -41,6 +42,8 @@ const ESTIMATE_OPTIONS = [
   { minutes: "240", label: "4 hours" },
   { minutes: "480", label: "1 day" },
 ] as const;
+
+export { ESTIMATE_OPTIONS };
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: "High",
@@ -165,11 +168,11 @@ export function CreateTaskDialog({
             aria-label="Close create task"
             className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Icon name="close" className="size-4" />
+            <X aria-hidden="true" className="size-4" />
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
           <label className="block">
             <span className={labelClassName}>Task title</span>
             <input
@@ -195,23 +198,20 @@ export function CreateTaskDialog({
             />
           </label>
 
-          <label className="block">
-            <span className={labelClassName}>Priority</span>
-            <select
-              value={priority}
-              onChange={(event) =>
-                setPriority(event.target.value as TaskPriority | "")
-              }
-              className={inputClassName}
-            >
-              <option value="">No priority</option>
-              {TASK_PRIORITIES.map((option) => (
-                <option key={option} value={option}>
-                  {PRIORITY_LABELS[option]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            label="Priority"
+            value={priority}
+            onChange={(event) =>
+              setPriority(event.target.value as TaskPriority | "")
+            }
+          >
+            <option value="">No priority</option>
+            {TASK_PRIORITIES.map((option) => (
+              <option key={option} value={option}>
+                {PRIORITY_LABELS[option]}
+              </option>
+            ))}
+          </SelectField>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
@@ -223,20 +223,17 @@ export function CreateTaskDialog({
                 className={inputClassName}
               />
             </label>
-            <label className="block">
-              <span className={labelClassName}>Estimate</span>
-              <select
-                value={estimate}
-                onChange={(event) => setEstimate(event.target.value)}
-                className={inputClassName}
-              >
-                {ESTIMATE_OPTIONS.map((option) => (
-                  <option key={option.label} value={option.minutes}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SelectField
+              label="Estimate"
+              value={estimate}
+              onChange={(event) => setEstimate(event.target.value)}
+            >
+              {ESTIMATE_OPTIONS.map((option) => (
+                <option key={option.label} value={option.minutes}>
+                  {option.label}
+                </option>
+              ))}
+            </SelectField>
           </div>
 
           <fieldset>
@@ -257,7 +254,7 @@ export function CreateTaskDialog({
                         : "border-border bg-paper text-text-secondary hover:border-border-strong hover:text-ink"
                     }`}
                   >
-                    <TagIcon aria-hidden="true" className="size-3 shrink-0" />
+                    <Square aria-hidden="true" className="size-3 shrink-0" />
                     {tag}
                   </button>
                 );
@@ -288,7 +285,7 @@ export function CreateTaskDialog({
                   : "border-border-strong bg-paper hover:border-ink"
               }`}
             >
-              <Icon name="upload" className="size-5 text-text-muted" />
+              <CloudUpload aria-hidden="true" className="size-5 text-text-muted" />
               <span className="text-small font-medium text-ink">
                 Drop files here
               </span>
@@ -313,13 +310,13 @@ export function CreateTaskDialog({
               </p>
             ) : null}
             {files.length > 0 ? (
-              <ul className="mt-2 space-y-1.5">
+              <ul className="mt-2 flex flex-col gap-1.5">
                 {files.map((file, index) => (
                   <li
                     key={`${file.name}-${index}`}
                     className="flex items-center gap-2 rounded-lg border border-border bg-paper px-3 py-2 text-small"
                   >
-                    <Icon name="document" className="size-4 shrink-0 text-text-muted" />
+                    <FileText aria-hidden="true" className="size-4 shrink-0 text-text-muted" />
                     <span className="min-w-0 flex-1 truncate">{file.name}</span>
                     <span className="shrink-0 text-label text-text-muted">
                       {formatFileSize(file.size)}
@@ -330,7 +327,7 @@ export function CreateTaskDialog({
                       aria-label={`Remove ${file.name}`}
                       className="flex size-6 shrink-0 items-center justify-center rounded-md text-text-muted outline-none hover:bg-surface-raised hover:text-brick focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
                     >
-                      <Icon name="close" className="size-3.5" />
+                      <X aria-hidden="true" className="size-3.5" />
                     </button>
                   </li>
                 ))}
@@ -340,20 +337,12 @@ export function CreateTaskDialog({
         </div>
 
         <footer className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border-strong bg-paper px-4 py-2 text-small font-medium outline-none hover:border-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isPending || !title.trim()}
-            className="rounded-lg bg-marigold px-4 py-2 text-small font-medium text-ink outline-none hover:bg-marigold-tint focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50"
-          >
+          </Button>
+          <Button type="submit" disabled={isPending || !title.trim()}>
             {isPending ? "Creating…" : "Create task"}
-          </button>
+          </Button>
         </footer>
       </form>
     </Dialog>
