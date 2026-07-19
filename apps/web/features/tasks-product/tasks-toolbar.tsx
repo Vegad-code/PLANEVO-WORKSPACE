@@ -70,13 +70,14 @@ export function TasksToolbar({
     <div
       role="toolbar"
       aria-label="Tasks controls"
-      className="flex flex-wrap items-center gap-3"
+      className="flex flex-wrap items-center justify-between gap-3"
     >
-      <div
-        role="group"
-        aria-label="Task view"
-        className="flex rounded-lg border border-border bg-surface-raised p-0.5"
-      >
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          role="group"
+          aria-label="Task view"
+          className="flex rounded-lg border border-border bg-surface-raised p-0.5"
+        >
         {TASK_VIEWS.map((option) => {
           const isSelected = view === option;
           const ViewIcon = VIEW_ICONS[option];
@@ -87,7 +88,7 @@ export function TasksToolbar({
               type="button"
               aria-pressed={isSelected}
               onClick={() => onViewChange(option)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-small font-medium outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-product-body font-medium outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                 isSelected
                   ? "border border-border bg-paper text-ink"
                   : "border border-transparent text-text-secondary hover:text-ink"
@@ -107,7 +108,7 @@ export function TasksToolbar({
           aria-expanded={filterOpen}
           aria-controls="task-scope-filter"
           onClick={() => setFilterOpen((open) => !open)}
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-raised px-3 py-2 text-small font-medium text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           <SlidersHorizontal aria-hidden="true" className="size-4" />
           Filter
@@ -150,7 +151,7 @@ export function TasksToolbar({
                         }}
                         className="peer sr-only"
                       />
-                      <span className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-small text-ink outline-none hover:bg-surface-raised peer-focus-visible:outline peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink">
+                      <span className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-product-body text-ink outline-none hover:bg-surface-raised peer-focus-visible:outline peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink">
                         {option.label}
                         {isSelected ? (
                           <Icon
@@ -166,6 +167,7 @@ export function TasksToolbar({
             </div>
           </>
         ) : null}
+      </div>
       </div>
 
       <Button

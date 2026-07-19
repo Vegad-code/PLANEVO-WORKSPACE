@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import {
   TASK_STATUS_LABELS,
   type TaskPriority,
 } from "@planevo/core/types/tasks";
 import { Icon } from "@/components/ui/planevo-icon";
+import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
+import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import {
   groupTasksForList,
   type TaskListGrouping,
@@ -16,6 +19,7 @@ import {
 type TaskListProps = {
   tasks: TaskWithMeta[];
   onTaskSelect?: (taskId: string) => void;
+  fillHeight?: boolean;
 };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -48,7 +52,7 @@ function formatDueDate(dueAt: string | null): string {
   const date = new Date(dueAt);
   return Number.isNaN(date.getTime())
     ? "No due date"
-    : `Due ${DATE_FORMATTER.format(date)}`;
+    : DATE_FORMATTER.format(date);
 }
 
 function TaskListRow({
@@ -59,55 +63,45 @@ function TaskListRow({
   onTaskSelect?: (taskId: string) => void;
 }) {
   const title = task.title.trim() || "Untitled task";
-  const fileLabel = task.fileCount === 1 ? "file" : "files";
   const rowContent = (
     <>
-      <span className="min-w-0 flex-1 truncate text-left text-body font-medium text-ink">
+      <span className="min-w-0 flex-1 truncate text-product-title text-ink">
         {title}
       </span>
-      {task.priority ? (
-        <span
-          className={`shrink-0 rounded-full border px-2 py-1 text-label ${PRIORITY_STYLES[task.priority]}`}
-        >
-          <span className="sr-only">Priority: </span>
-          {PRIORITY_LABELS[task.priority]}
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+        {task.priority ? (
+          <span
+            className={`rounded-full border px-2.5 py-0.5 text-product-meta ${PRIORITY_STYLES[task.priority]}`}
+          >
+            <span className="sr-only">Priority: </span>
+            {PRIORITY_LABELS[task.priority]}
+          </span>
+        ) : null}
+        <span className="hidden items-center gap-1.5 text-product-body text-text-secondary sm:inline-flex">
+          <Icon name="calendar" className="size-3.5 text-text-muted" />
+          {formatDueDate(task.due_at)}
         </span>
-      ) : (
-        <span className="shrink-0 rounded-full border border-border bg-paper px-2 py-1 text-label text-text-muted">
-          No priority
+        <span className="flex items-center gap-1.5 text-product-stat tabular-nums text-text-secondary">
+          {task.subtaskDone}/{task.subtaskTotal}
+          <span className="sr-only"> subtasks complete</span>
         </span>
-      )}
-      <span className="flex shrink-0 items-center gap-1.5 text-small text-text-secondary">
-        <Icon name="calendar" className="size-4 text-text-muted" />
-        {formatDueDate(task.due_at)}
-      </span>
-      <span className="flex shrink-0 items-center gap-1.5 text-small text-text-secondary">
-        <Icon name="tasks" className="size-4 text-text-muted" />
-        {task.subtaskDone} of {task.subtaskTotal}
-        <span className="sr-only"> subtasks complete</span>
-      </span>
-      <span className="flex shrink-0 items-center gap-1.5 text-small text-text-secondary">
-        <Icon name="document" className="size-4 text-text-muted" />
-        {task.fileCount} {fileLabel}
-      </span>
+      </div>
     </>
   );
 
   return (
-    <li className="border-t border-border first:border-t-0">
+    <li className="border-b border-border last:border-b-0">
       {onTaskSelect ? (
         <button
           type="button"
           onClick={() => onTaskSelect(task.id)}
           aria-label={`Open task: ${title}`}
-          className="flex w-full min-w-max items-center gap-4 bg-surface-raised px-3 py-2.5 text-left outline-none transition-colors hover:bg-paper focus-visible:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"
+          className="flex w-full items-center gap-4 px-4 py-3 text-left outline-none transition-colors hover:bg-sidebar/40 focus-visible:bg-sidebar/40 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"
         >
           {rowContent}
         </button>
       ) : (
-        <div className="flex min-w-max items-center gap-4 bg-surface-raised px-3 py-2.5">
-          {rowContent}
-        </div>
+        <div className="flex items-center gap-4 px-4 py-3">{rowContent}</div>
       )}
     </li>
   );
@@ -134,50 +128,69 @@ function TaskGroup({
 
   return (
     <section aria-labelledby={headingId}>
-      <div className="flex items-center justify-between gap-3 border-b border-border bg-sidebar px-3 py-2">
-        <h3 id={headingId} className="text-small font-medium text-ink">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-sidebar/60 px-4 py-2.5">
+        <h3
+          id={headingId}
+          className="text-product-column text-text-muted"
+        >
           {groupLabel(groupKey, grouping)}
         </h3>
         <span
           aria-label={countLabel}
-          className="font-mono text-mono text-text-muted"
+          className="text-product-stat tabular-nums text-text-muted"
         >
-          {tasks.length}
+          {String(tasks.length).padStart(2, "0")}
         </span>
       </div>
       {tasks.length > 0 ? (
-        <ul>{tasks.map((task) => <TaskListRow key={task.id} task={task} onTaskSelect={onTaskSelect} />)}</ul>
+        <ul>
+          {tasks.map((task) => (
+            <TaskListRow key={task.id} task={task} onTaskSelect={onTaskSelect} />
+          ))}
+        </ul>
       ) : (
-        <p className="bg-surface-raised px-3 py-3 text-small text-text-muted">No tasks in this group.</p>
+        <p className="border-b border-border px-4 py-4 text-product-meta text-text-muted">
+          No tasks in this group.
+        </p>
       )}
     </section>
   );
 }
 
-export function TaskList({ tasks, onTaskSelect }: TaskListProps) {
+export function TaskList({
+  tasks,
+  onTaskSelect,
+  fillHeight = false,
+}: TaskListProps) {
   const [grouping, setGrouping] = useState<TaskListGrouping>("status");
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const layoutTransition = getShellLayoutTransition(prefersReducedMotion);
   const groups = groupTasksForList(tasks, grouping);
 
-  return (
+  const listContent = (
     <div
       role="region"
       aria-label="Tasks list"
-      className="overflow-x-auto rounded-card border border-border bg-paper"
+      className={`flex min-h-0 flex-col overflow-hidden border border-border bg-paper ${
+        fillHeight ? "min-h-0 flex-1" : ""
+      }`}
     >
-      <div className="flex justify-end border-b border-border bg-paper px-3 py-2">
-        <label className="flex items-center gap-2 text-small text-text-secondary">
+      <div className="flex shrink-0 justify-end border-b border-border bg-paper px-4 py-2.5">
+        <label className="flex items-center gap-2 text-product-body text-text-secondary">
           Group by
           <select
             value={grouping}
-            onChange={(event) => setGrouping(event.target.value as TaskListGrouping)}
-            className="rounded-lg border border-border-strong bg-paper px-2 py-1 text-small text-ink outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            onChange={(event) =>
+              setGrouping(event.target.value as TaskListGrouping)
+            }
+            className="rounded-lg border border-border bg-paper px-2.5 py-1.5 text-product-body text-ink outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             <option value="status">Status</option>
             <option value="priority">Priority</option>
           </select>
         </label>
       </div>
-      <div className="min-w-max">
+      <div className="min-h-0 flex-1 overflow-auto">
         {groups.map((group) => (
           <TaskGroup
             key={group.key}
@@ -188,6 +201,25 @@ export function TaskList({ tasks, onTaskSelect }: TaskListProps) {
           />
         ))}
       </div>
+      <div className="flex shrink-0 items-center border-t border-border bg-paper px-4 py-2.5">
+        <p className="text-product-meta tabular-nums text-text-muted">
+          Count {tasks.length}
+        </p>
+      </div>
     </div>
+  );
+
+  if (!fillHeight) {
+    return listContent;
+  }
+
+  return (
+    <motion.div
+      layout
+      transition={layoutTransition}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      {listContent}
+    </motion.div>
   );
 }

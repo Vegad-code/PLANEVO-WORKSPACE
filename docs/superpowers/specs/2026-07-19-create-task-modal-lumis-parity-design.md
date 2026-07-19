@@ -132,3 +132,5 @@ Prefer Approach A only. Do not introduce a parallel dialog component unless the 
 ---
 
 *Design v1.0 · July 19, 2026 · Approved in conversation*
+
+

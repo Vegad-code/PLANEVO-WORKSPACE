@@ -27,12 +27,13 @@ import { TaskList } from "./task-list";
 import { TaskPeek } from "./task-peek";
 import { TaskTable } from "./task-table";
 import { TasksToolbar, type TasksView } from "./tasks-toolbar";
+import { activeTasks } from "@/lib/tasks/task-view-state";
 import {
   getTasksScope,
   setTasksScope,
   type TasksScope,
 } from "@/lib/tasks/scope-prefs";
-import { activeTasks } from "@/lib/tasks/task-view-state";
+import { getTasksPageLayoutClass, isTasksFullBleedView } from "./tasks-page-layout";
 
 type TasksProductViewProps = {
   initialTasks: TaskWithMeta[];
@@ -317,25 +318,40 @@ export function TasksProductView({
       onStatusChange={moveTask}
       onTaskSelect={setSelectedTaskId}
       onCreateTask={openCreate}
+      fillHeight
     />
   ) : view === "list" ? (
-    <TaskList tasks={visibleTasks} onTaskSelect={setSelectedTaskId} />
+    <TaskList
+      tasks={visibleTasks}
+      onTaskSelect={setSelectedTaskId}
+      fillHeight
+    />
   ) : (
-    <TaskTable tasks={visibleTasks} onTaskSelect={setSelectedTaskId} />
+    <TaskTable
+      tasks={visibleTasks}
+      onTaskSelect={setSelectedTaskId}
+      fillHeight
+    />
   );
+
+  const isFullBleed = isTasksFullBleedView(view, visibleTasks.length > 0);
 
   return (
     <section
       aria-labelledby="tasks-product-title"
-      className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
+      className={`tasks-product-ui ${getTasksPageLayoutClass(view, visibleTasks.length > 0)}`}
     >
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <header
+        className={`flex flex-wrap items-end justify-between gap-4 ${
+          isFullBleed ? "mb-4 shrink-0" : "mb-8"
+        }`}
+      >
         <div>
-          <p className="text-label uppercase text-text-muted">
+          <p className="text-product-meta text-text-muted">
             {initialScope === "workspace" ? "This workspace" : "All tasks"}
           </p>
           <div className="mt-1 flex items-center gap-2.5">
-            <h1 id="tasks-product-title" className="text-h1">
+            <h1 id="tasks-product-title" className="text-h1 font-medium tracking-tight">
               Tasks
             </h1>
             <span
@@ -344,12 +360,21 @@ export function TasksProductView({
                   ? "1 task"
                   : `${visibleTasks.length} tasks`
               }
-              className="rounded-full border border-border bg-surface-raised px-2 py-0.5 font-mono text-label text-text-muted"
+              className="rounded-full border border-border bg-surface-raised px-2 py-0.5 text-product-meta tabular-nums text-text-muted"
             >
               {visibleTasks.length}
             </span>
           </div>
         </div>
+      </header>
+
+      <div
+        className={`sticky top-0 z-20 mb-4 border-b border-border/80 bg-paper/95 py-2 backdrop-blur-sm ${
+          isFullBleed
+            ? "-mx-5 shrink-0 px-5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+            : "-mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+        }`}
+      >
         <TasksToolbar
           view={view}
           scope={initialScope}
@@ -358,9 +383,14 @@ export function TasksProductView({
           onCreateTask={() => openCreate()}
           isCreateDialogOpen={createOpen}
         />
-      </header>
+      </div>
 
-      <div aria-busy={isPending}>{content}</div>
+      <div
+        aria-busy={isPending}
+        className={isFullBleed ? "flex min-h-0 flex-1 flex-col" : undefined}
+      >
+        {content}
+      </div>
 
       {createOpen ? (
         <CreateTaskDialog

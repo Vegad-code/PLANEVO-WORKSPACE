@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { parseQuickCapture } from "@planevo/core/parsing/natural-capture";
+import { classifyTaskIcon } from "@planevo/core/tasks/task-icon-classifier";
 import { quickCaptureToTaskInsert } from "@planevo/core/parsing/quick-capture-to-task";
 import { createTask, deleteTask } from "@planevo/core/mutations/product-tasks";
 import { fuzzyMatch } from "@planevo/core/search/fuzzy";
@@ -151,6 +152,9 @@ export async function quickCapture(raw: string): Promise<QuickCaptureResult> {
       ...payload,
       title,
       operationKey: randomUUID(),
+      description_json: {
+        icon: classifyTaskIcon({ title }),
+      },
     });
     revalidatePath("/", "layout");
     revalidatePath("/tasks");

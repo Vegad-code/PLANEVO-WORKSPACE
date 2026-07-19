@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Square, X } from "lucide-react";
+import { Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
+import { resolveTaskIcon } from "@planevo/core/tasks/task-icon-classifier";
+import { resolveIconDefinition } from "@planevo/core/tasks/icon-catalog";
+import type { TaskIconRef } from "@planevo/core/tasks/task-icon-types";
 import {
   TASK_PRIORITIES,
   TASK_STATUS_LABELS,
@@ -22,12 +25,15 @@ import {
   deleteProductTaskAction,
   toggleProductSubtaskAction,
   updateProductTaskAction,
+  updateTaskIconAction,
 } from "@/app/(workspace)/tasks/actions";
 import {
   ESTIMATE_OPTIONS,
   TASK_TAGS,
 } from "./create-task-dialog";
 import { TaskCrossLinkActions } from "./cross-link-actions";
+import { TaskIconPicker } from "./task-icon-picker";
+import { TaskIconRender } from "./task-icon-render";
 
 type TaskPeekProps = {
   task: TaskWithMeta;
@@ -79,6 +85,15 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
   const [tags, setTags] = useState<string[]>(taskTags(task));
   const [estimate, setEstimate] = useState(taskEstimateMinutes(task));
   const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const taskIcon = resolveTaskIcon(task, task.fileCount);
+  const [optimisticIconRef, setOptimisticIconRef] = useState<TaskIconRef | null>(
+    null,
+  );
+  const localIconRef = optimisticIconRef ?? taskIcon.ref;
+  const iconDefinition =
+    resolveIconDefinition(localIconRef.id, localIconRef.emoji) ??
+    taskIcon.definition;
 
   function toggleTag(tag: string) {
     setTags((current) =>
@@ -91,6 +106,26 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
   function refreshAfter(message: string) {
     toast(message);
     router.refresh();
+  }
+
+  function handleIconSelect(nextIcon: TaskIconRef) {
+    setOptimisticIconRef(nextIcon);
+    setIconPickerOpen(false);
+    startTransition(async () => {
+      const result = await updateTaskIconAction({
+        taskId: task.id,
+        iconId: nextIcon.id,
+        style: nextIcon.style,
+        emoji: nextIcon.emoji,
+      });
+      if (!result.ok) {
+        setOptimisticIconRef(null);
+        toast(result.error, { tone: "error" });
+        return;
+      }
+      setOptimisticIconRef(null);
+      refreshAfter("Task icon updated");
+    });
   }
 
   function saveTask() {
@@ -207,6 +242,33 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
                 maxLength={500}
               />
             </label>
+
+            <div className="relative">
+              <span className="mb-2 block text-label uppercase text-text-muted">
+                Task icon
+              </span>
+              <button
+                type="button"
+                aria-label="Change task icon"
+                aria-expanded={iconPickerOpen}
+                onClick={() => setIconPickerOpen((open) => !open)}
+                className="flex size-12 items-center justify-center rounded-lg border border-border bg-sidebar text-text-secondary outline-none transition-colors hover:border-border-strong focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                <TaskIconRender
+                  definition={iconDefinition}
+                  active={taskIcon.active}
+                  style={localIconRef.style}
+                  size="peek"
+                />
+              </button>
+              {iconPickerOpen ? (
+                <TaskIconPicker
+                  currentIconRef={localIconRef}
+                  onSelect={handleIconSelect}
+                  onClose={() => setIconPickerOpen(false)}
+                />
+              ) : null}
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <SelectField

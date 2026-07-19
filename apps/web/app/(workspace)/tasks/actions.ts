@@ -40,6 +40,13 @@ import {
   taskAttachmentObjectName,
   type UploadedTaskAttachment,
 } from "@/lib/tasks/task-attachments";
+import { isValidTaskIconRefId, mergeTaskIconOnUpdate } from "@planevo/core/tasks/task-icon-classifier";
+import {
+  parseEmojiFromId,
+  type TaskIconStyle,
+} from "@planevo/core/tasks/task-icon-types";
+import { buildDescriptionJson } from "@/lib/tasks/task-description-json";
+import { searchTaskIconsWithCache } from "@/lib/tasks/icon-search.server";
 import {
   attachFileToTaskActionInputSchema,
   linkTaskToWorkspaceActionInputSchema,
@@ -117,6 +124,14 @@ const updateProductTaskSchema = z.object({
   description: z.string().max(20_000),
   tags: z.array(z.string().trim().min(1).max(50)).max(8).optional(),
   estimateMinutes: z.number().int().positive().nullable().optional(),
+  icon: z
+    .object({
+      id: z.string().refine((id) => isValidTaskIconRefId(id)),
+      source: z.enum(["auto", "user"]),
+      style: z.enum(["plain", "emoji"]).optional(),
+      emoji: z.string().min(1).max(32).optional(),
+    })
+    .optional(),
 });
 
 const moveProductTaskSchema = z
@@ -479,12 +494,12 @@ export async function createProductTaskAction(
       );
     }
 
-    const descriptionJson: Record<string, unknown> = {};
-    if (parsed.data.description) descriptionJson.text = parsed.data.description;
-    if (parsed.data.tags.length > 0) descriptionJson.tags = parsed.data.tags;
-    if (parsed.data.estimateMinutes !== null) {
-      descriptionJson.estimateMinutes = parsed.data.estimateMinutes;
-    }
+    const descriptionJson = buildDescriptionJson({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      tags: parsed.data.tags,
+      estimateMinutes: parsed.data.estimateMinutes,
+    });
 
     const task = await createTask(access.client, access.ownerId, {
       operationKey: parsed.data.operationKey,
@@ -541,6 +556,7 @@ export async function updateProductTaskAction(input: {
   description: string;
   tags?: string[];
   estimateMinutes?: number | null;
+  icon?: { id: string; source: "auto" | "user" };
 }): Promise<TaskActionResult> {
   try {
     const access = await requireMutationDataAccess();
@@ -571,6 +587,14 @@ export async function updateProductTaskAction(input: {
         delete descriptionJson.estimateMinutes;
       }
     }
+
+    descriptionJson.icon = mergeTaskIconOnUpdate({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      tags: parsed.data.tags,
+      existingDescriptionJson: current.description_json,
+      explicitIcon: parsed.data.icon,
+    });
 
     if (parsed.data.status !== current.status) {
       await moveTaskOrdered(
@@ -605,6 +629,88 @@ export async function updateProductTaskAction(input: {
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not update the task.");
+  }
+}
+
+const updateTaskIconSchema = z.object({
+  taskId: taskIdSchema,
+  iconId: z.string().refine((id) => isValidTaskIconRefId(id)),
+  style: z.enum(["plain", "emoji"]).optional(),
+  emoji: z.string().min(1).max(32).optional(),
+});
+
+const searchTaskIconsSchema = z.object({
+  query: z.string().trim().min(2).max(80),
+});
+
+export async function searchTaskIconsAction(input: {
+  query: string;
+}): Promise<TaskActionResult<Array<import("@planevo/core/tasks/icon-catalog").CatalogIcon>>> {
+  try {
+    const parsed = searchTaskIconsSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: true, data: [] };
+    }
+
+    let client: Awaited<
+      ReturnType<typeof requireMutationDataAccess>
+    >["client"] | null = null;
+    try {
+      const access = await requireMutationDataAccess();
+      client = access.client;
+    } catch {
+      client = null;
+    }
+
+    const results = await searchTaskIconsWithCache(client, parsed.data.query);
+    return { ok: true, data: results };
+  } catch (cause) {
+    return actionError(cause, "Could not search icons.");
+  }
+}
+
+export async function updateTaskIconAction(input: {
+  taskId: string;
+  iconId: string;
+  style?: TaskIconStyle;
+  emoji?: string;
+}): Promise<TaskActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = updateTaskIconSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid task icon." };
+    }
+
+    const current = await requireOwnedTask(access, parsed.data.taskId);
+    const style = parsed.data.style ?? "plain";
+    const emoji =
+      style === "emoji"
+        ? parsed.data.emoji ?? parseEmojiFromId(parsed.data.iconId) ?? undefined
+        : undefined;
+
+    if (style === "emoji" && !emoji) {
+      return { ok: false, error: "Choose a valid emoji icon." };
+    }
+
+    const descriptionJson = {
+      ...current.description_json,
+      icon: {
+        id: parsed.data.iconId,
+        source: "user" as const,
+        style,
+        ...(emoji ? { emoji } : {}),
+      },
+    };
+
+    await updateTask(access.client, access.ownerId, parsed.data.taskId, {
+      description_json: descriptionJson,
+    });
+
+    revalidatePath("/tasks");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the task icon.");
   }
 }
 

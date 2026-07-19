@@ -5,6 +5,9 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { motion, type Transition } from "framer-motion";
+import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
+import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import {
   closestCenter,
   DndContext,
@@ -29,7 +32,9 @@ import {
   TASK_STATUS_LABELS,
   type TaskStatus,
 } from "@planevo/core/types/tasks";
-import { Plus } from "lucide-react";
+import { getTaskIconDefinition } from "@planevo/core/tasks/task-icon-registry";
+import { TaskBoardPlusIcon } from "./task-card-icons";
+import { TaskIconSlot } from "./task-icon-slot";
 import { TaskCard } from "./task-card";
 import {
   resolveTaskBoardDrop,
@@ -55,6 +60,7 @@ type TaskBoardProps = {
   ) => void | Promise<void>;
   onTaskSelect?: (taskId: string) => void;
   onCreateTask?: (status: TaskBoardStatus) => void;
+  fillHeight?: boolean;
 };
 
 function isBoardStatus(value: unknown): value is TaskBoardStatus {
@@ -115,11 +121,17 @@ function TaskColumn({
   tasks,
   onTaskSelect,
   onCreateTask,
+  isDragging,
+  fillHeight,
+  layoutTransition,
 }: {
   status: TaskBoardStatus;
   tasks: TaskWithMeta[];
   onTaskSelect?: (taskId: string) => void;
   onCreateTask?: (status: TaskBoardStatus) => void;
+  isDragging: boolean;
+  fillHeight: boolean;
+  layoutTransition: Transition;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnId(status),
@@ -129,21 +141,24 @@ function TaskColumn({
   const taskCountLabel = `${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`;
 
   return (
-    <section
+    <motion.section
+      layout={!isDragging}
+      layoutId={`task-column-${status}`}
+      transition={layoutTransition}
       ref={setNodeRef}
       aria-labelledby={headingId}
-      className={`flex min-h-[70vh] w-72 shrink-0 flex-col rounded-2xl border bg-sidebar p-4 transition-colors motion-reduce:transition-none xl:w-auto ${
-        isOver ? "border-ink" : "border-border"
-      }`}
+      className={`flex w-72 shrink-0 flex-col rounded-2xl border bg-sidebar p-4 transition-colors motion-reduce:transition-none md:w-auto ${
+        fillHeight ? "min-h-0 flex-1 md:min-h-[70vh]" : "min-h-[70vh]"
+      } ${isOver ? "border-ink" : "border-border"}`}
     >
       <div className="flex items-center justify-between gap-3 px-1 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 id={headingId} className="truncate text-small font-medium">
+          <h2 id={headingId} className="truncate text-product-title text-ink">
             {TASK_STATUS_LABELS[status]}
           </h2>
           <span
             aria-label={taskCountLabel}
-            className="shrink-0 rounded-full border border-border bg-paper px-2 py-0.5 font-mono text-label text-text-secondary"
+            className="shrink-0 rounded-full border border-border bg-paper px-2 py-0.5 text-product-stat tabular-nums text-text-secondary"
           >
             {String(tasks.length).padStart(2, "0")}
           </span>
@@ -156,7 +171,7 @@ function TaskColumn({
             onClick={() => onCreateTask(status)}
             className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border bg-paper text-text-secondary outline-none hover:border-border-strong hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
-            <Plus aria-hidden="true" className="size-4" />
+            <TaskBoardPlusIcon className="size-4" />
           </button>
         ) : null}
       </div>
@@ -175,13 +190,20 @@ function TaskColumn({
           ))}
           {tasks.length === 0 && (
             <div className="flex min-h-32 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface-raised px-4 py-8 text-center">
-              <p className="text-small font-medium text-text-secondary">No tasks here</p>
-              <p className="mt-1 text-small text-text-muted">Drag a task into this column.</p>
+              <TaskIconSlot
+                taskId={`empty-${status}`}
+                iconRef={{ id: "default", source: "auto" }}
+                definition={getTaskIconDefinition("default")!}
+                active={false}
+                interactive={false}
+              />
+              <p className="mt-3 text-product-body font-medium text-text-secondary">No tasks here</p>
+              <p className="mt-1 text-product-meta text-text-muted">Drag a task into this column.</p>
             </div>
           )}
         </div>
       </SortableContext>
-    </section>
+    </motion.section>
   );
 }
 
@@ -190,8 +212,12 @@ export function TaskBoard({
   onStatusChange,
   onTaskSelect,
   onCreateTask,
+  fillHeight = false,
 }: TaskBoardProps) {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const layoutTransition = getShellLayoutTransition(prefersReducedMotion);
+  const isDragging = activeTaskId !== null;
 
   const columns = useMemo(
     () =>
@@ -243,7 +269,8 @@ export function TaskBoard({
   }
 
   return (
-    <DndContext
+    <div className={fillHeight ? "flex min-h-0 flex-1 flex-col" : undefined}>
+      <DndContext
       id="tasks-product-board"
       sensors={sensors}
       collisionDetection={closestCenter}
@@ -281,12 +308,20 @@ export function TaskBoard({
         },
       }}
     >
-      <div
+      <motion.div
+        layout={!isDragging}
+        transition={layoutTransition}
         role="region"
         aria-label="Task board"
-        className="overflow-x-auto rounded-card border border-border bg-paper p-4 pb-6"
+        className={`overflow-x-auto rounded-card border border-border bg-paper p-4 pb-6 ${
+          fillHeight ? "flex min-h-0 flex-1 flex-col" : ""
+        }`}
       >
-        <div className="flex min-w-max items-stretch gap-4 xl:grid xl:min-w-0 xl:grid-cols-4 xl:gap-6">
+        <div
+          className={`flex min-w-max items-stretch gap-4 md:grid md:min-w-0 md:grid-cols-4 md:gap-6 ${
+            fillHeight ? "min-h-0 flex-1" : ""
+          }`}
+        >
           {columns.map((column) => (
             <TaskColumn
               key={column.status}
@@ -294,10 +329,13 @@ export function TaskBoard({
               tasks={column.tasks}
               onTaskSelect={onTaskSelect}
               onCreateTask={onCreateTask}
+              isDragging={isDragging}
+              fillHeight={fillHeight}
+              layoutTransition={layoutTransition}
             />
           ))}
         </div>
-      </div>
+      </motion.div>
 
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
@@ -307,5 +345,6 @@ export function TaskBoard({
         ) : null}
       </DragOverlay>
     </DndContext>
+    </div>
   );
 }

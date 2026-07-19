@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import {
@@ -9,10 +10,14 @@ import {
   TASK_STATUSES,
   type TaskPriority,
 } from "@planevo/core/types/tasks";
+import { Icon, type IconName } from "@/components/ui/planevo-icon";
+import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
+import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 
 type TaskTableProps = {
   tasks: TaskWithMeta[];
   onTaskSelect?: (taskId: string) => void;
+  fillHeight?: boolean;
 };
 
 type SortKey =
@@ -31,13 +36,17 @@ type SortState = {
 };
 
 const COLUMNS = [
-  { key: "title", label: "Title" },
-  { key: "status", label: "Status" },
-  { key: "priority", label: "Priority" },
-  { key: "due", label: "Due" },
-  { key: "subtasks", label: "Subtasks" },
-  { key: "files", label: "Files" },
-] as const satisfies ReadonlyArray<{ key: SortKey; label: string }>;
+  { key: "title", label: "Title", icon: "tasks" },
+  { key: "status", label: "Status", icon: "check" },
+  { key: "priority", label: "Priority", icon: "star" },
+  { key: "due", label: "Due", icon: "calendar" },
+  { key: "subtasks", label: "Subtasks", icon: "tasks" },
+  { key: "files", label: "Files", icon: "document" },
+] as const satisfies ReadonlyArray<{
+  key: SortKey;
+  label: string;
+  icon: IconName;
+}>;
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -60,6 +69,17 @@ const PRIORITY_STYLES: Record<TaskPriority, string> = {
   high: "border-brick bg-brick-tint text-ink",
   medium: "border-border-strong bg-paper text-ink",
   low: "border-meadow bg-meadow-tint text-ink",
+};
+
+const STATUS_STYLES: Record<
+  (typeof TASK_STATUSES)[number],
+  string
+> = {
+  not_started: "border-border bg-paper text-text-secondary",
+  in_progress: "border-border-strong bg-sidebar text-ink",
+  in_review: "border-border bg-surface-raised text-ink",
+  done: "border-meadow bg-meadow-tint text-ink",
+  cancelled: "border-border bg-paper text-text-muted",
 };
 
 const STATUS_ORDER = new Map(TASK_STATUSES.map((status, index) => [status, index]));
@@ -111,11 +131,58 @@ function sortedTasks(tasks: TaskWithMeta[], sort: SortState): TaskWithMeta[] {
   });
 }
 
-export function TaskTable({ tasks, onTaskSelect }: TaskTableProps) {
+function ColumnHeader({
+  column,
+  sort,
+  onSelectSort,
+}: {
+  column: (typeof COLUMNS)[number];
+  sort: SortState;
+  onSelectSort: (key: SortKey) => void;
+}) {
+  const isActive = sort.key === column.key;
+  const ariaSort = isActive ? sort.direction : "none";
+  const SortIcon = sort.direction === "ascending" ? ChevronUp : ChevronDown;
+
+  return (
+    <th
+      scope="col"
+      aria-sort={ariaSort}
+      className={`sticky top-0 z-10 border-b border-border bg-paper px-4 py-2.5 text-left ${
+        column.key === "title" ? "min-w-64" : "whitespace-nowrap"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onSelectSort(column.key)}
+        className="inline-flex items-center gap-2 rounded-lg text-product-column text-text-muted outline-none transition-colors hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"
+      >
+        <Icon name={column.icon} className="size-3.5 shrink-0 text-text-muted" />
+        {column.label}
+        {isActive ? (
+          <SortIcon aria-hidden="true" className="size-3.5 text-ink" />
+        ) : null}
+        <span className="sr-only">
+          {isActive
+            ? `, sorted ${sort.direction}. Activate to sort ${sort.direction === "ascending" ? "descending" : "ascending"}.`
+            : ", not sorted. Activate to sort ascending."}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+export function TaskTable({
+  tasks,
+  onTaskSelect,
+  fillHeight = false,
+}: TaskTableProps) {
   const [sort, setSort] = useState<SortState>({
     key: "title",
     direction: "ascending",
   });
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const layoutTransition = getShellLayoutTransition(prefersReducedMotion);
   const rows = useMemo(() => sortedTasks(tasks, sort), [tasks, sort]);
 
   function selectSort(key: SortKey) {
@@ -128,111 +195,121 @@ export function TaskTable({ tasks, onTaskSelect }: TaskTableProps) {
     }));
   }
 
-  return (
+  const tableContent = (
     <div
       role="region"
       aria-label="Tasks table. Scroll horizontally to see all columns."
       tabIndex={0}
-      className="overflow-x-auto rounded-card border border-border bg-paper outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+      className={`flex min-h-0 flex-col overflow-hidden border border-border bg-paper outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
+        fillHeight ? "min-h-0 flex-1" : ""
+      }`}
     >
-      <table className="min-w-full border-collapse text-left">
-        <thead className="bg-sidebar">
-          <tr>
-            {COLUMNS.map((column) => {
-              const isActive = sort.key === column.key;
-              const ariaSort = isActive ? sort.direction : "none";
-              const SortIcon =
-                sort.direction === "ascending" ? ChevronUp : ChevronDown;
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="min-w-full border-collapse text-left">
+          <thead>
+            <tr>
+              {COLUMNS.map((column) => (
+                <ColumnHeader
+                  key={column.key}
+                  column={column}
+                  sort={sort}
+                  onSelectSort={selectSort}
+                />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((task) => {
+              const title = task.title.trim() || "Untitled task";
+              const due = dueTimestamp(task.due_at);
 
               return (
-                <th
-                  key={column.key}
-                  scope="col"
-                  aria-sort={ariaSort}
-                  className={`border-b border-border px-3 py-2.5 text-label uppercase text-text-muted ${
-                    column.key === "title" ? "min-w-64" : "whitespace-nowrap"
-                  }`}
+                <tr
+                  key={task.id}
+                  className="border-b border-border transition-colors hover:bg-sidebar/40 motion-reduce:transition-none"
                 >
-                  <button
-                    type="button"
-                    onClick={() => selectSort(column.key)}
-                    className="inline-flex items-center gap-2 rounded-lg outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-                  >
-                    {column.label}
-                    {isActive ? (
-                      <SortIcon aria-hidden="true" className="size-3.5" />
-                    ) : null}
-                    <span className="sr-only">
-                      {isActive
-                        ? `, sorted ${sort.direction}. Activate to sort ${sort.direction === "ascending" ? "descending" : "ascending"}.`
-                        : ", not sorted. Activate to sort ascending."}
+                  <th scope="row" className="px-4 py-2.5 text-product-title text-ink">
+                    {onTaskSelect ? (
+                      <button
+                        type="button"
+                        onClick={() => onTaskSelect(task.id)}
+                        aria-label={`Open task: ${title}`}
+                        className="max-w-full truncate rounded-lg text-left outline-none hover:underline focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+                      >
+                        {title}
+                      </button>
+                    ) : (
+                      <span className="block max-w-full truncate">{title}</span>
+                    )}
+                  </th>
+                  <td className="whitespace-nowrap px-4 py-2.5">
+                    <span
+                      className={`inline-flex rounded-full border px-2.5 py-0.5 text-product-meta ${STATUS_STYLES[task.status]}`}
+                    >
+                      {TASK_STATUS_LABELS[task.status]}
                     </span>
-                  </button>
-                </th>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5">
+                    {task.priority ? (
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-0.5 text-product-meta ${PRIORITY_STYLES[task.priority]}`}
+                      >
+                        {PRIORITY_LABELS[task.priority]}
+                      </span>
+                    ) : (
+                      <span className="text-product-meta text-text-muted">No priority</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-product-body text-text-secondary">
+                    {due !== null ? (
+                      <time dateTime={new Date(due).toISOString()}>
+                        {DATE_FORMATTER.format(due)}
+                      </time>
+                    ) : (
+                      "No due date"
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-product-stat tabular-nums text-text-secondary">
+                    {task.subtaskDone} / {task.subtaskTotal}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-product-stat tabular-nums text-text-secondary">
+                    {String(task.fileCount).padStart(2, "0")}
+                  </td>
+                </tr>
               );
             })}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((task) => {
-            const title = task.title.trim() || "Untitled task";
-            const due = dueTimestamp(task.due_at);
-
-            return (
-              <tr key={task.id} className="border-b border-border bg-surface-raised last:border-b-0 hover:bg-paper">
-                <th scope="row" className="px-3 py-2.5 text-body font-medium text-ink">
-                  {onTaskSelect ? (
-                    <button
-                      type="button"
-                      onClick={() => onTaskSelect(task.id)}
-                      aria-label={`Open task: ${title}`}
-                      className="rounded-lg text-left outline-none hover:underline focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-                    >
-                      {title}
-                    </button>
-                  ) : (
-                    title
-                  )}
-                </th>
-                <td className="whitespace-nowrap px-3 py-2.5 text-small text-text-secondary">
-                  {TASK_STATUS_LABELS[task.status]}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-small text-text-secondary">
-                  {task.priority ? (
-                    <span className={`rounded-full border px-2 py-0.5 text-label ${PRIORITY_STYLES[task.priority]}`}>
-                      {PRIORITY_LABELS[task.priority]}
-                    </span>
-                  ) : (
-                    "No priority"
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-small text-text-secondary">
-                  {due !== null ? (
-                    <time dateTime={new Date(due).toISOString()}>
-                      {DATE_FORMATTER.format(due)}
-                    </time>
-                  ) : (
-                    "None"
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-mono text-text-secondary">
-                  {task.subtaskDone} / {task.subtaskTotal}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-mono text-text-secondary">
-                  {task.fileCount}
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={COLUMNS.length}
+                  className="px-4 py-12 text-center text-product-meta text-text-muted"
+                >
+                  No tasks to display.
                 </td>
               </tr>
-            );
-          })}
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={COLUMNS.length} className="px-4 py-8 text-center text-small text-text-muted">
-                No tasks to display.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex shrink-0 items-center border-t border-border bg-paper px-4 py-2.5">
+        <p className="text-product-meta tabular-nums text-text-muted">
+          Count {rows.length}
+        </p>
+      </div>
     </div>
+  );
+
+  if (!fillHeight) {
+    return tableContent;
+  }
+
+  return (
+    <motion.div
+      layout
+      transition={layoutTransition}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      {tableContent}
+    </motion.div>
   );
 }

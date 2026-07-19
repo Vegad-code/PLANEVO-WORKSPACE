@@ -1,10 +1,16 @@
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
 import type { TaskPriority } from "@planevo/core/types/tasks";
 import type { Ref } from "react";
-import { Calendar, FileText, GripVertical, Tag } from "lucide-react";
+import { resolveTaskIcon } from "@planevo/core/tasks/task-icon-classifier";
 import { Badge } from "@/components/ui/badge";
 import { taskDueState } from "@/lib/tasks/task-due-state";
-import { TaskFileBoxIllustration } from "./task-file-box-illustration";
+import {
+  TaskCardCalendarIcon,
+  TaskCardDragHandleIcon,
+  TaskCardFileIcon,
+  TaskCardTagBullet,
+} from "./task-card-icons";
+import { TaskIconSlot } from "./task-icon-slot";
 
 type TaskCardProps = {
   task: TaskWithMeta;
@@ -72,6 +78,7 @@ export function TaskCard({
   const priority = task.priority ? PRIORITY_STYLES[task.priority] : null;
   const due = dueDateDetails(task);
   const tags = taskTags(task);
+  const taskIcon = resolveTaskIcon(task, task.fileCount);
   const allSubtasksDone =
     task.subtaskTotal > 0 && task.subtaskDone >= task.subtaskTotal;
   const fileLabel = task.fileCount === 1 ? "file" : "files";
@@ -86,12 +93,12 @@ export function TaskCard({
         <span
           aria-hidden="true"
           title="Task initials"
-          className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-sidebar font-mono text-label text-text-secondary"
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-sidebar text-product-meta text-text-secondary"
         >
           {initials}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-small font-medium">
+          <h3 className="truncate text-product-title">
             {onOpen ? (
               <button
                 type="button"
@@ -105,7 +112,7 @@ export function TaskCard({
             )}
           </h3>
           <p
-            className={`mt-0.5 text-label ${
+            className={`mt-0.5 text-product-meta ${
               allSubtasksDone
                 ? "font-medium text-ink"
                 : "text-text-secondary"
@@ -140,13 +147,18 @@ export function TaskCard({
             aria-label={`Move task: ${title}`}
             className="touch-none flex size-7 shrink-0 cursor-grab items-center justify-center rounded-lg text-text-muted outline-none hover:bg-sidebar hover:text-ink active:cursor-grabbing focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
-            <GripVertical aria-hidden="true" className="size-4" />
+            <TaskCardDragHandleIcon className="size-4" />
           </button>
         ) : null}
       </div>
 
-      <div className="mt-4 flex min-h-20 items-center justify-center rounded-lg border border-border bg-paper">
-        <TaskFileBoxIllustration active={task.fileCount > 0} />
+      <div className="mt-4">
+        <TaskIconSlot
+          taskId={task.id}
+          iconRef={taskIcon.ref}
+          definition={taskIcon.definition}
+          active={taskIcon.active}
+        />
       </div>
 
       {tags.length > 0 ? (
@@ -154,24 +166,23 @@ export function TaskCard({
           {tags.map((tag) => (
             <li
               key={tag}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-paper px-2 py-0.5 text-label text-text-secondary"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-paper px-2 py-0.5 text-product-meta text-text-secondary"
             >
-              <Tag aria-hidden="true" className="size-3 shrink-0" />
+              <TaskCardTagBullet className="size-2 shrink-0 text-text-muted" />
               {tag}
             </li>
           ))}
         </ul>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border pt-3 text-label">
-        <span className="flex items-center gap-1.5 text-text-secondary">
-          <FileText aria-hidden="true" className="size-3.5 shrink-0" />
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border pt-3 text-product-meta">
+        <span className="flex items-center gap-1.5 tabular-nums text-text-secondary">
+          <TaskCardFileIcon className="size-3.5 shrink-0 opacity-80" />
           {String(task.fileCount).padStart(2, "0")} {fileLabel}
         </span>
         <span className="ml-auto flex items-center gap-1.5 text-text-secondary">
-          <Calendar
-            aria-hidden="true"
-            className={`size-3.5 shrink-0 ${due?.isOverdue ? "text-brick" : ""}`}
+          <TaskCardCalendarIcon
+            className={`size-3.5 shrink-0 opacity-80 ${due?.isOverdue ? "text-brick" : ""}`}
           />
           {due ? (
             <time

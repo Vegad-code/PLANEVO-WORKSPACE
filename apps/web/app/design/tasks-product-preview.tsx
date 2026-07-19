@@ -9,7 +9,11 @@ import {
   TaskBoard,
   type TaskBoardStatus,
 } from "@/features/tasks-product/task-board";
+import { classifyTaskIcon } from "@planevo/core/tasks/task-icon-classifier";
+import { resolveIconDefinition } from "@planevo/core/tasks/icon-catalog";
+import { TASK_ICON_REGISTRY } from "@planevo/core/tasks/task-icon-registry";
 import { TaskCard } from "@/features/tasks-product/task-card";
+import { TaskIconRender } from "@/features/tasks-product/task-icon-render";
 import { TaskList } from "@/features/tasks-product/task-list";
 import { TaskPeek } from "@/features/tasks-product/task-peek";
 import { TaskTable } from "@/features/tasks-product/task-table";
@@ -18,6 +22,14 @@ import {
   type TasksView,
 } from "@/features/tasks-product/tasks-toolbar";
 import type { TasksScope } from "@/lib/tasks/scope-prefs";
+
+const CLASSIFIER_EXAMPLES = [
+  { title: "Do homework", expected: "fa:solid:book" },
+  { title: "Buy groceries", expected: "fa:solid:cart-shopping" },
+  { title: "Weekly team sync", expected: "meeting" },
+  { title: "Write API spec", expected: "docs" },
+  { title: "Untitled task", tags: ["Design"], expected: "design" },
+] as const;
 
 const DEFAULT_TASK: TaskWithMeta = {
   id: "design-task-default",
@@ -212,6 +224,84 @@ export function TasksProductPreview() {
 
   return (
     <div className="space-y-8">
+      <div>
+        <h3 className="text-h3">Task icon registry</h3>
+        <p className="mt-1 text-small text-text-secondary">
+          Auto-assigned on create; light weight by default, duotone when files attach.
+        </p>
+        <ul className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-7">
+          {TASK_ICON_REGISTRY.map((entry) => (
+            <li
+              key={entry.id}
+              className="flex flex-col items-center gap-2 rounded-xl border border-border bg-paper p-3 text-center"
+            >
+              <TaskIconRender definition={entry} className="size-6 text-text-secondary" />
+              <span className="text-label text-text-muted">{entry.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="text-h3">Classifier examples</h3>
+        <p className="mt-1 text-small text-text-secondary">
+          Deterministic title and tag rules — no AI.
+        </p>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+          {CLASSIFIER_EXAMPLES.map((example) => {
+            const icon = classifyTaskIcon({
+              title: example.title,
+              tags: "tags" in example ? [...example.tags] : undefined,
+            });
+
+            return (
+              <li
+                key={example.title}
+                className="flex items-center gap-3 rounded-xl border border-border bg-paper p-4"
+              >
+                <TaskIconRender
+                  definition={resolveIconDefinition(icon.id)!}
+                  className="size-6 shrink-0 text-text-secondary"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-small font-medium">{example.title}</p>
+                  <p className="text-label text-text-muted">→ {icon.id}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="text-h3">Task icon states</h3>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-paper p-6">
+            <p className="mb-3 text-label uppercase text-text-muted">Auto (empty)</p>
+            <div className="rounded-xl border border-border bg-paper p-2">
+              <div className="flex min-h-[4.75rem] items-center justify-center rounded-lg bg-sidebar ring-1 ring-inset ring-border/80 text-text-muted/65">
+                <TaskIconRender
+                  definition={TASK_ICON_REGISTRY.find((entry) => entry.id === "default")!}
+                  className="size-9"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-paper p-6">
+            <p className="mb-3 text-label uppercase text-text-muted">With files</p>
+            <div className="rounded-xl border border-border bg-paper p-2">
+              <div className="flex min-h-[4.75rem] items-center justify-center rounded-lg bg-sidebar ring-1 ring-inset ring-border/80 text-text-secondary">
+                <TaskIconRender
+                  definition={TASK_ICON_REGISTRY.find((entry) => entry.id === "files")!}
+                  active
+                  className="size-9"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div>
         <h3 className="text-h3">Task card states</h3>
         <div className="mt-4 grid gap-4 md:grid-cols-2">

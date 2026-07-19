@@ -8,6 +8,7 @@ import {
   type TaskStatus,
 } from "@planevo/core/types/tasks";
 import { requireMutationDataAccess } from "@/lib/data/access";
+import { buildDescriptionJson } from "@/lib/tasks/task-description-json";
 
 const STATUS_BY_LABEL: Record<string, TaskStatus> = Object.fromEntries(
   Object.entries(TASK_STATUS_LABELS).map(([value, label]) => [
@@ -61,16 +62,12 @@ export async function createProductTaskFromFields(
   input: CreateProductTaskFields,
 ): Promise<TaskRow> {
   const access = await requireMutationDataAccess();
-  const descriptionJson: Record<string, unknown> = {};
-  if (input.description?.trim()) {
-    descriptionJson.text = input.description.trim();
-  }
-  if (input.tags?.length) {
-    descriptionJson.tags = input.tags;
-  }
-  if (input.estimateMinutes != null && input.estimateMinutes > 0) {
-    descriptionJson.estimateMinutes = input.estimateMinutes;
-  }
+  const descriptionJson = buildDescriptionJson({
+    title: input.title,
+    description: input.description,
+    tags: input.tags,
+    estimateMinutes: input.estimateMinutes,
+  });
 
   return createTask(access.client, access.ownerId, {
     operationKey: randomUUID(),
