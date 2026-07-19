@@ -186,8 +186,9 @@ export async function scheduleTaskFromDragAction(input: {
 }
 
 /**
- * Legacy kernel face action — still referenced by the pre-cutover /calendar
- * page. Removed with the DatabaseFace strangler in the Task 11 cutover.
+ * Legacy kernel face action — the product route no longer uses it, but the
+ * /design kernel preview (features/calendar/calendar-view.tsx) still does.
+ * Deleted with the kernel faces in Phase 8.
  */
 export async function createWorkspaceCalendar(): Promise<void> {
   // Resolved server-side — a client-supplied workspace id is never trusted.
