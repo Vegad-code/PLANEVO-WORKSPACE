@@ -259,3 +259,43 @@ test("createSubtask inserts into task_subtasks", async () => {
   assert.ok(inserted.position > 0);
   assert.equal(sub.id, "sub-1");
 });
+
+test("moveTaskOrdered calls move_task_ordered RPC with neighbor ids", async () => {
+  let captured = null;
+  const client = {
+    async rpc(name, args) {
+      captured = { name, args };
+      return { error: null };
+    },
+  };
+  await import("./product-tasks.ts").then(({ moveTaskOrdered }) =>
+    moveTaskOrdered(
+      client,
+      "user-1",
+      "task-1",
+      "in_review",
+      "before-id",
+      "after-id",
+    ),
+  );
+  assert.equal(captured.name, "move_task_ordered");
+  assert.equal(captured.args.p_owner_id, "user-1");
+  assert.equal(captured.args.p_task_id, "task-1");
+  assert.equal(captured.args.p_status, "in_review");
+  assert.equal(captured.args.p_before_task_id, "before-id");
+  assert.equal(captured.args.p_after_task_id, "after-id");
+});
+
+test("moveTaskOrdered appends to column end when neighbors are null", async () => {
+  let captured = null;
+  const client = {
+    async rpc(name, args) {
+      captured = { name, args };
+      return { error: null };
+    },
+  };
+  const { moveTaskOrdered } = await import("./product-tasks.ts");
+  await moveTaskOrdered(client, "user-1", "task-1", "done", null, null);
+  assert.equal(captured.args.p_before_task_id, null);
+  assert.equal(captured.args.p_after_task_id, null);
+});

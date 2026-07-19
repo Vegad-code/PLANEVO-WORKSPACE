@@ -10,6 +10,7 @@ import {
   deleteTask,
   moveTaskOrdered,
   toggleSubtask,
+  updateTask,
   updateTaskAndStatus,
 } from "@planevo/core/mutations/product-tasks";
 import {
@@ -552,18 +553,36 @@ export async function updateProductTaskAction(input: {
     } else {
       delete descriptionJson.text;
     }
-    await updateTaskAndStatus(
-      access.client,
-      access.ownerId,
-      parsed.data.taskId,
-      {
+
+    if (parsed.data.status !== current.status) {
+      await moveTaskOrdered(
+        access.client,
+        access.ownerId,
+        parsed.data.taskId,
+        parsed.data.status,
+        null,
+        null,
+      );
+      await updateTask(access.client, access.ownerId, parsed.data.taskId, {
         title: parsed.data.title,
         priority: parsed.data.priority,
         due_at: parsed.data.dueAt,
         description_json: descriptionJson,
-        status: parsed.data.status,
-      },
-    );
+      });
+    } else {
+      await updateTaskAndStatus(
+        access.client,
+        access.ownerId,
+        parsed.data.taskId,
+        {
+          title: parsed.data.title,
+          priority: parsed.data.priority,
+          due_at: parsed.data.dueAt,
+          description_json: descriptionJson,
+          status: parsed.data.status,
+        },
+      );
+    }
     revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
@@ -709,6 +728,13 @@ export async function attachFileToProductTaskAction(input: {
       access,
       parsed.data.fileSourceId,
     );
+    const existingCount = await countTaskFiles(access, parsed.data.taskId);
+    if (existingCount >= MAX_TASK_ATTACHMENTS) {
+      return {
+        ok: false,
+        error: `Attach up to ${MAX_TASK_ATTACHMENTS} files per task.`,
+      };
+    }
     await attachFileToTask(access.client, parsed.data);
     const fileCount = await countTaskFiles(access, parsed.data.taskId);
     revalidatePath("/tasks");
