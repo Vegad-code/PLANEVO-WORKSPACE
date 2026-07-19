@@ -30,6 +30,10 @@ import { CalendarDndContext } from "./calendar-dnd-context";
 import { CalendarSidebar } from "./calendar-sidebar";
 import { CalendarToolbar, type CalendarView } from "./calendar-toolbar";
 import { CreateEventPopover, type CreateEventInput } from "./create-event-popover";
+import {
+  EventCrossLinkDialogs,
+  type EventCrossLinkPanel,
+} from "./event-cross-links";
 import { EventPeek } from "./event-peek";
 import { TodayColumn } from "./today-column";
 import type { TodayColumnTask } from "./today-task-row";
@@ -77,6 +81,8 @@ export function CalendarProductView({
     return today >= start && today < end ? today : weekStart;
   });
   const [selectedEvent, setSelectedEvent] = useState<SelectedEvent | null>(null);
+  const [crossLinkPanel, setCrossLinkPanel] =
+    useState<EventCrossLinkPanel | null>(null);
   const [createSlot, setCreateSlot] = useState<Date | null>(null);
 
   // The current-time line drifts without a minute tick.
@@ -275,6 +281,17 @@ export function CalendarProductView({
           calendar={selectedEventCalendar}
           anchor={selectedEvent.anchor}
           onClose={() => setSelectedEvent(null)}
+          onLinkTask={() => setCrossLinkPanel("task")}
+          onAttachFile={() => setCrossLinkPanel("files")}
+          onAddToWorkspace={() => setCrossLinkPanel("workspace")}
+        />
+      ) : null}
+
+      {selectedEvent && crossLinkPanel ? (
+        <EventCrossLinkDialogs
+          eventId={selectedEvent.event.id}
+          panel={crossLinkPanel}
+          onClose={() => setCrossLinkPanel(null)}
         />
       ) : null}
     </section>

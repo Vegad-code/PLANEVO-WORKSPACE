@@ -3,17 +3,33 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { attachFileToEvent } from "@planevo/core/mutations/file-cross-links";
 import {
   createCalendar,
   createCalendarEvent,
   scheduleTaskFromDrag,
+  updateCalendarEvent,
   updateCalendarVisibility,
 } from "@planevo/core/mutations/product-calendar";
+import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
 import { CALENDAR_COLORS } from "@planevo/core/types/calendar";
 import type { DataAccess } from "@/lib/data/access";
 import { requireMutationDataAccess } from "@/lib/data/access";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
+import {
+  taskCrossLinkOptions,
+  type TaskCrossLinkOptions,
+} from "@/lib/tasks/task-cross-link-contracts";
 import { createCalendarDatabaseWithViews, createWorkspace } from "../actions";
+
+export type EventTaskOption = {
+  id: string;
+  title: string;
+};
+
+export type EventCrossLinkOptions = TaskCrossLinkOptions & {
+  tasks: EventTaskOption[];
+};
 
 export type CalendarActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -182,6 +198,185 @@ export async function scheduleTaskFromDragAction(input: {
     return { ok: true, data: { eventId: event.id } };
   } catch (cause) {
     return actionError(cause, "Could not schedule the task.");
+  }
+}
+
+async function requireOwnedEvent(
+  access: DataAccess,
+  eventId: string,
+): Promise<void> {
+  const { data, error } = await access.client
+    .from("calendar_events")
+    .select("id")
+    .eq("id", eventId)
+    .eq("user_id", access.ownerId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Event not found.");
+}
+
+const eventIdSchema = z.object({ eventId: z.string().uuid() });
+
+/** Files, tasks, and workspaces an event peek can link to. */
+export async function loadEventCrossLinkOptionsAction(input: {
+  eventId: string;
+}): Promise<CalendarActionResult<EventCrossLinkOptions>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = eventIdSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid event." };
+    await requireOwnedEvent(access, parsed.data.eventId);
+
+    const [files, attachedFiles, tasks, workspaces, linkedWorkspaces, current] =
+      await Promise.all([
+        access.client
+          .from("file_sources")
+          .select("id,name,mime_type,size_bytes,metadata_json")
+          .eq("user_id", access.ownerId)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        access.client
+          .from("file_links")
+          .select("file_source_id")
+          .eq("target_type", "calendar_event")
+          .eq("target_id", parsed.data.eventId),
+        access.client
+          .from("tasks")
+          .select("id,title,status")
+          .eq("user_id", access.ownerId)
+          .order("position", { ascending: true })
+          .limit(100),
+        access.client
+          .from("workspaces")
+          .select("id,name")
+          .eq("owner_id", access.ownerId)
+          .order("created_at", { ascending: true })
+          .limit(100),
+        access.client
+          .from("workspace_links")
+          .select("workspace_id")
+          .eq("resource_type", "calendar_event")
+          .eq("resource_id", parsed.data.eventId),
+        getCurrentWorkspace(),
+      ]);
+    if (files.error) throw files.error;
+    if (attachedFiles.error) throw attachedFiles.error;
+    if (tasks.error) throw tasks.error;
+    if (workspaces.error) throw workspaces.error;
+    if (linkedWorkspaces.error) throw linkedWorkspaces.error;
+
+    const shared = taskCrossLinkOptions({
+      files: files.data ?? [],
+      attachedFileIds: (attachedFiles.data ?? []).map(
+        (link) => link.file_source_id,
+      ),
+      workspaces: workspaces.data ?? [],
+      currentWorkspaceId:
+        current?.access.ownerId === access.ownerId ? current.workspace.id : null,
+      linkedWorkspaceIds: (linkedWorkspaces.data ?? []).map(
+        (link) => link.workspace_id,
+      ),
+    });
+    const openTasks = (tasks.data ?? [])
+      .filter((task) => task.status !== "done" && task.status !== "cancelled")
+      .map((task) => ({ id: task.id, title: task.title }));
+
+    return { ok: true, data: { ...shared, tasks: openTasks } };
+  } catch (cause) {
+    return actionError(cause, "Could not load cross-feature options.");
+  }
+}
+
+const attachFileToEventSchema = z.object({
+  eventId: z.string().uuid(),
+  fileSourceId: z.string().uuid(),
+});
+
+export async function attachFileToEventAction(input: {
+  eventId: string;
+  fileSourceId: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = attachFileToEventSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Choose a valid file." };
+    await requireOwnedEvent(access, parsed.data.eventId);
+    await attachFileToEvent(access.client, {
+      eventId: parsed.data.eventId,
+      fileSourceId: parsed.data.fileSourceId,
+    });
+    revalidatePath("/calendar");
+    revalidatePath("/files");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not attach the file.");
+  }
+}
+
+const linkTaskToEventSchema = z.object({
+  eventId: z.string().uuid(),
+  taskId: z.string().uuid(),
+});
+
+export async function linkTaskToEventAction(input: {
+  eventId: string;
+  taskId: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = linkTaskToEventSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Choose a valid task." };
+    await requireOwnedEvent(access, parsed.data.eventId);
+    const { data: task, error } = await access.client
+      .from("tasks")
+      .select("id")
+      .eq("id", parsed.data.taskId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!task) return { ok: false, error: "Task not found." };
+    await updateCalendarEvent(access.client, access.ownerId, parsed.data.eventId, {
+      taskId: parsed.data.taskId,
+    });
+    revalidatePath("/calendar");
+    revalidatePath("/tasks");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not link the task.");
+  }
+}
+
+const linkEventToWorkspaceSchema = z.object({
+  eventId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+});
+
+export async function linkEventToWorkspaceAction(input: {
+  eventId: string;
+  workspaceId: string;
+}): Promise<CalendarActionResult<{ workspaceName: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = linkEventToWorkspaceSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Choose a valid workspace." };
+    await requireOwnedEvent(access, parsed.data.eventId);
+    const { data: workspace, error } = await access.client
+      .from("workspaces")
+      .select("id,name")
+      .eq("id", parsed.data.workspaceId)
+      .eq("owner_id", access.ownerId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!workspace) return { ok: false, error: "Workspace not found." };
+    await linkResourceToWorkspace(access.client, access.ownerId, {
+      workspaceId: workspace.id,
+      resourceType: "calendar_event",
+      resourceId: parsed.data.eventId,
+    });
+    revalidatePath("/calendar");
+    return { ok: true, data: { workspaceName: workspace.name } };
+  } catch (cause) {
+    return actionError(cause, "Could not add the event to the workspace.");
   }
 }
 

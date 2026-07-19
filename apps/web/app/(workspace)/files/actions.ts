@@ -64,6 +64,57 @@ export async function updateProductFileTagsAction(input: {
   }
 }
 
+export type FileLinkTargets = {
+  tasks: { id: string; title: string }[];
+  events: { id: string; title: string; startsAt: string }[];
+};
+
+const fileIdSchema = z.object({ fileSourceId: z.string().uuid() });
+
+/** Open tasks and recent/upcoming events a file row can link to. */
+export async function loadFileLinkTargetsAction(input: {
+  fileSourceId: string;
+}): Promise<FilesActionResult<FileLinkTargets>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = fileIdSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Choose a valid file." };
+
+    const [tasks, events] = await Promise.all([
+      access.client
+        .from("tasks")
+        .select("id,title,status")
+        .eq("user_id", access.ownerId)
+        .order("position", { ascending: true })
+        .limit(100),
+      access.client
+        .from("calendar_events")
+        .select("id,title,starts_at")
+        .eq("user_id", access.ownerId)
+        .order("starts_at", { ascending: false })
+        .limit(50),
+    ]);
+    if (tasks.error) throw tasks.error;
+    if (events.error) throw events.error;
+
+    return {
+      ok: true,
+      data: {
+        tasks: (tasks.data ?? [])
+          .filter((task) => task.status !== "done" && task.status !== "cancelled")
+          .map((task) => ({ id: task.id, title: task.title })),
+        events: (events.data ?? []).map((event) => ({
+          id: event.id,
+          title: event.title,
+          startsAt: event.starts_at,
+        })),
+      },
+    };
+  } catch (cause) {
+    return filesActionError(cause, "Could not load link targets.");
+  }
+}
+
 const deleteProductFileSchema = z.object({
   fileSourceId: z.string().uuid(),
 });

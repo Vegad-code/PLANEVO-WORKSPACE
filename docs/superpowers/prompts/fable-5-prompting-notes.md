@@ -68,6 +68,21 @@ I'm working on Planevo Ecosystem Phase 1 for the founder. They need product tabl
 I'm working on Planevo Tasks product for the founder. They need a real task app on the tasks table — Lumis craft on cards, Planevo shell — so they can dogfood daily before Calendar ships. With that in mind: [task].
 ```
 
+### Intent context (workers — Phase 3)
+```
+I'm working on Planevo Calendar and Files products for the founder. They need real product UIs matching the reference screenshots — Calendar three-pane week view, Files CloudNest cabinet — on calendar_events and file_sources so all three global products ship before workspace embeds. With that in mind: [task].
+```
+
+### Screenshot layout (Phase 3 — mandatory)
+```
+Calendar and Files reference screenshots are LAYOUT references for /calendar and /files (founder override July 19). Match three-pane calendar and cabinet files hierarchy. Planevo app-shell owns global IA — never clone reference app sidebars (My Works, Projects, Members).
+```
+
+### Design-before-wire (Phase 3 UI)
+```
+Land calendar-product and files-product components in /design preview with all states before wiring to /calendar or /files.
+```
+
 ### Design-before-wire (Phase 2 UI)
 ```
 Land UI components in /design preview with all states before wiring to /tasks. Lumis screenshot is craft reference only — never clone its sidebar IA.
@@ -119,6 +134,22 @@ Do not instruct models to reproduce summarized thinking in response text — tri
 **Resume orchestrator (after Codex):** `docs/superpowers/prompts/fable-5-phase-2-resume-orchestrator.md`  
 **Plan:** `docs/superpowers/plans/2026-07-17-ecosystem-phase-2-tasks-product.md`
 
+## Phase 3 orchestrator mapping
+
+| Anthropic recommendation | Phase 3 application |
+|--------------------------|---------------------|
+| Start at top of difficulty range | Two product UIs + cross-links in one phase |
+| Fresh-context Opus verifier | Review after every 2 tasks; screenshot layout gate |
+| Parallel subagents | Core (A) before calendar UI (B); files UI (C) after Task 5 |
+| Ground progress claims | Require test output + kernel grep for GOAL_MET |
+| Autonomous pipelines block | No mid-task "Shall I…?" for reversible work |
+
+**Orchestrator file:** `docs/superpowers/prompts/fable-5-phase-3-orchestrator.md`  
+**Ship orchestrator (code-first):** `docs/superpowers/prompts/fable-5-phase-3-ship-orchestrator.md`  
+**Paste package:** `docs/superpowers/prompts/fable-5-phase-3-PASTE-PACKAGE.md`  
+**Plan:** `docs/superpowers/plans/2026-07-19-ecosystem-phase-3-calendar-files.md`  
+**Design:** `docs/superpowers/specs/2026-07-19-phase-3-calendar-files-design.md`
+
 ### Hands-on resume mode (founder preference, July 18)
 ```
 Fable reviews every diff before commit. Fable codes Tasks 9–11 integration directly; Opus workers only for optional slices. Opus second-gate on Tasks 9, 11, 12. Take over after one worker FAIL, not two. Uncommitted ≠ done; dogfood unsigned ≠ Phase 2 complete.
@@ -126,4 +157,4 @@ Fable reviews every diff before commit. Fable codes Tasks 9–11 integration dir
 
 ---
 
-*Scraped and adapted July 17, 2026 · Updated for Phase 2 resume July 18*
+*Scraped and adapted July 17, 2026 · Updated for Phase 2 resume July 18 · Phase 3 July 19*

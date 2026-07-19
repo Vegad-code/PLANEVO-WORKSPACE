@@ -19,6 +19,10 @@ import {
   setFilesScope,
   type FilesScope,
 } from "@/lib/files/scope-prefs";
+import {
+  FileCrossLinkDialog,
+  type FileCrossLinkTarget,
+} from "./file-cross-link-dialog";
 import { FilePreviewPanel } from "./file-preview-panel";
 import { FilesActionRow } from "./files-action-row";
 import { FilesCabinetHeader } from "./files-cabinet-header";
@@ -161,6 +165,10 @@ export function FilesProductView({
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [fileToDelete, setFileToDelete] = useState<ProductFileItem | null>(null);
+  const [crossLink, setCrossLink] = useState<{
+    file: ProductFileItem;
+    target: FileCrossLinkTarget;
+  } | null>(null);
 
   useEffect(() => {
     const storedScope = getFilesScope();
@@ -306,12 +314,8 @@ export function FilesProductView({
                   setSelectedFileId(file.id === selectedFileId ? null : file.id)
                 }
                 onDeleteFile={setFileToDelete}
-                onAttachToTask={() =>
-                  toast("Attach to task lands with cross-links")
-                }
-                onLinkToEvent={() =>
-                  toast("Link to event lands with cross-links")
-                }
+                onAttachToTask={(file) => setCrossLink({ file, target: "task" })}
+                onLinkToEvent={(file) => setCrossLink({ file, target: "event" })}
               />
             )}
           </div>
@@ -329,6 +333,15 @@ export function FilesProductView({
       <div className="mt-5 max-w-sm">
         <StorageMeter usedBytes={usedBytes} capBytes={capBytes} />
       </div>
+
+      {crossLink ? (
+        <FileCrossLinkDialog
+          key={`${crossLink.file.id}-${crossLink.target}`}
+          file={crossLink.file}
+          target={crossLink.target}
+          onClose={() => setCrossLink(null)}
+        />
+      ) : null}
 
       {fileToDelete ? (
         <Dialog
