@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteWorkspace, renameWorkspace } from "@/app/(workspace)/actions";
+import {
+  deleteWorkspace,
+  renameWorkspace,
+  updateWorkspaceIcon,
+} from "@/app/(workspace)/actions";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { Icon } from "@/components/ui/planevo-icon";
 import type { WorkspaceSummary } from "@/lib/queries/workspace-shell";
 
@@ -14,6 +19,7 @@ export function WorkspaceManagePopover({
   onClose: () => void;
 }) {
   const [name, setName] = useState(workspace.name);
+  const [icon, setIcon] = useState(workspace.icon);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteDialogKey, setDeleteDialogKey] = useState(0);
@@ -29,6 +35,19 @@ export function WorkspaceManagePopover({
       }
       setError(null);
       onClose();
+    });
+  }
+
+  function handleIconChange(nextIcon: string | null) {
+    setIcon(nextIcon);
+    startTransition(async () => {
+      const result = await updateWorkspaceIcon({ workspaceId: workspace.id, icon: nextIcon });
+      if (!result.success) {
+        setError(result.error);
+        setIcon(workspace.icon);
+      } else {
+        setError(null);
+      }
     });
   }
 
@@ -55,6 +74,11 @@ export function WorkspaceManagePopover({
           >
             <Icon name="close" />
           </button>
+        </div>
+
+        <div className="mt-4 flex items-center gap-3">
+          <EmojiPicker value={icon} onChange={handleIconChange} label="Workspace icon" />
+          <p className="text-small text-text-secondary">Pick an icon for this workspace.</p>
         </div>
 
         <form onSubmit={handleRename} className="mt-4 space-y-3">

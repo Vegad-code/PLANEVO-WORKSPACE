@@ -7,9 +7,15 @@ const primaryItems: Array<{
   label: string;
   icon: IconName;
   href: string;
+  activeAccent?: boolean;
 }> = [
   { label: "Home", icon: "workspace", href: "/" },
-  { label: "Tasks", icon: "tasks", href: "/tasks" },
+  {
+    label: "Tasks",
+    icon: "tasks",
+    href: "/tasks",
+    activeAccent: false,
+  },
   { label: "Calendar", icon: "calendar", href: "/calendar" },
   { label: "Files", icon: "files", href: "/files" },
 ];

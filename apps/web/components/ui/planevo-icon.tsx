@@ -18,6 +18,7 @@ import {
   DocumentIcon,
   DocumentTextIcon,
   EnvelopeIcon,
+  EllipsisHorizontalIcon,
   ExclamationTriangleIcon,
   FolderIcon,
   HomeIcon,
@@ -25,7 +26,9 @@ import {
   MapPinIcon,
   PlusIcon,
   PuzzlePieceIcon,
+  ShareIcon,
   Squares2X2Icon,
+  StarIcon,
   UserPlusIcon,
   WindowIcon,
   XMarkIcon,
@@ -62,7 +65,10 @@ export type IconName =
   | "invite"
   | "upgrade"
   | "logout"
-  | "mail";
+  | "mail"
+  | "share"
+  | "star"
+  | "more";
 
 const ICONS = {
   workspace: HomeIcon,
@@ -94,6 +100,9 @@ const ICONS = {
   upgrade: ArrowUpCircleIcon,
   logout: ArrowRightOnRectangleIcon,
   mail: EnvelopeIcon,
+  share: ShareIcon,
+  star: StarIcon,
+  more: EllipsisHorizontalIcon,
 } satisfies Record<IconName, HeroIcon>;
 
 export function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {

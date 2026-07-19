@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { stripPageContentForTemplate } from "@planevo/core/mutations/duplicate-page";
-import { promoteBlocksToDatabase } from "@planevo/core/mutations/promote-blocks";
+import { promoteBlocksToRecordsAtomic } from "@planevo/core/mutations/promote-blocks-atomic";
 import { createDatabase } from "@planevo/core/mutations/create-database";
 import { requireDataAccess } from "@/lib/data/access";
+import { createProductTaskFromFields } from "@/lib/tasks/create-product-task";
 import {
   clearRecentItems,
   deleteError,
@@ -69,7 +70,6 @@ export async function savePageContent(
 export async function promoteBlocksToRecords(input: {
   pageId: string;
   databaseId: string;
-  createNewTaskDatabase?: boolean;
   blocks: Array<{
     blockId: string;
     title: string;
@@ -81,6 +81,7 @@ export async function promoteBlocksToRecords(input: {
   ok: boolean;
   databaseId?: string;
   recordIds?: string[];
+  contentJson?: unknown;
   error?: string;
 }> {
   const cleaned = input.blocks
@@ -99,26 +100,9 @@ export async function promoteBlocksToRecords(input: {
   }
 
   try {
-    const { access, pageId: ownedPageId } = await requireOwnedPage(input.pageId);
-    void ownedPageId;
+    const { access } = await requireOwnedPage(input.pageId);
 
-    let databaseId = input.databaseId;
-
-    if (input.createNewTaskDatabase) {
-      const { data: page, error: pageError } = await access.client
-        .from("pages")
-        .select("workspace_id")
-        .eq("id", input.pageId)
-        .maybeSingle();
-      if (pageError) throw pageError;
-      if (!page) return { ok: false, error: "Page not found." };
-
-      const created = await createDatabase(access.client, access.ownerId, {
-        workspaceId: page.workspace_id,
-        templateType: "task",
-      });
-      databaseId = created.databaseId;
-    }
+    const databaseId = input.databaseId;
 
     const { data: database, error: databaseError } = await access.client
       .from("databases")
@@ -129,11 +113,13 @@ export async function promoteBlocksToRecords(input: {
     if (databaseError) throw databaseError;
     if (!database) return { ok: false, error: "Database not found." };
 
-    const result = await promoteBlocksToDatabase(access.client, access.ownerId, {
+    const result = await promoteBlocksToRecordsAtomic(access.client, access.ownerId, {
+      pageId: input.pageId,
       databaseId,
       blocks: cleaned,
     });
 
+    revalidatePath(`/pages/${input.pageId}`);
     revalidatePath("/tasks");
     revalidatePath(`/databases/${databaseId}`);
     revalidatePath("/", "layout");
@@ -142,6 +128,7 @@ export async function promoteBlocksToRecords(input: {
       ok: true,
       databaseId: result.databaseId,
       recordIds: result.recordIds,
+      contentJson: result.contentJson,
     };
   } catch (cause) {
     return {
@@ -152,8 +139,7 @@ export async function promoteBlocksToRecords(input: {
 }
 
 /**
- * Retroactive structure v1 (PRD §5.3 #1, checklist slice): promote written
- * list items into real task records in the workspace's default task database.
+ * Promote written list items into global product tasks on `public.tasks`.
  */
 export async function promoteItemsToTasks(
   pageId: string,
@@ -166,13 +152,8 @@ export async function promoteItemsToTasks(
 
   try {
     await requireOwnedPage(pageId);
-    const { createTaskWithRequiredFoundation } = await import(
-      "@/lib/mutations/create-foundations"
-    );
-    // ponytail: one RPC per item — selections are small; batch RPC if bulk
-    // promotion ever exceeds dozens of items.
     for (const title of cleaned) {
-      await createTaskWithRequiredFoundation({ title });
+      await createProductTaskFromFields({ title });
     }
     revalidatePath("/tasks");
     revalidatePath("/", "layout");
@@ -194,6 +175,140 @@ export async function updatePageTitle(pageId: string, title: string): Promise<vo
     .eq("id", pageId);
   if (error) throw error;
   revalidatePath("/", "layout");
+}
+
+export async function updatePageIcon(
+  pageId: string,
+  icon: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { access } = await requireOwnedPage(pageId);
+    const cleaned = icon?.trim() || null;
+    const { error } = await access.client
+      .from("pages")
+      .update({ icon: cleaned })
+      .eq("id", pageId);
+    if (error) throw error;
+    revalidatePath("/", "layout");
+    revalidatePath(`/pages/${pageId}`);
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to update the icon.",
+    };
+  }
+}
+
+export async function updatePageCover(
+  pageId: string,
+  coverImage: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { access } = await requireOwnedPage(pageId);
+    const cleaned = coverImage?.trim() || null;
+    const { error } = await access.client
+      .from("pages")
+      .update({ cover_image: cleaned })
+      .eq("id", pageId);
+    if (error) throw error;
+    revalidatePath(`/pages/${pageId}`);
+    return { ok: true };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to update the cover.",
+    };
+  }
+}
+
+/** Create a child page under `parentPageId` and return its id for linking. */
+export async function createSubpage(input: {
+  parentPageId: string;
+  title?: string;
+}): Promise<{ ok: boolean; pageId?: string; error?: string }> {
+  try {
+    const { access } = await requireOwnedPage(input.parentPageId);
+    const { data: parent, error: parentError } = await access.client
+      .from("pages")
+      .select("id, workspace_id, position")
+      .eq("id", input.parentPageId)
+      .maybeSingle();
+    if (parentError) throw parentError;
+    if (!parent) return { ok: false, error: "Parent page not found." };
+
+    const { data: siblings, error: siblingsError } = await access.client
+      .from("pages")
+      .select("position")
+      .eq("parent_page_id", parent.id)
+      .order("position", { ascending: false })
+      .limit(1);
+    if (siblingsError) throw siblingsError;
+
+    const nextPosition = (siblings?.[0]?.position ?? -1) + 1;
+    const title = input.title?.trim() || "Untitled";
+
+    const { data: created, error: createError } = await access.client
+      .from("pages")
+      .insert({
+        workspace_id: parent.workspace_id,
+        parent_page_id: parent.id,
+        title,
+        position: nextPosition,
+      })
+      .select("id")
+      .single();
+    if (createError) throw createError;
+
+    revalidatePath("/", "layout");
+    return { ok: true, pageId: created.id };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to create a page.",
+    };
+  }
+}
+
+/** Slash-menu path: create a database from a built-in template under this page. */
+export async function createDatabaseFromTemplateAction(input: {
+  pageId: string;
+  templateType: "task" | "notes" | "project" | "files" | "custom";
+  name?: string;
+}): Promise<{ ok: boolean; databaseId?: string; pageId?: string | null; error?: string }> {
+  try {
+    const { access } = await requireOwnedPage(input.pageId);
+    const { data: page, error: pageError } = await access.client
+      .from("pages")
+      .select("id, workspace_id")
+      .eq("id", input.pageId)
+      .maybeSingle();
+    if (pageError) throw pageError;
+    if (!page) return { ok: false, error: "Page not found." };
+
+    const created = await createDatabase(access.client, access.ownerId, {
+      workspaceId: page.workspace_id,
+      templateType: input.templateType,
+      name: input.name,
+      parentPageId: page.id,
+      createPage: true,
+    });
+
+    revalidatePath("/", "layout");
+    revalidatePath(`/pages/${input.pageId}`);
+    if (created.databaseId) revalidatePath(`/databases/${created.databaseId}`);
+
+    return {
+      ok: true,
+      databaseId: created.databaseId,
+      pageId: created.pageId,
+    };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Failed to create a database.",
+    };
+  }
 }
 
 /** F-12: duplicate page layout with cleared text and fresh block ids. */

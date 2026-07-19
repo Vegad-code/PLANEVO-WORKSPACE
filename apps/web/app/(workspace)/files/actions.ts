@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createDatabase } from "@planevo/core/mutations/create-database";
+import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { requireDataAccess } from "@/lib/data/access";
 import {
   clearRecentItems,
@@ -9,6 +11,20 @@ import {
   removeStorageObject,
   type DeleteResult,
 } from "@/lib/mutations/delete-entities";
+
+export async function recreateFilesDatabase(): Promise<void> {
+  const current = await getCurrentWorkspace();
+  if (!current) throw new Error("Workspace not found.");
+
+  await createDatabase(current.access.client, current.access.ownerId, {
+    workspaceId: current.workspace.id,
+    templateType: "files",
+    name: "Files",
+  });
+
+  revalidatePath("/files");
+  revalidatePath("/", "layout");
+}
 
 async function requireOwnedFileSource(fileId: string) {
   const access = await requireDataAccess();

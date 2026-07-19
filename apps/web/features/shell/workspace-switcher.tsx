@@ -1,11 +1,16 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { signOut } from "@/app/(auth)/actions";
-import { setCurrentWorkspace } from "@/app/(workspace)/actions";
+import {
+  renameWorkspace,
+  setCurrentWorkspace,
+  updateWorkspaceIcon,
+} from "@/app/(workspace)/actions";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 import type { WorkspaceSummary } from "@/lib/queries/workspace-shell";
 import { Icon } from "@/components/ui/planevo-icon";
-import { WorkspaceComposer } from "@/features/home/workspace-composer";
+import { WorkspaceCreateButton } from "@/features/shell/workspace-create-button";
 import { WorkspaceManagePopover } from "@/features/shell/workspace-manage-popover";
 
 const SWITCH_DELAY_MS = 250;
@@ -32,11 +37,20 @@ export function WorkspaceSwitcher({
   onOpenSettings,
 }: WorkspaceSwitcherProps) {
   const [open, setOpen] = useState(false);
-  const [managingWorkspace, setManagingWorkspace] = useState<WorkspaceSummary | null>(
-    null,
-  );
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(workspaceName);
+  const [displayName, setDisplayName] = useState(workspaceName);
+  const [displayIcon, setDisplayIcon] = useState(workspaceInitial);
+  const [managingWorkspace, setManagingWorkspace] = useState<WorkspaceSummary | null>(null);
   const [isPending, startTransition] = useTransition();
   const switchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setDisplayName(workspaceName);
+    setDraftName(workspaceName);
+    setDisplayIcon(workspaceInitial);
+  }, [workspaceName, workspaceInitial]);
 
   function switchTo(workspaceId: string) {
     setOpen(false);
@@ -66,28 +80,107 @@ export function WorkspaceSwitcher({
     setManagingWorkspace(null);
   }
 
+  function beginRename() {
+    setDraftName(displayName);
+    setEditingName(true);
+    requestAnimationFrame(() => nameInputRef.current?.select());
+  }
+
+  function cancelRename() {
+    setDraftName(displayName);
+    setEditingName(false);
+  }
+
+  function commitRename() {
+    const nextName = draftName.trim();
+    if (!nextName || !activeWorkspaceId) {
+      cancelRename();
+      return;
+    }
+    if (nextName === displayName) {
+      setEditingName(false);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await renameWorkspace({ workspaceId: activeWorkspaceId, name: nextName });
+      if (result.success) {
+        setDisplayName(nextName);
+        setEditingName(false);
+      } else {
+        setDraftName(displayName);
+        setEditingName(false);
+      }
+    });
+  }
+
+  function handleIconChange(icon: string | null) {
+    if (!activeWorkspaceId) return;
+    const nextIcon = icon ?? displayName.charAt(0).toUpperCase();
+    setDisplayIcon(nextIcon);
+    startTransition(async () => {
+      const result = await updateWorkspaceIcon({ workspaceId: activeWorkspaceId, icon });
+      if (!result.success) {
+        setDisplayIcon(workspaceInitial);
+      }
+    });
+  }
+
   const memberLabel = memberCount === 1 ? "1 member" : `${memberCount} members`;
 
   return (
     <div className="relative min-w-0 flex-1">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label="Switch workspace"
-        className={`flex h-9 min-w-0 w-full items-center gap-2 rounded-lg px-2 outline-none transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+      <div
+        className={`flex h-9 min-w-0 w-full items-center gap-1 rounded-lg px-1 outline-none transition-colors hover:bg-surface-raised focus-within:bg-surface-raised ${
           isPending ? "opacity-60" : ""
         }`}
       >
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-surface-raised text-label font-medium text-ink">
-          {workspaceInitial}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-left text-small font-medium">
-          {workspaceName}
-        </span>
-        <Icon name="chevron-down" className="size-4 shrink-0 text-text-muted" />
-      </button>
+        <div className="shrink-0 [&_button]:size-7 [&_button]:text-body">
+          <EmojiPicker
+            value={displayIcon.length <= 2 ? displayIcon : null}
+            onChange={handleIconChange}
+            label="Workspace icon"
+          />
+        </div>
+        {editingName ? (
+          <input
+            ref={nameInputRef}
+            value={draftName}
+            onChange={(event) => setDraftName(event.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitRename();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancelRename();
+              }
+            }}
+            aria-label="Workspace name"
+            className="min-w-0 flex-1 truncate rounded-md bg-paper px-1 text-small font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={beginRename}
+            className="min-w-0 flex-1 truncate rounded-md px-1 text-left text-small font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            {displayName}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label="Switch workspace"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-muted outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          <Icon name="chevron-down" className="size-4" />
+        </button>
+      </div>
 
       {open && (
         <>
@@ -108,10 +201,10 @@ export function WorkspaceSwitcher({
           >
             <div className="flex items-center gap-3 rounded-lg px-2 py-2">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-paper text-small font-medium text-ink">
-                {workspaceInitial}
+                {displayIcon}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-small font-medium text-ink">{workspaceName}</p>
+                <p className="truncate text-small font-medium text-ink">{displayName}</p>
                 <p className="truncate text-label text-text-muted">
                   {planLabel} · {memberLabel}
                 </p>
@@ -133,6 +226,16 @@ export function WorkspaceSwitcher({
             <button
               type="button"
               role="menuitem"
+              title="Invite members — coming soon"
+              disabled
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-small text-text-muted opacity-60"
+            >
+              <Icon name="invite" className="size-4 shrink-0" />
+              Invite members
+            </button>
+            <button
+              type="button"
+              role="menuitem"
               onClick={() => {
                 closeMenus();
                 onOpenSettings?.();
@@ -142,23 +245,11 @@ export function WorkspaceSwitcher({
               <Icon name="settings" className="size-4 shrink-0 text-text-secondary" />
               Settings
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              title="Invite members — coming soon"
-              disabled
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-small text-text-muted opacity-60"
-            >
-              <Icon name="invite" className="size-4 shrink-0" />
-              Invite members
-            </button>
 
             <div className="my-1 border-t border-border" />
 
             {userEmail && (
-              <p className="truncate px-2 pb-1 pt-1 text-label text-text-muted">
-                {userEmail}
-              </p>
+              <p className="truncate px-2 pb-1 pt-1 text-label text-text-muted">{userEmail}</p>
             )}
 
             {workspaces.map((workspace) => (
@@ -191,7 +282,7 @@ export function WorkspaceSwitcher({
             ))}
 
             <div className="mt-1 border-t border-border pt-1">
-              <WorkspaceComposer />
+              <WorkspaceCreateButton onCreated={closeMenus} />
               <p className="px-2 pb-1 pt-2 text-label text-text-muted">
                 Double-click a workspace to rename or delete.
               </p>

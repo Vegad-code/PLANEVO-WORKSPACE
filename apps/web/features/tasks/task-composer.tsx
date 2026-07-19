@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { submitTask, type TaskFormState } from "@/app/(workspace)/tasks/actions";
+import { submitTask, type TaskFormState } from "@/features/tasks/composer-actions";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/planevo-icon";
 

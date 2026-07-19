@@ -18,9 +18,9 @@ function fakeClient(results) {
   };
 }
 
-test("task database creation creates only its empty born-with foundation", async () => {
+test("task database creation uses F-11 create_database_from_template", async () => {
   const client = fakeClient({
-    create_task_database_with_views: {
+    create_database_from_template: {
       data: {
         workspace_id: "workspace-1",
         page_id: "page-1",
@@ -40,8 +40,9 @@ test("task database creation creates only its empty born-with foundation", async
     },
   );
   assert.deepEqual(client.calls.map((call) => call.functionName), [
-    "create_task_database_with_views",
+    "create_database_from_template",
   ]);
+  assert.equal(client.calls[0].args.p_template.templateType, "task");
 });
 
 test("a record is requested only when a real task is submitted", async () => {

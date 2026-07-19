@@ -43,6 +43,7 @@ export interface Database {
           parent_page_id: string | null;
           title: string;
           icon: string | null;
+          cover_image: string | null;
           content_json: Json;
           database_id: string | null;
           position: number;
@@ -56,6 +57,7 @@ export interface Database {
           parent_page_id?: string | null;
           title?: string;
           icon?: string | null;
+          cover_image?: string | null;
           content_json?: Json;
           database_id?: string | null;
           position?: number;
@@ -69,6 +71,7 @@ export interface Database {
           parent_page_id?: string | null;
           title?: string;
           icon?: string | null;
+          cover_image?: string | null;
           content_json?: Json;
           database_id?: string | null;
           position?: number;
@@ -412,9 +415,9 @@ export interface Database {
         Relationships: [];
       };
       file_sources: {
-        Row: { id: string; workspace_id: string; page_id: string | null; created_by: string; storage_path: string; name: string; mime_type: string | null; size_bytes: number | null; ingestion_status: string; metadata_json: Json; created_at: string; updated_at: string };
-        Insert: { id?: string; workspace_id: string; page_id?: string | null; created_by: string; storage_path: string; name: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
-        Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; storage_path?: string; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Row: { id: string; workspace_id: string; page_id: string | null; created_by: string; user_id: string; operation_key: string | null; reservation_expires_at: string | null; storage_path: string; name: string; mime_type: string | null; size_bytes: number | null; ingestion_status: string; metadata_json: Json; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; page_id?: string | null; created_by: string; user_id: string; operation_key?: string | null; reservation_expires_at?: string | null; storage_path: string; name: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; user_id?: string; operation_key?: string | null; reservation_expires_at?: string | null; storage_path?: string; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
         Relationships: [];
       };
       integration_connections: {
@@ -441,11 +444,118 @@ export interface Database {
         Update: { id?: string; file_source_id?: string; position?: number; content?: string; token_count?: number | null; metadata_json?: Json; created_at?: string };
         Relationships: [];
       };
+      tasks: {
+        Row: { id: string; user_id: string; operation_key: string | null; title: string; status: string; priority: string | null; due_at: string | null; description_json: Json; position: number; completed_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; operation_key?: string | null; title: string; status?: string; priority?: string | null; due_at?: string | null; description_json?: Json; position?: number; completed_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; user_id?: string; operation_key?: string | null; title?: string; status?: string; priority?: string | null; due_at?: string | null; description_json?: Json; position?: number; completed_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      task_subtasks: {
+        Row: { id: string; task_id: string; title: string; is_done: boolean; position: number; created_at: string };
+        Insert: { id?: string; task_id: string; title: string; is_done?: boolean; position?: number; created_at?: string };
+        Update: { id?: string; task_id?: string; title?: string; is_done?: boolean; position?: number; created_at?: string };
+        Relationships: [];
+      };
+      calendars: {
+        Row: { id: string; user_id: string; name: string; color: string; is_visible: boolean; position: number; created_at: string };
+        Insert: { id?: string; user_id: string; name: string; color?: string; is_visible?: boolean; position?: number; created_at?: string };
+        Update: { id?: string; user_id?: string; name?: string; color?: string; is_visible?: boolean; position?: number; created_at?: string };
+        Relationships: [];
+      };
+      calendar_events: {
+        Row: { id: string; calendar_id: string; user_id: string; operation_key: string | null; title: string; starts_at: string; ends_at: string; all_day: boolean; location: string | null; description_json: Json; task_id: string | null; google_event_id: string | null; source: string; created_at: string; updated_at: string };
+        Insert: { id?: string; calendar_id: string; user_id: string; operation_key?: string | null; title: string; starts_at: string; ends_at: string; all_day?: boolean; location?: string | null; description_json?: Json; task_id?: string | null; google_event_id?: string | null; source?: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; calendar_id?: string; user_id?: string; operation_key?: string | null; title?: string; starts_at?: string; ends_at?: string; all_day?: boolean; location?: string | null; description_json?: Json; task_id?: string | null; google_event_id?: string | null; source?: string; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      workspace_links: {
+        Row: { id: string; workspace_id: string; resource_type: string; resource_id: string; created_by: string; created_at: string };
+        Insert: { id?: string; workspace_id: string; resource_type: string; resource_id: string; created_by: string; created_at?: string };
+        Update: { id?: string; workspace_id?: string; resource_type?: string; resource_id?: string; created_by?: string; created_at?: string };
+        Relationships: [];
+      };
+      file_links: {
+        Row: { id: string; file_source_id: string; operation_key: string | null; target_type: string; target_id: string; created_at: string };
+        Insert: { id?: string; file_source_id: string; operation_key?: string | null; target_type: string; target_id: string; created_at?: string };
+        Update: { id?: string; file_source_id?: string; operation_key?: string | null; target_type?: string; target_id?: string; created_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      claim_task_attachment: {
+        Args: {
+          p_owner_id: string;
+          p_file_source_id: string;
+          p_task_id: string;
+          p_operation_key: string;
+        };
+        Returns: undefined;
+      };
+      reserve_task_attachment: {
+        Args: { p_owner_id: string; p_workspace_id: string; p_operation_key: string; p_storage_path: string; p_name: string; p_mime_type: string; p_size_bytes: number; p_expires_at: string };
+        Returns: Json;
+      };
+      begin_task_attachment_cleanup: {
+        Args: { p_owner_id: string; p_file_source_id: string; p_storage_path: string; p_failure_stage?: string | null; p_failure_message?: string | null };
+        Returns: boolean;
+      };
+      finalize_task_attachment_cleanup: {
+        Args: { p_owner_id: string; p_file_source_id: string; p_storage_path: string };
+        Returns: boolean;
+      };
+      create_task_ordered: {
+        Args: { p_owner_id: string; p_operation_key: string; p_title: string; p_status: string; p_priority: string | null; p_due_at: string | null; p_description_json: Json };
+        Returns: Database["public"]["Tables"]["tasks"]["Row"];
+      };
+      move_task_ordered: {
+        Args: { p_owner_id: string; p_task_id: string; p_status: string; p_before_task_id: string | null; p_after_task_id: string | null };
+        Returns: undefined;
+      };
+      delete_task_cascade: {
+        Args: { p_owner_id: string; p_task_id: string };
+        Returns: boolean;
+      };
+      schedule_task_idempotent: {
+        Args: { p_owner_id: string; p_task_id: string; p_operation_key: string; p_title: string; p_starts_at: string; p_ends_at: string };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
       create_planevo_workspace: {
         Args: { p_owner_id: string; p_name: string; p_icon?: string | null };
+        Returns: Json;
+      };
+      create_starter_workspace: {
+        Args: {
+          p_owner_id: string;
+          p_seed: Json;
+          p_workspace_id?: string | null;
+        };
+        Returns: Json;
+      };
+      create_user_products: {
+        Args: { p_user_id: string; p_seed: Json };
+        Returns: Json;
+      };
+      create_starter_workspace_v2: {
+        Args: {
+          p_owner_id: string;
+          p_seed: Json;
+          p_workspace_id?: string | null;
+        };
+        Returns: Json;
+      };
+      promote_blocks_to_records: {
+        Args: {
+          p_owner_id: string;
+          p_page_id: string;
+          p_database_id: string;
+          p_blocks: Json;
+          p_next_content: Json;
+        };
+        Returns: Json;
+      };
+      duplicate_database_with_records: {
+        Args: { p_owner_id: string; p_database_id: string; p_name?: string | null };
         Returns: Json;
       };
       create_database_from_template: {
@@ -492,6 +602,30 @@ export interface Database {
       duplicate_database_structure: {
         Args: { p_owner_id: string; p_database_id: string; p_name?: string | null };
         Returns: Json;
+      };
+      apply_property_conversion: {
+        Args: {
+          p_owner_id: string;
+          p_property_id: string;
+          p_new_type: string;
+          p_new_config: Json;
+          p_value_updates: Json;
+          p_clear_record_ids: string[];
+        };
+        Returns: Json;
+      };
+      duplicate_records: {
+        Args: { p_owner_id: string; p_record_ids: string[] };
+        Returns: string[];
+      };
+      move_records_to_database: {
+        Args: {
+          p_owner_id: string;
+          p_record_ids: string[];
+          p_target_database_id: string;
+          p_property_map: Json;
+        };
+        Returns: number;
       };
       get_workspace_calendar_records: {
         Args: { p_workspace_id: string; p_start: string; p_end: string };

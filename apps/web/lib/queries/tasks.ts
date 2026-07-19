@@ -9,6 +9,11 @@ export type { TasksData } from "@planevo/core/queries/tasks";
 
 // Errors intentionally propagate to the route error boundary — a failed load
 // must never render as an empty workspace. "unavailable" = unauthenticated only.
+/**
+ * @deprecated Kernel task-database bundle, kept only for legacy workspace
+ * database surfaces. The Tasks product reads `loadProductTasks` /
+ * `loadTasksPageData` (apps/web/lib/queries/product-tasks.ts) instead.
+ */
 export const getTasksData = cache(async (): Promise<TasksData> => {
   const current = await getCurrentWorkspace();
   if (!current) {
@@ -24,7 +29,7 @@ export const getTasksData = cache(async (): Promise<TasksData> => {
   return loadTasksBundle(current.access.client, current.workspace.id);
 });
 
-/** Full task database bundle for the F-08 Tasks face. */
+/** @deprecated Kernel task-database bundle for legacy DatabaseFace routes. */
 export const getTaskDatabaseBundle = cache(async (): Promise<{
   workspaceId: string;
   bundle: DatabaseBundle | null;

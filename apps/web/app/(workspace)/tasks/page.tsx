@@ -1,46 +1,48 @@
-import { Suspense } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
-import { TaskComposer } from "@/features/tasks/task-composer";
-import { TaskDatabaseFace } from "@/features/tasks/task-database-face";
-import { getTaskDatabaseBundle } from "@/lib/queries/tasks";
+import { TasksProductView } from "@/features/tasks-product/tasks-product-view";
+import { loadTasksPageData } from "@/lib/queries/product-tasks";
+import type { TasksScope } from "@/lib/tasks/scope-prefs";
 
-export default async function TasksPage() {
-  const { workspaceId, bundle } = await getTaskDatabaseBundle();
+function requestedScope(value: string | undefined): TasksScope {
+  return value === "workspace" ? "workspace" : "all";
+}
 
-  if (!workspaceId) {
-    return (
-      <div className="mx-auto max-w-3xl px-5 py-12">
-        <EmptyState
-          icon="tasks"
-          title="Sign in to see your tasks"
-          description="Your task database appears here once you're signed in."
-        />
-      </div>
-    );
+async function TasksProductPage({ scope }: { scope: TasksScope }) {
+  let data = await loadTasksPageData(scope);
+  if (
+    data.status === "ready" &&
+    data.scope === "workspace" &&
+    data.workspaceId === null
+  ) {
+    data = await loadTasksPageData("all");
   }
 
-  if (!bundle) {
+  if (data.status === "unauthenticated") {
     return (
-      <div className="mx-auto max-w-3xl px-5 py-12">
-        <EmptyState
-          icon="tasks"
-          title="Your task board is ready when you are"
-          description="Create your first real task. Planevo will add only the database structure and views it needs."
-          action={
-            <TaskComposer
-              workspaceId={workspaceId}
-              buttonLabel="Create first task"
-              appearance="quiet"
-            />
-          }
-        />
-      </div>
+      <section className="mx-auto w-full max-w-3xl px-6 py-12">
+        <p className="text-label uppercase text-text-muted">Tasks</p>
+        <h1 className="mt-2 text-h1">Sign in to see your tasks</h1>
+        <p className="mt-2 text-body text-text-secondary">
+          Your task board, list, and table will be ready here after you sign in.
+        </p>
+      </section>
     );
   }
 
   return (
-    <Suspense fallback={<p className="p-8 text-small text-text-muted">Loading tasks…</p>}>
-      <TaskDatabaseFace bundle={bundle} workspaceId={workspaceId} />
-    </Suspense>
+    <TasksProductView
+      initialTasks={data.tasks}
+      initialScope={data.scope}
+      workspaceId={data.workspaceId}
+      workspaceName={data.workspaceName}
+    />
   );
+}
+
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scope?: string }>;
+}) {
+  const { scope } = await searchParams;
+  return <TasksProductPage scope={requestedScope(scope)} />;
 }

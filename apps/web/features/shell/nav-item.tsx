@@ -15,6 +15,7 @@ type NavItemBaseProps = {
   compact?: boolean;
   depth?: number;
   onNavigate?: () => void;
+  activeAccent?: boolean;
 };
 
 type NavItemProps = NavItemBaseProps &
@@ -41,6 +42,7 @@ export function NavItem({
   compact = false,
   depth = 0,
   onNavigate,
+  activeAccent = true,
 }: NavItemProps) {
   const pathname = usePathname();
   const active = href ? isNavItemActive(pathname, href) : false;
@@ -60,7 +62,7 @@ export function NavItem({
   }`;
   const content = (
     <>
-      {resolvedState === "active" && (
+      {resolvedState === "active" && activeAccent && (
         <span className="absolute left-0 h-4 w-0.5 bg-marigold" aria-hidden="true" />
       )}
       <Icon name={icon} className={`size-4 shrink-0 ${ai ? "text-slate" : "text-current"}`} />

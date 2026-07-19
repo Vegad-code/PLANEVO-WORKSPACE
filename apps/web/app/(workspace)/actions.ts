@@ -130,6 +130,27 @@ export async function createPageAndOpen(): Promise<void> {
   redirect(`/pages/${pageId}`);
 }
 
+export async function updateWorkspaceIcon(input: {
+  workspaceId: string;
+  icon: string | null;
+}): Promise<ActionResult> {
+  const icon = input.icon?.trim() || null;
+
+  try {
+    const access = await requireDataAccess();
+    const { error } = await access.client
+      .from("workspaces")
+      .update({ icon })
+      .eq("id", input.workspaceId)
+      .eq("owner_id", access.ownerId);
+    if (error) throw error;
+    revalidatePath("/", "layout");
+    return { success: true, data: undefined };
+  } catch (cause) {
+    return { success: false, error: errorMessage(cause, "Failed to update the workspace icon.") };
+  }
+}
+
 export async function renameWorkspace(input: {
   workspaceId: string;
   name: string;

@@ -16,3 +16,12 @@ out/
 *.log
 .vercel
 .turbo
+
+# Supabase CLI local state (project refs, pooler URLs)
+supabase/.temp/
+
+# Cursor local settings
+.cursor/
+
+# Apple emoji TTF (loaded via CDN; do not commit 111MB binary)
+apps/web/public/fonts/apple-color-emoji/

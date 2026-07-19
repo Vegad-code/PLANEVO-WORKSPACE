@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
@@ -20,6 +21,13 @@ const appearanceScript = `
     preferences.theme === "system" ? (systemDark ? "dark" : "light") : preferences.theme;
   document.documentElement.toggleAttribute("data-minimal", preferences.minimal);
 })();`;
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 const generalSans = localFont({
   src: [
@@ -44,7 +52,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${generalSans.variable} ${GeistMono.variable} h-full antialiased`}
+      className={`${generalSans.variable} ${inter.variable} ${GeistMono.variable} h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: appearanceScript }} />

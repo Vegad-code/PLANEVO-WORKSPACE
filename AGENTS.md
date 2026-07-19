@@ -4,9 +4,11 @@ Single source of truth for every AI dev tool on this repo (Codex, Cursor, Claude
 read this file). Do not duplicate these rules into other files — the tool-specific files
 (`CLAUDE.md`, `.cursor/rules/planevo.mdc`) only point here so nothing drifts.
 
-Planevo is the workspace that's ready before you are: Notion-caliber structural power
-(blocks, databases, views, relations) with none of the setup tax. Its own product —
-never marketed as a Notion alternative.
+Planevo is the Work OS for normal people: a productivity **ecosystem** where Tasks,
+Calendar, Files, and Workspace are separate products that connect seamlessly (Apple
+Continuity model) — not one database engine wearing different hats. Workspace is the
+Notion-grade block canvas; everything else does its own job. Never marketed as a
+Notion alternative.
 
 ## What we're doing right now
 
@@ -26,10 +28,12 @@ Order of operations:
 1. `docs/design-brief.md` — the design spec. Tokens (with their exact CSS variable names),
    type/spacing scales, component inventory, screen list, and the rules for reference
    images. **This governs all design work.**
-2. `docs/planevo-prd.md` — product strategy source of truth. Read the relevant section
-   before building any screen (e.g. §5.7 before onboarding, §5.4 before Planevo AI).
+2. `docs/planevo-prd.md` — product strategy source of truth (**v2.0 ecosystem model**).
+   Read the relevant section before building any screen (e.g. §5.11 onboarding, §5.8 AI).
    For WHAT each feature is and its V1 boundary, `docs/planevo-feature-spec.md` (F-01…)
    is the build-ready companion — feature IDs there are the stable references.
+   **Do not use kernel-first patterns** (`DatabaseFace`, `template_type` faces for
+   Tasks/Calendar/Files) — see DEP-01 in the feature spec.
 3. `docs/design-build-sheet.md` — the 22-screen build order and what each screen contains.
 4. `docs/references/` — visual craft references ONLY. See the rule below.
 
@@ -42,13 +46,15 @@ Order of operations:
   layout IS the layout reference for the Home screen** — sidebar, centered greeting,
   action-card grid, bottom composer. This exception covers Home only; every other screen
   stays craft-only. If you're unsure whether something is craft or IA, ask.
-- **Home is a calm launch hub; the rest of the product stays workspace-first.**
-  (Founder override, 2026-07-16 — supersedes the old "never Acme-style Home" rule and
-  F-47 as originally written in `docs/planevo-feature-spec.md`.) Home is its own route:
-  greeting, filter chips, Planevo-specific action cards, and a bottom composer that can
-  talk to Planevo AI without forcing anyone to be AI-native. Home links into Workspace /
-  Tasks / Calendar / Files but never renders them inline. Outside Home, the old rule
-  holds: no chat console as a front door, no agent grid, no AI-first IA.
+- **Home is a calm launch hub; Tasks, Calendar, and Files are independent products.**
+  (Founder overrides, 2026-07-16 Home layout; 2026-07-17 ecosystem architecture.)
+  Home links into real product routes — never database faces, never inline product UIs.
+  Tasks, Calendar, and Files have their own data, own UI, global scope; Workspace is the
+  Notion block canvas and embeds/links them. No chat console as a front door, no agent
+  grid, no AI-first IA.
+- **Ecosystem linking, not a universal kernel.** Products handshake via `workspace_links`
+  and cross-feature links — never by making Tasks/Calendar/Files into workspace databases.
+  Workspace custom databases are workspace-scoped builder tools only.
 - **Present, not pushy AI.** The AI surface (Planevo AI) is findable in seconds and
   ignorable forever. No sparkle-emoji buttons begging for clicks in core flows. The AI
   layer uses the `slate` token; it never dominates a screen.

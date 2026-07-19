@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
+import { LayoutGroup, motion } from "framer-motion";
+import { usePathname } from "next/navigation";
+import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
+import {
+  SHELL_TOP_BAR_HEIGHT_PX,
+  useScrollChrome,
+} from "@/lib/motion/use-scroll-chrome";
+import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
+import { pageBreadcrumbLabels } from "@/lib/onboarding/page-breadcrumb";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import {
   reduceMobileNavigation,
@@ -22,13 +30,25 @@ import {
   type SidebarEvent,
   type SidebarState,
 } from "@planevo/core/state/sidebar-state";
+import { CommandBar } from "@/features/command-bar/command-bar";
+import { createPageAndOpen } from "@/app/(workspace)/actions";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
 import { TopBar } from "@/features/shell/top-bar";
+import { SidebarLayoutProvider } from "@/features/shell/sidebar-layout-context";
 
 const SIDEBAR_PREFERENCE_KEY = "planevo.sidebar.preference";
 const SIDEBAR_WIDTH_KEY = "planevo.sidebar.width";
 const DISMISS_PEEK_DELAY_MS = 100;
 const PEEK_EXIT_MS = 200;
+
+/** Product routes where scroll should reclaim vertical space (Notion / Linear pattern). */
+const AUTO_HIDE_CHROME_PREFIXES = ["/tasks", "/calendar", "/files"];
+
+function shouldAutoHideChrome(pathname: string): boolean {
+  return AUTO_HIDE_CHROME_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
 
 export function AppShell({
   children,
@@ -37,12 +57,15 @@ export function AppShell({
   children: React.ReactNode;
   shell: WorkspaceShellData;
 }) {
-  const router = useRouter();
+  const pathname = usePathname();
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const shellLayoutTransition = getShellLayoutTransition(prefersReducedMotion);
   const [sidebarState, setSidebarState] = useState<SidebarState>(
     createInitialSidebarState(),
   );
   const [restored, setRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [peekExiting, setPeekExiting] = useState(false);
   const [mobileNavigation, dispatchMobileNavigation] = useReducer(
     reduceMobileNavigation,
@@ -55,6 +78,9 @@ export function AppShell({
   const mobileMenuTrigger = useRef<HTMLButtonElement>(null);
   const topBarSettingsTrigger = useRef<HTMLButtonElement>(null);
   const settingsReturnFocus = useRef<HTMLElement | null>(null);
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const autoHideChrome = shouldAutoHideChrome(pathname);
+  const topBarVisible = useScrollChrome(mainScrollRef, { enabled: autoHideChrome });
 
   const dispatch = useCallback((event: SidebarEvent) => {
     setSidebarState((state) => {
@@ -120,7 +146,10 @@ export function AppShell({
         dispatch({ type: "toggle" });
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        router.push("/search");
+        setCommandBarOpen(true);
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        void createPageAndOpen();
       } else if (event.key === "Escape" && sidebarState.peeked) {
         clearPeekTimer();
         scheduleDismissPeek();
@@ -133,7 +162,6 @@ export function AppShell({
     clearDismissTimer,
     clearPeekTimer,
     dispatch,
-    router,
     sidebarState.peeked,
   ]);
 
@@ -219,6 +247,11 @@ export function AppShell({
     });
   }
 
+  const pageIdMatch = pathname.match(/^\/pages\/([^/]+)/);
+  const pageBreadcrumb = pageIdMatch
+    ? pageBreadcrumbLabels(shell.pages, pageIdMatch[1]!)
+    : undefined;
+
   const sidebarPresentation = getSidebarPresentation(sidebarState);
   const isExpanded = sidebarPresentation.spacer === "expanded";
   const showEdgeTrigger = sidebarState.preference === "hidden";
@@ -227,40 +260,46 @@ export function AppShell({
   const showDesktopSidebar =
     sidebarPresentation.view === "expanded" || sidebarPresentation.view === "peek";
 
+  const spacerWidth = isExpanded ? sidebarState.width : 0;
+  const sidebarLayoutValue = useMemo(
+    () => ({
+      preference: sidebarState.preference,
+      spacerWidth,
+      isExpanded,
+    }),
+    [isExpanded, sidebarState.preference, spacerWidth],
+  );
+
   return (
-    <div className="flex h-dvh min-h-0 overflow-hidden bg-paper" data-testid="app-shell">
-      <div
-        data-testid="sidebar-spacer"
-        data-sidebar-preference={sidebarState.preference}
-        style={
-          isExpanded
-            ? ({
-                width: sidebarState.width,
-                ["--sidebar-width" as string]: `${sidebarState.width}px`,
-                transitionDuration: "var(--sidebar-motion-duration-enter)",
-              } satisfies CSSProperties)
-            : {
-                transitionDuration: "var(--sidebar-motion-duration-enter)",
+    <LayoutGroup id="app-shell-layout">
+      <div className="flex h-dvh min-h-0 overflow-hidden bg-paper" data-testid="app-shell">
+        <motion.div
+          layout
+          data-testid="sidebar-spacer"
+          data-sidebar-preference={sidebarState.preference}
+          animate={{ width: spacerWidth }}
+          transition={shellLayoutTransition}
+          style={
+            {
+              ["--sidebar-width" as string]: `${sidebarState.width}px`,
+            } satisfies CSSProperties
+          }
+          className="relative hidden shrink-0 overflow-hidden md:block"
+        >
+          {showDesktopSidebar && sidebarPresentation.view === "expanded" && (
+            <Sidebar
+              shell={shell}
+              view="expanded"
+              width={sidebarState.width}
+              onToggle={() => dispatch({ type: "toggle" })}
+              onPin={() => dispatch({ type: "pin" })}
+              onWidthChange={(nextWidth) =>
+                dispatch({ type: "set-width", width: nextWidth })
               }
-        }
-        className={`relative hidden shrink-0 transition-[width] ease-out motion-reduce:transition-none md:block ${
-          isExpanded ? "" : "w-0"
-        }`}
-      >
-        {showDesktopSidebar && sidebarPresentation.view === "expanded" && (
-          <Sidebar
-            shell={shell}
-            view="expanded"
-            width={sidebarState.width}
-            onToggle={() => dispatch({ type: "toggle" })}
-            onPin={() => dispatch({ type: "pin" })}
-            onWidthChange={(nextWidth) =>
-              dispatch({ type: "set-width", width: nextWidth })
-            }
-            onOpenSettings={() => openSettings()}
-          />
-        )}
-      </div>
+              onOpenSettings={() => openSettings()}
+            />
+          )}
+        </motion.div>
 
       {showDesktopSidebar && sidebarPresentation.view === "peek" && (
         <Sidebar
@@ -282,21 +321,46 @@ export function AppShell({
         />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          userDisplayName={shell.userDisplayName}
-          userInitials={shell.userInitials}
-          menuButtonRef={mobileMenuTrigger}
-          settingsButtonRef={topBarSettingsTrigger}
-          onOpenNavigation={() => dispatchMobileNavigation({ type: "open" })}
-          onOpenSettings={() => openSettings()}
-          navigationOpen={mobileNavigation.open}
-          showSidebarReveal={showRevealButton}
-        />
-        <main aria-label="Workspace canvas" className="min-h-0 flex-1 overflow-auto bg-paper">
-          {children}
-        </main>
-      </div>
+      <motion.div
+        layout
+        transition={shellLayoutTransition}
+        className="flex min-w-0 flex-1 flex-col"
+      >
+        <motion.div
+          layout
+          animate={{
+            height: topBarVisible || !autoHideChrome ? SHELL_TOP_BAR_HEIGHT_PX : 0,
+            opacity: topBarVisible || !autoHideChrome ? 1 : 0,
+          }}
+          transition={shellLayoutTransition}
+          className="shrink-0 overflow-hidden"
+        >
+          <TopBar
+            breadcrumb={
+              pageBreadcrumb && pageBreadcrumb.length > 0
+                ? pageBreadcrumb
+                : undefined
+            }
+            userDisplayName={shell.userDisplayName}
+            userInitials={shell.userInitials}
+            menuButtonRef={mobileMenuTrigger}
+            settingsButtonRef={topBarSettingsTrigger}
+            onOpenNavigation={() => dispatchMobileNavigation({ type: "open" })}
+            onOpenSettings={() => openSettings()}
+            navigationOpen={mobileNavigation.open}
+            showSidebarReveal={showRevealButton}
+          />
+        </motion.div>
+        <SidebarLayoutProvider value={sidebarLayoutValue}>
+          <main
+            ref={mainScrollRef}
+            aria-label="Workspace canvas"
+            className="min-h-0 flex-1 overflow-auto bg-paper"
+          >
+            {children}
+          </main>
+        </SidebarLayoutProvider>
+      </motion.div>
 
       <MobileSidebar
         open={mobileNavigation.open}
@@ -313,6 +377,14 @@ export function AppShell({
         shell={shell}
         onOpenChange={handleSettingsOpenChange}
       />
+      <CommandBar
+        open={commandBarOpen}
+        onClose={() => setCommandBarOpen(false)}
+        onOpenSettings={() => {
+          setCommandBarOpen(false);
+          openSettings();
+        }}
+      />
 
       {showEdgeTrigger && (
         <SidebarPeekTrigger
@@ -322,6 +394,7 @@ export function AppShell({
           onScheduleDismissPeek={scheduleDismissPeek}
         />
       )}
-    </div>
+      </div>
+    </LayoutGroup>
   );
 }
