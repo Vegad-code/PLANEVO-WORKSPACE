@@ -29,11 +29,20 @@ import { subscribeSpotlightOpen } from "@/features/command-bar/spotlight-bridge"
 import { createPageAndOpen } from "@/app/(workspace)/actions";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
 import { SidebarLayoutProvider } from "@/features/shell/sidebar-layout-context";
+import type { SettingsSection } from "@planevo/core/state/settings-state";
+import { SETTINGS_SECTIONS } from "@planevo/core/state/settings-state";
 
 const SIDEBAR_PREFERENCE_KEY = "planevo.sidebar.preference";
 const SIDEBAR_WIDTH_KEY = "planevo.sidebar.width";
 const DISMISS_PEEK_DELAY_MS = 100;
 const PEEK_EXIT_MS = 200;
+
+function isSettingsSection(value: unknown): value is SettingsSection {
+  return (
+    typeof value === "string" &&
+    (SETTINGS_SECTIONS as readonly string[]).includes(value)
+  );
+}
 
 export function AppShell({
   children,
@@ -49,6 +58,7 @@ export function AppShell({
   );
   const [restored, setRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("account");
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [spotlightQuery, setSpotlightQuery] = useState<string | undefined>(undefined);
   const [peekExiting, setPeekExiting] = useState(false);
@@ -128,6 +138,20 @@ export function AppShell({
       openSpotlight(query);
     });
   }, [openSpotlight]);
+
+  useEffect(() => {
+    function handleOpenSettingsEvent(event: Event) {
+      const detail =
+        event instanceof CustomEvent ? (event.detail as { section?: unknown } | undefined) : undefined;
+      const section = isSettingsSection(detail?.section) ? detail.section : "account";
+      openSettings(undefined, section);
+    }
+
+    window.addEventListener("planevo:open-settings", handleOpenSettingsEvent);
+    return () => {
+      window.removeEventListener("planevo:open-settings", handleOpenSettingsEvent);
+    };
+  }, []);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -217,10 +241,14 @@ export function AppShell({
     }, PEEK_EXIT_MS + DISMISS_PEEK_DELAY_MS);
   }
 
-  function openSettings(returnFocus?: HTMLElement | null) {
+  function openSettings(
+    returnFocus?: HTMLElement | null,
+    section: SettingsSection = "account",
+  ) {
     settingsReturnFocus.current =
       returnFocus ??
       (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setSettingsSection(section);
     setSettingsOpen(true);
   }
 
@@ -228,6 +256,7 @@ export function AppShell({
     setSettingsOpen(nextOpen);
     if (nextOpen) return;
 
+    setSettingsSection("account");
     window.requestAnimationFrame(() => {
       const returnTarget = settingsReturnFocus.current;
       if (returnTarget?.isConnected) {
@@ -245,13 +274,18 @@ export function AppShell({
     sidebarPresentation.view === "expanded" || sidebarPresentation.view === "peek";
 
   const spacerWidth = isExpanded ? sidebarState.width : 0;
+  // Safe inset follows preference=hidden, NOT peek. Peek already hides the
+  // hamburger (showRevealButton); dropping inset on peek made Files Library
+  // jump left under the overlay and flicker the edge-hover peek loop.
+  const showRevealChrome = sidebarState.preference === "hidden";
   const sidebarLayoutValue = useMemo(
     () => ({
       preference: sidebarState.preference,
       spacerWidth,
       isExpanded,
+      showRevealChrome,
     }),
-    [isExpanded, sidebarState.preference, spacerWidth],
+    [isExpanded, showRevealChrome, sidebarState.preference, spacerWidth],
   );
 
   return (
@@ -339,6 +373,7 @@ export function AppShell({
       <SettingsDialog
         open={settingsOpen}
         shell={shell}
+        initialSection={settingsSection}
         onOpenChange={handleSettingsOpenChange}
       />
       <CommandBar

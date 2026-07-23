@@ -4,7 +4,9 @@ import { enrichBundleWithRelationTitles } from "@planevo/core/queries/relation-d
 import { toDisplayRecord } from "@planevo/core/queries/record-display";
 import { applyView } from "@planevo/core/views/filter-engine";
 import { normalizeViewConfig } from "@planevo/core/views/view-config";
+import { mapTypedError } from "@/lib/api/typed-errors";
 import { requireDataAccess } from "@/lib/data/access";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -23,6 +25,7 @@ export async function GET(request: Request) {
 
   try {
     const access = await requireDataAccess();
+    await enforceRateLimit(access, "embedded-database:get", RATE_LIMITS.read);
     const { data: database, error: databaseError } = await access.client
       .from("databases")
       .select("id, name, workspaces!inner(owner_id)")
@@ -60,6 +63,8 @@ export async function GET(request: Request) {
       records,
     });
   } catch (cause) {
+    const mapped = mapTypedError(cause);
+    if (mapped) return mapped;
     const message = cause instanceof Error ? cause.message : "Failed to load embedded view.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

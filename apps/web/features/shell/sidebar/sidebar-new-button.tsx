@@ -8,7 +8,7 @@ import { Icon, type IconName } from "@/components/ui/planevo-icon";
 const menuItems: Array<{ label: string; icon: IconName; href: string }> = [
   { label: "New task", icon: "tasks", href: "/tasks" },
   { label: "New database", icon: "canvas", href: "/templates" },
-  { label: "New file", icon: "files", href: "/files/new" },
+  { label: "New file", icon: "files", href: "/files" },
 ];
 
 export function SidebarNewButton({ onNavigate }: { onNavigate?: () => void }) {

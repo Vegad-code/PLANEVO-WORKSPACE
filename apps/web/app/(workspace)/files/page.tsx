@@ -32,9 +32,10 @@ async function FilesProductPage({ scope }: { scope: FilesScope }) {
   return (
     <FilesProductView
       initialFiles={data.files}
+      folders={data.folders}
+      owner={data.owner}
       initialScope={data.scope}
       workspaceId={data.workspaceId}
-      firstName={data.firstName}
       usedBytes={data.usedBytes}
       capBytes={data.capBytes}
     />

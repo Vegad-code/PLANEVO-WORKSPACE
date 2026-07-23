@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useDraggable } from "@dnd-kit/core";
 import {
   Download,
   FileImage,
   FileSpreadsheet,
   FileText,
+  FolderInput,
+  GripVertical,
   Link2,
   MoreHorizontal,
   Paperclip,
@@ -13,6 +16,7 @@ import {
 } from "lucide-react";
 import type { FileSourceWithMeta } from "@planevo/core/queries/product-files";
 import { mimeFamily } from "@planevo/core/types/files";
+import { fileDragId, type FolderTreeItem, type OwnerDisplay } from "./kb-contracts";
 import { formatBytes } from "./storage-meter";
 
 export type ProductFileItem = FileSourceWithMeta & {
@@ -21,27 +25,25 @@ export type ProductFileItem = FileSourceWithMeta & {
 
 type FilesTableProps = {
   files: ProductFileItem[];
+  owner: OwnerDisplay;
+  folders: FolderTreeItem[];
   selectedFileId: string | null;
   onSelectFile: (file: ProductFileItem) => void;
   onDeleteFile: (file: ProductFileItem) => void;
   onAttachToTask: (file: ProductFileItem) => void;
   onLinkToEvent: (file: ProductFileItem) => void;
+  onMoveFileToFolder: (fileId: string, folderId: string | null) => void;
 };
 
+/** Minimal, borderless document glyph — matches the calm file-list reference. */
 function FileTypeIcon({ mimeType }: { mimeType: string | null }) {
   const family = mimeFamily(mimeType);
   const isSpreadsheet =
     mimeType?.includes("spreadsheet") || mimeType?.includes("csv");
   const IconComponent =
-    family === "images"
-      ? FileImage
-      : isSpreadsheet
-        ? FileSpreadsheet
-        : FileText;
+    family === "images" ? FileImage : isSpreadsheet ? FileSpreadsheet : FileText;
   return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary">
-      <IconComponent aria-hidden="true" className="size-4" />
-    </span>
+    <IconComponent aria-hidden="true" className="size-5 shrink-0 text-files-text-muted" />
   );
 }
 
@@ -52,8 +54,8 @@ function IngestionBadge({ status }: { status: string }) {
     <span
       className={`rounded-full px-2 py-0.5 text-product-meta ${
         status === "failed"
-          ? "bg-brick-tint text-ink"
-          : "bg-slate-tint text-ink"
+          ? "bg-brick-tint text-files-text"
+          : "bg-files-surface-muted text-files-text-muted"
       }`}
     >
       {label}
@@ -65,27 +67,60 @@ function formatModified(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString(undefined, {
-    month: "short",
     day: "numeric",
+    month: "long",
     year: "numeric",
   });
 }
 
+function OwnerCell({ owner }: { owner: OwnerDisplay }) {
+  const label = owner.name ?? owner.email;
+  const initial = label.trim().charAt(0).toUpperCase() || "?";
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {owner.avatarUrl ? (
+        <img
+          src={owner.avatarUrl}
+          alt=""
+          className="size-6 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#c9a227] text-[11px] font-semibold text-black">
+          {initial}
+        </span>
+      )}
+      <span className="truncate text-product-body text-files-text-muted">
+        {owner.email}
+      </span>
+    </div>
+  );
+}
+
 function RowMenu({
   file,
+  folders,
   onDeleteFile,
   onAttachToTask,
   onLinkToEvent,
+  onMoveFileToFolder,
 }: {
   file: ProductFileItem;
+  folders: FolderTreeItem[];
   onDeleteFile: (file: ProductFileItem) => void;
   onAttachToTask: (file: ProductFileItem) => void;
   onLinkToEvent: (file: ProductFileItem) => void;
+  onMoveFileToFolder: (fileId: string, folderId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+
+  function close() {
+    setOpen(false);
+    setMoveOpen(false);
+  }
 
   function choose(action: () => void) {
-    setOpen(false);
+    close();
     action();
   }
 
@@ -98,8 +133,9 @@ function RowMenu({
         onClick={(event) => {
           event.stopPropagation();
           setOpen((wasOpen) => !wasOpen);
+          setMoveOpen(false);
         }}
-        className="flex size-7 items-center justify-center rounded-lg text-text-muted outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+        className="flex size-7 items-center justify-center rounded-lg text-files-text-muted outline-none hover:bg-files-surface-muted hover:text-files-text focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta"
       >
         <MoreHorizontal aria-hidden="true" className="size-4" />
       </button>
@@ -112,12 +148,12 @@ function RowMenu({
             className="fixed inset-0 z-10 cursor-default"
             onClick={(event) => {
               event.stopPropagation();
-              setOpen(false);
+              close();
             }}
           />
           <div
             role="menu"
-            className="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-border bg-paper p-1"
+            className="absolute right-0 z-20 mt-1 w-52 rounded-files-card border border-files-border bg-files-surface p-1 shadow-lg"
             onClick={(event) => event.stopPropagation()}
           >
             {file.previewUrl ? (
@@ -127,8 +163,8 @@ function RowMenu({
                 download={file.name}
                 target="_blank"
                 rel="noreferrer"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-product-body text-ink hover:bg-surface-raised"
+                onClick={() => close()}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-product-body text-files-text hover:bg-files-surface-muted"
               >
                 <Download aria-hidden="true" className="size-4" />
                 Download
@@ -138,7 +174,7 @@ function RowMenu({
               role="menuitem"
               type="button"
               onClick={() => choose(() => onAttachToTask(file))}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-ink hover:bg-surface-raised"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-files-text hover:bg-files-surface-muted"
             >
               <Paperclip aria-hidden="true" className="size-4" />
               Attach to task
@@ -147,7 +183,7 @@ function RowMenu({
               role="menuitem"
               type="button"
               onClick={() => choose(() => onLinkToEvent(file))}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-ink hover:bg-surface-raised"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-files-text hover:bg-files-surface-muted"
             >
               <Link2 aria-hidden="true" className="size-4" />
               Link to event
@@ -155,8 +191,46 @@ function RowMenu({
             <button
               role="menuitem"
               type="button"
+              aria-expanded={moveOpen}
+              onClick={() => setMoveOpen((wasOpen) => !wasOpen)}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-files-text hover:bg-files-surface-muted"
+            >
+              <FolderInput aria-hidden="true" className="size-4" />
+              Move to folder
+            </button>
+            {moveOpen ? (
+              <div
+                role="group"
+                aria-label="Move to folder"
+                className="mt-1 max-h-56 overflow-auto border-t border-files-border pt-1"
+              >
+                {folders.map((folder) => (
+                  <button
+                    key={folder.id}
+                    role="menuitem"
+                    type="button"
+                    onClick={() => choose(() => onMoveFileToFolder(file.id, folder.id))}
+                    style={{ paddingLeft: `${0.75 + folder.depth * 0.75}rem` }}
+                    className="flex w-full items-center rounded-md py-1.5 pr-3 text-left text-product-body text-files-text hover:bg-files-surface-muted"
+                  >
+                    <span className="truncate">{folder.name}</span>
+                  </button>
+                ))}
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={() => choose(() => onMoveFileToFolder(file.id, null))}
+                  className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-product-body text-files-text-muted hover:bg-files-surface-muted"
+                >
+                  Remove from folder
+                </button>
+              </div>
+            ) : null}
+            <button
+              role="menuitem"
+              type="button"
               onClick={() => choose(() => onDeleteFile(file))}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-brick hover:bg-surface-raised"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-brick hover:bg-files-surface-muted"
             >
               <Trash2 aria-hidden="true" className="size-4" />
               Delete
@@ -168,122 +242,165 @@ function RowMenu({
   );
 }
 
+function FileRow({
+  file,
+  owner,
+  folders,
+  isSelected,
+  onSelectFile,
+  onDeleteFile,
+  onAttachToTask,
+  onLinkToEvent,
+  onMoveFileToFolder,
+}: {
+  file: ProductFileItem;
+  owner: OwnerDisplay;
+  folders: FolderTreeItem[];
+  isSelected: boolean;
+  onSelectFile: (file: ProductFileItem) => void;
+  onDeleteFile: (file: ProductFileItem) => void;
+  onAttachToTask: (file: ProductFileItem) => void;
+  onLinkToEvent: (file: ProductFileItem) => void;
+  onMoveFileToFolder: (fileId: string, folderId: string | null) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: fileDragId(file.id),
+  });
+
+  return (
+    <tr
+      onClick={() => onSelectFile(file)}
+      className={`group cursor-pointer border-b border-files-border/70 transition-colors ${
+        isSelected ? "bg-files-surface-muted" : "hover:bg-files-surface-muted/60"
+      } ${isDragging ? "opacity-50" : ""}`}
+    >
+      <td className="w-8 py-4 pl-4 pr-0">
+        <button
+          ref={setNodeRef}
+          type="button"
+          aria-label={`Drag ${file.name} to a folder`}
+          onClick={(event) => event.stopPropagation()}
+          {...attributes}
+          {...listeners}
+          className="flex size-6 cursor-grab touch-none items-center justify-center rounded text-files-text-muted opacity-0 outline-none transition-opacity hover:text-files-text focus-visible:opacity-100 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta group-hover:opacity-100"
+        >
+          <GripVertical aria-hidden="true" className="size-4" />
+        </button>
+      </td>
+      <td className="px-3 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <FileTypeIcon mimeType={file.mime_type} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-product-body font-medium text-files-text">
+                {file.name}
+              </span>
+              <IngestionBadge status={file.ingestion_status} />
+            </div>
+            {file.tags.length > 0 ? (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {file.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded border border-files-border px-1.5 py-0.5 text-product-meta text-files-text-muted"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </td>
+      <td className="hidden px-3 py-4 sm:table-cell">
+        <OwnerCell owner={owner} />
+      </td>
+      <td className="hidden px-3 py-4 text-product-body tabular-nums text-files-text-muted sm:table-cell">
+        {file.size_bytes === null ? "—" : formatBytes(file.size_bytes)}
+      </td>
+      <td className="hidden px-3 py-4 text-product-body text-files-text-muted md:table-cell">
+        {formatModified(file.created_at)}
+      </td>
+      <td className="w-12 px-3 py-4 text-right">
+        <div className="flex justify-end">
+          <RowMenu
+            file={file}
+            folders={folders}
+            onDeleteFile={onDeleteFile}
+            onAttachToTask={onAttachToTask}
+            onLinkToEvent={onLinkToEvent}
+            onMoveFileToFolder={onMoveFileToFolder}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export function FilesTable({
   files,
+  owner,
+  folders,
   selectedFileId,
   onSelectFile,
   onDeleteFile,
   onAttachToTask,
   onLinkToEvent,
+  onMoveFileToFolder,
 }: FilesTableProps) {
-  const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
-
-  function toggleChecked(fileId: string) {
-    setCheckedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(fileId)) {
-        next.delete(fileId);
-      } else {
-        next.add(fileId);
-      }
-      return next;
-    });
-  }
-
   return (
     <table className="w-full border-collapse">
       <thead>
-        <tr className="border-b border-border text-left">
-          <th scope="col" className="w-10 px-3 py-2" aria-label="Select" />
-          <th scope="col" className="px-3 py-2 text-product-column text-text-muted">
+        <tr className="border-b border-files-border text-left">
+          <th scope="col" className="w-8 py-3 pl-4 pr-0" aria-label="Drag" />
+          <th
+            scope="col"
+            className="px-3 py-3 text-product-column font-medium text-files-text-muted"
+          >
             Name
           </th>
-          <th scope="col" className="hidden px-3 py-2 text-product-column text-text-muted sm:table-cell">
-            Shared by
+          <th
+            scope="col"
+            className="hidden px-3 py-3 text-product-column font-medium text-files-text-muted sm:table-cell"
+          >
+            Added by
           </th>
-          <th scope="col" className="hidden px-3 py-2 text-product-column text-text-muted sm:table-cell">
-            Size
+          <th
+            scope="col"
+            className="hidden px-3 py-3 text-product-column font-medium text-files-text-muted sm:table-cell"
+          >
+            File size
           </th>
-          <th scope="col" className="hidden px-3 py-2 text-product-column text-text-muted md:table-cell">
+          <th
+            scope="col"
+            className="hidden px-3 py-3 text-product-column font-medium text-files-text-muted md:table-cell"
+          >
             Modified
           </th>
-          <th scope="col" className="w-12 px-3 py-2" aria-label="Actions" />
+          <th
+            scope="col"
+            className="w-12 px-3 py-3 text-right text-product-column font-medium text-files-text-muted"
+            aria-label="Actions"
+          >
+            Action
+          </th>
         </tr>
       </thead>
       <tbody>
-        {files.map((file) => {
-          const isSelected = file.id === selectedFileId;
-          return (
-            <tr
-              key={file.id}
-              onClick={() => onSelectFile(file)}
-              className={`cursor-pointer border-b border-border/70 ${
-                isSelected ? "bg-surface-raised" : "hover:bg-surface-raised/60"
-              }`}
-            >
-              <td className="px-3 py-2.5">
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${file.name}`}
-                  checked={checkedIds.has(file.id)}
-                  onChange={() => toggleChecked(file.id)}
-                  onClick={(event) => event.stopPropagation()}
-                  className="size-3.5 cursor-pointer accent-ink"
-                />
-              </td>
-              <td className="px-3 py-2.5">
-                <div className="flex min-w-0 items-center gap-3">
-                  <FileTypeIcon mimeType={file.mime_type} />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-product-title text-ink">
-                        {file.name}
-                      </span>
-                      <IngestionBadge status={file.ingestion_status} />
-                    </div>
-                    {file.tags.length > 0 ? (
-                      <div className="mt-0.5 flex flex-wrap gap-1">
-                        {file.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full border border-border px-1.5 py-0 text-product-meta text-text-secondary"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </td>
-              <td className="hidden px-3 py-2.5 sm:table-cell">
-                <span className="flex items-center gap-2 text-product-body text-text-secondary">
-                  <span
-                    aria-hidden="true"
-                    className="flex size-6 items-center justify-center rounded-full border border-border bg-surface-raised text-product-meta"
-                  >
-                    Y
-                  </span>
-                  You
-                </span>
-              </td>
-              <td className="hidden px-3 py-2.5 text-product-body tabular-nums text-text-secondary sm:table-cell">
-                {file.size_bytes === null ? "—" : formatBytes(file.size_bytes)}
-              </td>
-              <td className="hidden px-3 py-2.5 text-product-body text-text-secondary md:table-cell">
-                {formatModified(file.created_at)}
-              </td>
-              <td className="px-3 py-2.5">
-                <RowMenu
-                  file={file}
-                  onDeleteFile={onDeleteFile}
-                  onAttachToTask={onAttachToTask}
-                  onLinkToEvent={onLinkToEvent}
-                />
-              </td>
-            </tr>
-          );
-        })}
+        {files.map((file) => (
+          <FileRow
+            key={file.id}
+            file={file}
+            owner={owner}
+            folders={folders}
+            isSelected={file.id === selectedFileId}
+            onSelectFile={onSelectFile}
+            onDeleteFile={onDeleteFile}
+            onAttachToTask={onAttachToTask}
+            onLinkToEvent={onLinkToEvent}
+            onMoveFileToFolder={onMoveFileToFolder}
+          />
+        ))}
       </tbody>
     </table>
   );

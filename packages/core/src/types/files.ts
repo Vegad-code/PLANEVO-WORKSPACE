@@ -5,12 +5,8 @@ export type FileSourceRow = Database["public"]["Tables"]["file_sources"]["Row"];
 export const FILE_FILTER_TABS = ["all", "documents", "pdfs", "images"] as const;
 export type FileFilterTab = (typeof FILE_FILTER_TABS)[number];
 
-export type MimeFamily = Exclude<FileFilterTab, "all">;
+export type MimeFamily = "documents" | "pdfs" | "images";
 
-/** Dev placeholder plan cap for the storage meter (10 GB). */
-export const STORAGE_CAP_BYTES = 10 * 1024 * 1024 * 1024;
-
-/** Bucket a MIME type into the Files filter tabs. Unknown types read as documents. */
 export function mimeFamily(mimeType: string | null): MimeFamily {
   if (!mimeType) return "documents";
   if (mimeType.startsWith("image/")) return "images";
@@ -18,11 +14,24 @@ export function mimeFamily(mimeType: string | null): MimeFamily {
   return "documents";
 }
 
+import { storageCapBytesForPlan } from "./plans.ts";
+
+/** Default storage cap for the free plan (5 GB). */
+export const STORAGE_CAP_BYTES = storageCapBytesForPlan("free");
+
 export function matchesFileFilterTab(
   mimeType: string | null,
   tab: FileFilterTab,
 ): boolean {
-  return tab === "all" || mimeFamily(mimeType) === tab;
+  if (tab === "all") return true;
+  return mimeFamily(mimeType) === tab;
+}
+
+export function isStarredFileMetadata(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return false;
+  }
+  return (metadata as Record<string, unknown>).starred === true;
 }
 
 /**

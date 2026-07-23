@@ -78,6 +78,52 @@ function TaskSection({
   );
 }
 
+function MiniCalendar({ now }: { now: Date }) {
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanks = Array.from({ length: firstDay === 0 ? 6 : firstDay - 1 }, (_, i) => i); // Monday start
+  const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  return (
+    <div className="px-4 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-product-body font-medium text-ink">
+          {now.toLocaleString('default', { month: 'long', year: 'numeric' })}
+        </h3>
+        <div className="flex gap-2">
+          <button className="text-text-muted hover:text-ink size-5 flex items-center justify-center rounded">&lt;</button>
+          <button className="text-text-muted hover:text-ink size-5 flex items-center justify-center rounded">&gt;</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center mb-1">
+        {weekDays.map((d, i) => (
+          <div key={`${d}-${i}`} className="text-label uppercase font-medium text-text-muted">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-1 gap-x-1 text-center">
+        {blanks.map(b => <div key={`blank-${b}`} />)}
+        {days.map(d => {
+          const isToday = d === now.getDate();
+          return (
+            <button
+              key={d}
+              className={`text-product-meta size-7 flex items-center justify-center rounded-full hover:bg-surface-raised mx-auto ${
+                isToday ? 'bg-ink text-paper font-medium' : 'text-ink'
+              }`}
+            >
+              {d}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function TodayColumn({
   tasks,
   now,
@@ -88,37 +134,22 @@ export function TodayColumn({
   const groups = groupTodayColumnTasks(tasks, now);
 
   return (
-    <div className="flex h-full w-full flex-col">
-      <header className="border-b border-border px-2 pb-2">
-        <h2 className="px-2 text-h3">Today</h2>
-        <div role="tablist" aria-label="Today column" className="mt-2 flex gap-1">
-          {COLUMN_TABS.map((tab) => (
-            <button
-              key={tab.label}
-              type="button"
-              role="tab"
-              aria-selected={tab.enabled}
-              disabled={!tab.enabled}
-              className={`rounded-lg px-2.5 py-1 text-product-body outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
-                tab.enabled
-                  ? "font-medium text-ink underline decoration-2 underline-offset-8"
-                  : "cursor-not-allowed text-text-muted"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </header>
+    <div className="flex h-full w-full flex-col bg-paper">
+      <MiniCalendar now={now} />
+      
+      <div className="px-4 pt-2 pb-1">
+        <h2 className="text-h3 font-medium tracking-tight mb-2">To-dos</h2>
+      </div>
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto py-3">
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-2 py-2">
         <TaskSection label="Today" tasks={groups.today} />
         <TaskSection label="This week" tasks={groups.thisWeek} />
         <TaskSection label="Unscheduled" tasks={groups.unscheduled} />
-        <p className="mt-auto px-2 text-product-meta text-text-muted">
+        <p className="mt-auto px-2 pb-4 text-product-meta text-text-muted text-center">
           Drag a task onto the grid to schedule it
         </p>
       </div>
     </div>
   );
 }
+

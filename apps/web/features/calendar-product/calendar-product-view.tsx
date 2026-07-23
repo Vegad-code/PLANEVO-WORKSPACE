@@ -15,6 +15,8 @@ import type {
   TaskDueChip,
 } from "@planevo/core/types/calendar";
 import { toast } from "@/components/ui/toast";
+import { useSidebarLayout } from "@/features/shell/sidebar-layout-context";
+import { cn } from "@/lib/utils";
 import {
   createCalendarAction,
   createCalendarEventAction,
@@ -72,6 +74,7 @@ export function CalendarProductView({
   workspaceId,
 }: CalendarProductViewProps) {
   const router = useRouter();
+  const { showRevealChrome } = useSidebarLayout();
   const [isPending, startTransition] = useTransition();
   const [view, setView] = useState<CalendarView>("week");
   const [now, setNow] = useState(() => new Date());
@@ -203,38 +206,22 @@ export function CalendarProductView({
     <section
       aria-labelledby="calendar-product-title"
       aria-busy={isPending}
-      className="flex min-h-full w-full flex-col px-5 pt-6 pb-6 sm:px-6 lg:px-8"
+      className="flex h-full w-full flex-col"
     >
-      <header className="mb-4 flex shrink-0 flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-product-meta text-text-muted">
-            {initialScope === "workspace" ? "This workspace" : "All calendars"}
-          </p>
-          <h1
-            id="calendar-product-title"
-            className="mt-1 text-h1 font-medium tracking-tight"
-          >
-            Calendar
-          </h1>
-        </div>
-      </header>
-
-      <div className="sticky top-0 z-20 -mx-5 mb-4 shrink-0 border-b border-border/80 bg-paper/95 px-5 py-2 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-        <CalendarToolbar
-          anchor={view === "day" ? dayAnchor : weekStart}
-          view={view}
-          scope={initialScope}
-          onViewChange={setView}
-          onScopeChange={changeScope}
-          onNavigatePrevious={handleNavigatePrevious}
-          onNavigateNext={handleNavigateNext}
-          onNavigateToday={handleNavigateToday}
-        />
-      </div>
+      <h1 id="calendar-product-title" className="sr-only">
+        Calendar
+      </h1>
 
       <CalendarDndContext onScheduleTask={handleScheduleTask}>
-        <div className="flex min-h-0 flex-1 overflow-hidden rounded-card border border-border bg-paper">
-          <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-border p-3 lg:block">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 gap-4 overflow-hidden bg-surface py-4 pr-4",
+            showRevealChrome
+              ? "pl-4 md:pl-[length:var(--sidebar-reveal-safe-inset)]"
+              : "pl-4",
+          )}
+        >
+          <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto rounded-xl border border-border bg-paper p-3 shadow-sm lg:flex">
             <CalendarSidebar
               calendars={calendars}
               onToggleVisibility={handleToggleVisibility}
@@ -242,24 +229,38 @@ export function CalendarProductView({
             />
           </aside>
 
-          <div className="hidden w-72 shrink-0 overflow-hidden border-r border-border pt-3 md:block">
+          <div className="hidden w-80 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-paper shadow-sm md:flex">
             <TodayColumn tasks={todayTasks} now={now} />
           </div>
 
-          <div className="min-w-0 flex-1">
-            <WeekGrid
-              key={dateKey(gridStart)}
-              weekStart={gridStart}
-              dayCount={view === "day" ? 1 : 7}
-              calendars={calendars}
-              events={events}
-              taskDues={taskDues}
-              now={now}
-              onSlotClick={setCreateSlot}
-              onEventSelect={(event, anchor) =>
-                setSelectedEvent({ event, anchor })
-              }
-            />
+          <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-paper shadow-sm">
+            <div className="shrink-0 border-b border-border px-6 py-4">
+              <CalendarToolbar
+                anchor={view === "day" ? dayAnchor : weekStart}
+                view={view}
+                scope={initialScope}
+                onViewChange={setView}
+                onScopeChange={changeScope}
+                onNavigatePrevious={handleNavigatePrevious}
+                onNavigateNext={handleNavigateNext}
+                onNavigateToday={handleNavigateToday}
+              />
+            </div>
+            <div className="flex-1 min-h-0">
+              <WeekGrid
+                key={dateKey(gridStart)}
+                weekStart={gridStart}
+                dayCount={view === "day" ? 1 : 7}
+                calendars={calendars}
+                events={events}
+                taskDues={taskDues}
+                now={now}
+                onSlotClick={setCreateSlot}
+                onEventSelect={(event, anchor) =>
+                  setSelectedEvent({ event, anchor })
+                }
+              />
+            </div>
           </div>
         </div>
       </CalendarDndContext>

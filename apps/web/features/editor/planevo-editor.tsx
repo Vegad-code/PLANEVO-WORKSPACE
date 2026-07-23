@@ -80,7 +80,10 @@ async function fetchMentionIndex(): Promise<MentionIndexItem[]> {
   try {
     const entries = await fetchCommandIndex();
     return entries
-      .filter((entry) => entry.kind === "page" || entry.kind === "record")
+      .filter(
+        (entry): entry is typeof entry & { kind: "page" | "record" } =>
+          entry.kind === "page" || entry.kind === "record",
+      )
       .map((entry) => ({
         id: entry.id,
         title: entry.title,

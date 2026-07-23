@@ -40,8 +40,8 @@ export function FilesUploadDropzone({
     >
       {children}
       {isDragActive ? (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-card border-2 border-dashed border-border-strong bg-paper/90">
-          <span className="flex items-center gap-2 text-body font-medium text-ink">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-files-card border-2 border-dashed border-files-border-strong bg-files-surface/95">
+          <span className="flex items-center gap-2 text-product-body font-medium text-files-text">
             <Upload aria-hidden="true" className="size-5" />
             Drop files to upload
           </span>

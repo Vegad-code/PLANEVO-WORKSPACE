@@ -24,17 +24,21 @@ export async function loadProductFiles(
   userId: string,
   options: LoadProductFilesOptions = {},
 ): Promise<FileSourceWithMeta[]> {
-  let allowedIds: string[] | null = null;
+  let query = client.from("file_sources").select("*").eq("user_id", userId);
   if (options.workspaceId) {
-    allowedIds = await listWorkspaceResourceIds(client, {
+    const linkedIds = await listWorkspaceResourceIds(client, {
       workspaceId: options.workspaceId,
       resourceType: "file",
     });
-    if (allowedIds.length === 0) return [];
+    if (linkedIds.length > 0) {
+      const idList = linkedIds.join(",");
+      query = query.or(
+        `workspace_id.eq.${options.workspaceId},id.in.(${idList})`,
+      );
+    } else {
+      query = query.eq("workspace_id", options.workspaceId);
+    }
   }
-
-  let query = client.from("file_sources").select("*").eq("user_id", userId);
-  if (allowedIds) query = query.in("id", allowedIds);
   const { data, error } = await query
     .order("created_at", { ascending: false })
     // ponytail: newest 200 files; add paging when a library outgrows this.

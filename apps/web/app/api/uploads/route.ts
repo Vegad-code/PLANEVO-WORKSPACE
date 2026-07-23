@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { mapTypedError } from "@/lib/api/typed-errors";
 import { requireDataAccess } from "@/lib/data/access";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
+import { enforceStorageQuota } from "@/lib/files/storage-quota.server";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server";
 
 const BUCKET = "page-assets";
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -20,6 +23,7 @@ function cleanFileName(name: string): string {
 export async function POST(request: Request) {
   try {
     const access = await requireDataAccess();
+    await enforceRateLimit(access, "uploads:post", RATE_LIMITS.upload);
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -32,6 +36,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    await enforceStorageQuota(access, file.size);
 
     const storagePath = `${access.ownerId}/${randomUUID()}-${cleanFileName(file.name)}`;
     const payload = new Uint8Array(await file.arrayBuffer());
@@ -84,6 +89,8 @@ export async function POST(request: Request) {
       sizeBytes: file.size,
     });
   } catch (cause) {
+    const mapped = mapTypedError(cause);
+    if (mapped) return mapped;
     const message = cause instanceof Error ? cause.message : "Upload failed.";
     const status = message.startsWith("No data access") ? 401 : 500;
     return NextResponse.json({ error: message }, { status });
@@ -94,6 +101,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const access = await requireDataAccess();
+    await enforceRateLimit(access, "uploads:get", RATE_LIMITS.read);
     const url = new URL(request.url);
     const path = url.searchParams.get("path");
     if (!path) {
@@ -115,6 +123,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ url: signed.signedUrl });
   } catch (cause) {
+    const mapped = mapTypedError(cause);
+    if (mapped) return mapped;
     const message = cause instanceof Error ? cause.message : "Failed to resolve file URL.";
     const status = message.startsWith("No data access") ? 401 : 500;
     return NextResponse.json({ error: message }, { status });

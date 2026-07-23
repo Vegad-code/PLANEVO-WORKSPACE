@@ -362,6 +362,8 @@ Unchanged from v1 §7.2.
 - **Phase 6 — Agents + integrations:** builder, first-party agents, Composio (Gmail, GCal, Drive, Canvas).
 - **Phase 7 — Import, onboarding v2, polish:** Notion import, onboarding fusion (ecosystem), structure detection, minimal mode.
 - **Phase 8 — Beta & Launch:** closed beta, Stripe + legal, Product Hunt.
+  - **Storage billing (already seamed in 2026-07-22):** per-tier GB caps (free 5 / plus 50 / pro 200) are enforced on every upload path, and used-bytes is metered live from `file_sources`. A user's plan reads from `public.user_billing.plan` — **the Stripe webhook must write the resolved plan here** on subscription create/update/cancel (that's the whole wiring; `resolveUserPlan` already reads it and defaults to free). Remaining for Stripe: checkout + webhook + `user_billing` upserts, and (optional) metered $/GB overage billing on top of the caps. See migration `20260722120000_files_billing_and_ratelimit.sql`.
+  - **Ops to wire at launch:** schedule `scripts/gc-orphan-blobs.mjs --apply` (orphan-blob GC) and a periodic prune of stale `api_rate_limits` window rows — no cron infra exists yet (Supabase edge function + pg_cron is the intended home).
 
 ---
 

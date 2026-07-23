@@ -83,15 +83,19 @@ function SlotCell({
 function DayHeaderCell({ day, isToday }: { day: Date; isToday: boolean }) {
   const label = day
     .toLocaleDateString(undefined, { weekday: "short" })
+    .substring(0, 3)
     .toUpperCase();
   return (
-    <div className="flex-1 border-l border-border px-1 py-2 text-center">
+    <div className="flex-1 border-l border-border px-1 py-2 text-center flex flex-col items-center justify-center">
+      <span className="text-label uppercase font-medium text-text-muted mb-1">
+        {label}
+      </span>
       <span
-        className={`text-product-column uppercase ${
-          isToday ? "font-medium text-brick" : "text-text-secondary"
+        className={`text-product-body flex size-7 items-center justify-center rounded-full ${
+          isToday ? "bg-ink text-paper font-medium" : "text-ink"
         }`}
       >
-        {label} {String(day.getDate()).padStart(2, "0")}
+        {day.getDate()}
       </span>
     </div>
   );

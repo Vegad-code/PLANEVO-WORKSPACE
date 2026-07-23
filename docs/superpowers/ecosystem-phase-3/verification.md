@@ -80,3 +80,34 @@ founder pass in the running app (dev server + real Supabase session).
 - Interrupted uploads can leave a `pending` row (visible with a Processing
   badge); delete from the row menu cleans up. Reservation-style recovery can
   come with the ingestion pipeline.
+
+---
+
+## Audit fix pass (July 19, 2026)
+
+Post-ship remediation after full-stack audit. Code changes (uncommitted until founder commits):
+
+| Fix | Deliverable |
+|-----|-------------|
+| P0 ecosystem links | Home upload + sidebar New file → `/files`; `/files/new` redirects to `/files` |
+| P1 route boundaries | `loading.tsx` + `error.tsx` on `/calendar` and `/files` |
+| P3 design hygiene | Removed legacy kernel `CalendarView` from `/design`; added `FilePreviewPanel` to files-product preview |
+| Contract tests | `ecosystem-product-routes-contract.test.mjs` (51 web tests PASS) |
+
+### Automated gates (audit fix re-run)
+
+| Gate | Result |
+|------|--------|
+| Core tests | **PASS** — 189 tests |
+| Web tests | **PASS** — 51 tests (includes ecosystem route contract) |
+| TypeScript | **PASS** |
+| Production build | **PASS** |
+
+### Migration status (linked remote)
+
+See [`MIGRATIONS.md`](MIGRATIONS.md). **Required Calendar/Files schema is already on linked remote** (`calendars`, `calendar_events`, `file_links`, `schedule_task_idempotent`). Ledger repair optional for four versions; icon catalog table exists but needs `node scripts/seed-icon-catalog.mjs` if using task icon picker.
+
+### Manual QA — founder session
+
+The checklist below is unchanged. Run together in `npm run dev` with a signed-in session. Audit fix only verified entry-point routing and automated gates — not visual/interaction fidelity.
+

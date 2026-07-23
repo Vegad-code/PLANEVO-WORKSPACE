@@ -7,11 +7,11 @@ export const PREVENT_HOVER_MS = 500;
 export const SIDEBAR_DEFAULT_WIDTH = 210;
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 400;
-/** Inset floating card offsets — AFFiNE hoverNavWrapperStyle craft. */
-export const SIDEBAR_PEEK_TOP_OFFSET_PX = 52;
+/** Inset floating card offsets — floating peek card near the top edge (no global top bar). */
+export const SIDEBAR_PEEK_TOP_OFFSET_PX = 12;
 export const SIDEBAR_PEEK_BOTTOM_GAP_PX = 8;
 export const SIDEBAR_PEEK_LEFT_OFFSET_PX = 8;
-/** Width of the left-edge hover zone when the sidebar is hidden (below TopBar). */
+/** Width of the left-edge hover zone when the sidebar is hidden. */
 export const SIDEBAR_PEEK_EDGE_WIDTH_PX = 12;
 
 export type SidebarState = {

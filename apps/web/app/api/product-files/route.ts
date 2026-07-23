@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createFileSourceRecord } from "@planevo/core/mutations/product-files";
-import { deleteFileSource } from "@planevo/core/mutations/product-files";
+import {
+  createFileSourceRecord,
+  deleteFileSource,
+} from "@planevo/core/mutations/product-files";
+import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
+import { mapTypedError } from "@/lib/api/typed-errors";
 import { requireMutationDataAccess } from "@/lib/data/access";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import {
@@ -10,6 +14,8 @@ import {
   PRODUCT_FILES_BUCKET,
   requireProductFileSize,
 } from "@/lib/files/product-files";
+import { enforceStorageQuota } from "@/lib/files/storage-quota.server";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server";
 
 const uploadTargetSchema = z.object({
   operationKey: z.string().uuid(),
@@ -31,6 +37,18 @@ function cleanFileName(name: string): string {
   return cleaned || "upload";
 }
 
+async function linkUploadedFileToWorkspace(
+  access: Awaited<ReturnType<typeof requireMutationDataAccess>>,
+  workspaceId: string,
+  fileSourceId: string,
+): Promise<void> {
+  await linkResourceToWorkspace(access.client, access.ownerId, {
+    workspaceId,
+    resourceType: "file",
+    resourceId: fileSourceId,
+  });
+}
+
 function routeError(cause: unknown, fallback: string) {
   const unauthenticated =
     cause instanceof Error && cause.message.startsWith("No mutation access");
@@ -48,6 +66,7 @@ function routeError(cause: unknown, fallback: string) {
 export async function POST(request: Request) {
   try {
     const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "product-files:post", RATE_LIMITS.upload);
     const current = await getCurrentWorkspace();
     if (!current || current.access.ownerId !== access.ownerId) {
       return NextResponse.json(
@@ -66,6 +85,7 @@ export async function POST(request: Request) {
       );
     }
     requireProductFileSize(parsed.data.sizeBytes);
+    await enforceStorageQuota(access, parsed.data.sizeBytes);
 
     const storagePath = `${current.workspace.id}/${randomUUID()}-${cleanFileName(parsed.data.name)}`;
     const source = await createFileSourceRecord(access.client, access.ownerId, {
@@ -76,6 +96,11 @@ export async function POST(request: Request) {
       sizeBytes: parsed.data.sizeBytes,
       operationKey: parsed.data.operationKey,
     });
+    await linkUploadedFileToWorkspace(
+      access,
+      current.workspace.id,
+      source.id,
+    );
 
     const { data, error } = await access.client.storage
       .from(PRODUCT_FILES_BUCKET)
@@ -91,7 +116,7 @@ export async function POST(request: Request) {
       token: data.token,
     });
   } catch (cause) {
-    return routeError(cause, "Could not prepare the file upload.");
+    return mapTypedError(cause) ?? routeError(cause, "Could not prepare the file upload.");
   }
 }
 
@@ -99,6 +124,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "product-files:patch", RATE_LIMITS.mutate);
     const parsed = finalizeSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid upload." }, { status: 400 });
@@ -111,34 +137,51 @@ export async function PATCH(request: Request) {
       .eq("user_id", access.ownerId);
     if (error) throw error;
 
+    const current = await getCurrentWorkspace();
+    if (current && current.access.ownerId === access.ownerId) {
+      await linkUploadedFileToWorkspace(
+        access,
+        current.workspace.id,
+        parsed.data.sourceId,
+      );
+    }
+
     return NextResponse.json({ ok: true });
   } catch (cause) {
-    return routeError(cause, "Could not finish the file upload.");
+    return mapTypedError(cause) ?? routeError(cause, "Could not finish the file upload.");
   }
 }
 
-/** Remove the metadata row and storage object for a failed upload. */
+/** Remove the storage object and metadata row for a failed upload. */
 export async function DELETE(request: Request) {
   try {
     const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "product-files:delete", RATE_LIMITS.mutate);
     const parsed = discardSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid upload cleanup." }, { status: 400 });
     }
 
-    const { storagePath } = await deleteFileSource(
-      access.client,
-      access.ownerId,
-      parsed.data.sourceId,
-    );
-    const { error } = await access.client.storage
-      .from(PRODUCT_FILES_BUCKET)
-      .remove([storagePath]);
-    // A missing object is fine — the upload may never have finished.
-    if (error) console.error("[product-files] storage cleanup failed", error);
+    // Storage first, then the row — mirroring the cabinet delete. A missing
+    // object (upload never finished) is a no-op, but a real storage error keeps
+    // the row so its bytes stay counted and retryable rather than orphaning a blob.
+    const { data: row, error: lookupError } = await access.client
+      .from("file_sources")
+      .select("storage_path")
+      .eq("id", parsed.data.sourceId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!row) return NextResponse.json({ ok: true });
 
+    const { error: removeError } = await access.client.storage
+      .from(PRODUCT_FILES_BUCKET)
+      .remove([row.storage_path]);
+    if (removeError) throw removeError;
+
+    await deleteFileSource(access.client, access.ownerId, parsed.data.sourceId);
     return NextResponse.json({ ok: true });
   } catch (cause) {
-    return routeError(cause, "Could not clean up the file upload.");
+    return mapTypedError(cause) ?? routeError(cause, "Could not clean up the file upload.");
   }
 }

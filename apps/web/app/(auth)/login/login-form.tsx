@@ -12,7 +12,7 @@ function SubmitButton({ label }: { label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="h-10 w-full rounded-lg bg-marigold px-4 text-small font-medium text-ink outline-none transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50 motion-reduce:transition-none"
+      className="h-10 w-full rounded-lg bg-marigold px-4 text-small font-medium text-marigold-foreground outline-none transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50 motion-reduce:transition-none"
     >
       {pending ? "One moment…" : label}
     </button>

@@ -1,55 +1,78 @@
-"use client";
+"use client"
 
 import {
   useCallback,
   useEffect,
   useOptimistic,
+  useRef,
   useState,
   useTransition,
-} from "react";
-import { LayoutGrid } from "lucide-react";
-import { useRouter } from "next/navigation";
-import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
-import { toast } from "@/components/ui/toast";
-import type { TaskAttachmentCleanupTarget } from "@/lib/tasks/task-attachment-cleanup";
+} from "react"
+import { LayoutGrid } from "lucide-react"
+import { useRouter } from "next/navigation"
+import type { TaskWithMeta } from "@planevo/core/queries/product-tasks"
+import type { TaskStatus } from "@planevo/core/types/tasks"
+import { toast } from "@/components/ui/toast"
+import type { TaskAttachmentCleanupTarget } from "@/lib/tasks/task-attachment-cleanup"
 import {
   createProductTaskAction,
   linkProductTaskToWorkspaceAction,
   moveProductTaskAction,
-} from "@/app/(workspace)/tasks/actions";
-import { CreateTaskDialog } from "./create-task-dialog";
+  updateProductTaskAction,
+} from "@/app/(workspace)/tasks/actions"
+import { CreateTaskDialog } from "./create-task-dialog"
 import {
   discardTaskAttachmentUploads,
   uploadTaskAttachments,
-} from "./task-attachment-uploads";
-import { TaskBoard, type TaskBoardStatus } from "./task-board";
-import { TaskList } from "./task-list";
-import { TaskPeek } from "./task-peek";
-import { TaskTable } from "./task-table";
-import { TasksToolbar, type TasksView } from "./tasks-toolbar";
-import { activeTasks } from "@/lib/tasks/task-view-state";
+} from "./task-attachment-uploads"
+import { TaskBoard, type TaskBoardStatus } from "./task-board"
+import { TaskList } from "./task-list"
+import { TaskPeek } from "./task-peek"
+import { TaskTable } from "./task-table"
+import { TasksToolbar, type TasksView } from "./tasks-toolbar"
+import type { TaskPatch } from "./task-row"
+import { activeTasks } from "@/lib/tasks/task-view-state"
 import {
   getTasksScope,
   setTasksScope,
   type TasksScope,
-} from "@/lib/tasks/scope-prefs";
-import { getTasksPageLayoutClass, isTasksFullBleedView } from "./tasks-page-layout";
+} from "@/lib/tasks/scope-prefs"
+import {
+  buildTaskUpdatePayload,
+  toggleDoneStatus,
+} from "@/lib/tasks/task-row-formatters"
+import {
+  DEFAULT_TASKS_VIEW_PREFS,
+  getTasksViewPrefs,
+  setTasksViewPrefs,
+  type TasksViewPrefs,
+} from "@/lib/tasks/task-view-prefs"
+import { getTasksPageLayoutClass, isTasksFullBleedView } from "./tasks-page-layout"
 
 type TasksProductViewProps = {
-  initialTasks: TaskWithMeta[];
-  initialScope: TasksScope;
-  workspaceId: string | null;
-  workspaceName?: string | null;
-};
+  initialTasks: TaskWithMeta[]
+  initialScope: TasksScope
+  workspaceId: string | null
+  workspaceName?: string | null
+}
 
 type OptimisticMove = {
-  taskId: string;
-  status: TaskBoardStatus;
-  position: number;
-};
+  taskId: string
+  status: TaskBoardStatus
+  position: number
+}
+
+type OptimisticPatch = {
+  taskId: string
+  patch: TaskPatch
+}
+
+type OptimisticAction =
+  | { type: "move"; move: OptimisticMove }
+  | { type: "patch"; patch: OptimisticPatch }
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
+  if (!(target instanceof HTMLElement)) return false
   return (
     target.isContentEditable ||
     Boolean(
@@ -57,7 +80,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
         "input, textarea, select, [contenteditable]:not([contenteditable='false'])",
       ),
     )
-  );
+  )
 }
 
 function moveOptimistically(
@@ -68,7 +91,34 @@ function moveOptimistically(
     task.id === move.taskId
       ? { ...task, status: move.status, position: move.position }
       : task,
-  );
+  )
+}
+
+function patchOptimistically(
+  tasks: TaskWithMeta[],
+  action: OptimisticPatch,
+): TaskWithMeta[] {
+  return tasks.map((task) => {
+    if (task.id !== action.taskId) return task
+    return {
+      ...task,
+      status: action.patch.status ?? task.status,
+      priority:
+        action.patch.priority !== undefined
+          ? action.patch.priority
+          : task.priority,
+      due_at:
+        action.patch.dueAt !== undefined ? action.patch.dueAt : task.due_at,
+    }
+  })
+}
+
+function applyOptimisticAction(
+  tasks: TaskWithMeta[],
+  action: OptimisticAction,
+): TaskWithMeta[] {
+  if (action.type === "move") return moveOptimistically(tasks, action.move)
+  return patchOptimistically(tasks, action.patch)
 }
 
 function neighborIdsForMove(
@@ -80,21 +130,21 @@ function neighborIdsForMove(
     .sort(
       (left, right) =>
         left.position - right.position || left.id.localeCompare(right.id),
-    );
+    )
   const insertionIndex = destination.findIndex(
     (task) => task.position > move.position,
-  );
-  const index = insertionIndex === -1 ? destination.length : insertionIndex;
+  )
+  const index = insertionIndex === -1 ? destination.length : insertionIndex
   return {
     beforeTaskId: destination[index - 1]?.id ?? null,
     afterTaskId: destination[index]?.id ?? null,
-  };
+  }
 }
 
 export function TasksEmptyState({
   onCreateTask,
 }: {
-  onCreateTask: () => void;
+  onCreateTask: () => void
 }) {
   return (
     <div className="flex min-h-72 flex-col items-center justify-center rounded-card border border-dashed border-border bg-surface-raised px-6 py-12 text-center">
@@ -125,7 +175,7 @@ export function TasksEmptyState({
         Add your first task
       </button>
     </div>
-  );
+  )
 }
 
 export function TasksProductView({
@@ -134,44 +184,66 @@ export function TasksProductView({
   workspaceId,
   workspaceName = null,
 }: TasksProductViewProps) {
-  const router = useRouter();
-  const [view, setView] = useState<TasksView>("board");
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const router = useRouter()
+  const [prefs, setPrefs] = useState<TasksViewPrefs>(DEFAULT_TASKS_VIEW_PREFS)
+  const [prefsReady, setPrefsReady] = useState(false)
+  const previousStatusRef = useRef<Record<string, TaskStatus>>({})
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
   const [createStatus, setCreateStatus] =
-    useState<TaskBoardStatus>("not_started");
-  const [isPending, startTransition] = useTransition();
-  const [tasks, applyOptimisticMove] = useOptimistic(
+    useState<TaskBoardStatus>("not_started")
+  const [isPending, startTransition] = useTransition()
+  const [tasks, applyOptimistic] = useOptimistic(
     initialTasks,
-    moveOptimistically,
-  );
+    applyOptimisticAction,
+  )
   const selectedTask = selectedTaskId
     ? tasks.find((task) => task.id === selectedTaskId) ?? null
-    : null;
-  const boardTasks = activeTasks(tasks);
-  const visibleTasks = boardTasks;
+    : null
+  const boardTasks = activeTasks(tasks)
+  const visibleTasks = boardTasks
+  const view = prefs.view
 
-  const closePeek = useCallback(() => setSelectedTaskId(null), []);
+  const closePeek = useCallback(() => setSelectedTaskId(null), [])
 
-  function openCreate(status: TaskBoardStatus = "not_started") {
-    setCreateStatus(status);
-    setCreateOpen(true);
+  function persistPrefs(next: TasksViewPrefs) {
+    setPrefs(next)
+    setTasksViewPrefs(next)
   }
 
-  function closeCreate() {
-    setCreateOpen(false);
-    setCreateStatus("not_started");
+  function patchPrefs(patch: Partial<TasksViewPrefs>) {
+    persistPrefs({
+      ...prefs,
+      ...patch,
+      sort: patch.sort ? { ...prefs.sort, ...patch.sort } : prefs.sort,
+    })
   }
 
   useEffect(() => {
-    const storedScope = getTasksScope();
-    if (storedScope === initialScope) return;
+    const stored = getTasksViewPrefs()
+    setPrefs(stored)
+    setPrefsReady(true)
+  }, [])
+
+  function openCreate(status: TaskBoardStatus = "not_started") {
+    setCreateStatus(status)
+    setCreateOpen(true)
+  }
+
+  function closeCreate() {
+    setCreateOpen(false)
+    setCreateStatus("not_started")
+  }
+
+  useEffect(() => {
+    const storedScope = getTasksScope()
+    if (storedScope === initialScope) return
     if (storedScope === "workspace" && !workspaceId) {
-      setTasksScope("all");
-      return;
+      setTasksScope("all")
+      return
     }
-    router.replace(storedScope === "workspace" ? "/tasks?scope=workspace" : "/tasks");
-  }, [initialScope, router, workspaceId]);
+    router.replace(storedScope === "workspace" ? "/tasks?scope=workspace" : "/tasks")
+  }, [initialScope, router, workspaceId])
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -186,24 +258,24 @@ export function TasksProductView({
         event.isComposing ||
         isEditableTarget(event.target)
       ) {
-        return;
+        return
       }
-      event.preventDefault();
-      setCreateStatus("not_started");
-      setCreateOpen(true);
+      event.preventDefault()
+      setCreateStatus("not_started")
+      setCreateOpen(true)
     }
 
-    window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
+    window.addEventListener("keydown", handleShortcut)
+    return () => window.removeEventListener("keydown", handleShortcut)
+  }, [])
 
   function changeScope(scope: TasksScope) {
     if (scope === "workspace" && !workspaceId) {
-      toast("Open a workspace before using this filter", { tone: "error" });
-      return;
+      toast("Open a workspace before using this filter", { tone: "error" })
+      return
     }
-    setTasksScope(scope);
-    router.push(scope === "workspace" ? "/tasks?scope=workspace" : "/tasks");
+    setTasksScope(scope)
+    router.push(scope === "workspace" ? "/tasks?scope=workspace" : "/tasks")
   }
 
   function moveTask(
@@ -211,60 +283,94 @@ export function TasksProductView({
     status: TaskBoardStatus,
     position: number,
   ) {
-    const move = { taskId, status, position } satisfies OptimisticMove;
-    const neighbors = neighborIdsForMove(tasks, move);
+    const move = { taskId, status, position } satisfies OptimisticMove
+    const neighbors = neighborIdsForMove(tasks, move)
 
     startTransition(async () => {
-      applyOptimisticMove(move);
+      applyOptimistic({ type: "move", move })
       const result = await moveProductTaskAction({
         taskId,
         status,
         ...neighbors,
-      });
+      })
       if (!result.ok) {
-        toast(result.error, { tone: "error" });
+        toast(result.error, { tone: "error" })
       }
-      router.refresh();
-    });
+      router.refresh()
+    })
+  }
+
+  function patchTask(taskId: string, patch: TaskPatch) {
+    const task = tasks.find((entry) => entry.id === taskId)
+    if (!task) return
+
+    if (patch.status && patch.status !== "done" && task.status !== "done") {
+      previousStatusRef.current[taskId] = task.status
+    }
+
+    startTransition(async () => {
+      applyOptimistic({ type: "patch", patch: { taskId, patch } })
+      const result = await updateProductTaskAction(
+        buildTaskUpdatePayload(task, patch),
+      )
+      if (!result.ok) {
+        toast(result.error, { tone: "error" })
+      }
+      router.refresh()
+    })
+  }
+
+  function toggleComplete(taskId: string) {
+    const task = tasks.find((entry) => entry.id === taskId)
+    if (!task) return
+
+    const previous =
+      previousStatusRef.current[taskId] ??
+      (task.status !== "done" ? task.status : "not_started")
+    if (task.status !== "done") {
+      previousStatusRef.current[taskId] = task.status
+    }
+    const nextStatus = toggleDoneStatus(task.status, previous)
+    patchTask(taskId, { status: nextStatus })
   }
 
   function createTask(formData: FormData) {
     startTransition(async () => {
-      const fileEntries = formData.getAll("files");
+      const fileEntries = formData.getAll("files")
       if (fileEntries.some((entry) => !(entry instanceof File))) {
-        toast("Check the attachments and try again.", { tone: "error" });
-        return;
+        toast("Check the attachments and try again.", { tone: "error" })
+        return
       }
 
-      const files = fileEntries as File[];
-      formData.delete("files");
-      let cleanupTargets: TaskAttachmentCleanupTarget[] = [];
-      let cleanupAttempted = false;
+      const files = fileEntries as File[]
+      formData.delete("files")
+      let cleanupTargets: TaskAttachmentCleanupTarget[] = []
+      let cleanupAttempted = false
 
       try {
-        const attachments = await uploadTaskAttachments(files);
+        const attachments = await uploadTaskAttachments(files)
         cleanupTargets = attachments.map((attachment) => ({
           sourceId: attachment.sourceId,
           storagePath: attachment.storagePath,
-        }));
+        }))
         for (const attachment of attachments) {
-          formData.append("attachments", JSON.stringify(attachment));
+          formData.append("attachments", JSON.stringify(attachment))
         }
 
-        const result = await createProductTaskAction(formData);
+        const result = await createProductTaskAction(formData)
         if (!result.ok) {
-          cleanupAttempted = true;
-          await discardTaskAttachmentUploads(cleanupTargets);
-          cleanupTargets = [];
-          toast(result.error, { tone: "error" });
-          return;
+          cleanupAttempted = true
+          await discardTaskAttachmentUploads(cleanupTargets)
+          cleanupTargets = []
+          toast(result.error, { tone: "error" })
+          return
         }
 
-        closeCreate();
+        closeCreate()
         if (result.data.attachmentError) {
-          toast(result.data.attachmentError, { tone: "error" });
+          toast(result.data.attachmentError, { tone: "error" })
         } else if (workspaceId) {
-          const label = workspaceName?.trim() || "this workspace";
+          const label = workspaceName?.trim() || "this workspace"
           toast(`Add to ${label}?`, {
             action: {
               label: "Add",
@@ -274,40 +380,40 @@ export function TasksProductView({
                   workspaceId,
                 }).then((linkResult) => {
                   if (!linkResult.ok) {
-                    toast(linkResult.error, { tone: "error" });
-                    return;
+                    toast(linkResult.error, { tone: "error" })
+                    return
                   }
-                  toast(`Added to ${label}`);
-                  router.refresh();
-                });
+                  toast(`Added to ${label}`)
+                  router.refresh()
+                })
               },
             },
-          });
+          })
         } else {
-          toast("Task created");
+          toast("Task created")
         }
-        router.refresh();
+        router.refresh()
       } catch (cause) {
         if (cleanupTargets.length > 0 && !cleanupAttempted) {
           try {
-            cleanupAttempted = true;
-            await discardTaskAttachmentUploads(cleanupTargets);
+            cleanupAttempted = true
+            await discardTaskAttachmentUploads(cleanupTargets)
           } catch (cleanupCause) {
             toast(
               cleanupCause instanceof Error
                 ? cleanupCause.message
                 : "Attachment cleanup remains pending.",
               { tone: "error" },
-            );
-            return;
+            )
+            return
           }
         }
         toast(
           cause instanceof Error ? cause.message : "Could not create the task.",
           { tone: "error" },
-        );
+        )
       }
-    });
+    })
   }
 
   const content = visibleTasks.length === 0 ? (
@@ -323,23 +429,40 @@ export function TasksProductView({
   ) : view === "list" ? (
     <TaskList
       tasks={visibleTasks}
+      grouping={prefs.grouping}
+      onGroupingChange={(grouping) => patchPrefs({ grouping })}
+      collapsedGroups={prefs.collapsedGroups}
+      onCollapsedGroupsChange={(collapsedGroups) =>
+        patchPrefs({ collapsedGroups })
+      }
+      hideDone={prefs.hideDone}
+      onHideDoneChange={(hideDone) => patchPrefs({ hideDone })}
       onTaskSelect={setSelectedTaskId}
+      onTaskPatch={patchTask}
+      onToggleComplete={toggleComplete}
       fillHeight
     />
   ) : (
     <TaskTable
       tasks={visibleTasks}
+      sort={prefs.sort}
+      onSortChange={(sort) => patchPrefs({ sort })}
+      hideDone={prefs.hideDone}
+      onHideDoneChange={(hideDone) => patchPrefs({ hideDone })}
       onTaskSelect={setSelectedTaskId}
+      onTaskPatch={patchTask}
+      onToggleComplete={toggleComplete}
       fillHeight
     />
-  );
+  )
 
-  const isFullBleed = isTasksFullBleedView(view, visibleTasks.length > 0);
+  const isFullBleed = isTasksFullBleedView(view, visibleTasks.length > 0)
 
   return (
     <section
       aria-labelledby="tasks-product-title"
       className={`tasks-product-ui ${getTasksPageLayoutClass(view, visibleTasks.length > 0)}`}
+      data-prefs-ready={prefsReady ? "true" : "false"}
     >
       <header
         className={`flex flex-wrap items-end justify-between gap-4 ${
@@ -378,7 +501,7 @@ export function TasksProductView({
         <TasksToolbar
           view={view}
           scope={initialScope}
-          onViewChange={setView}
+          onViewChange={(nextView: TasksView) => patchPrefs({ view: nextView })}
           onScopeChange={changeScope}
           onCreateTask={() => openCreate()}
           isCreateDialogOpen={createOpen}
@@ -405,5 +528,5 @@ export function TasksProductView({
         <TaskPeek key={selectedTask.id} task={selectedTask} onClose={closePeek} />
       ) : null}
     </section>
-  );
+  )
 }

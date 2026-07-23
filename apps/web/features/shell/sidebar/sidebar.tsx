@@ -39,6 +39,7 @@ export type SidebarProps = {
   onBlurCapture?: FocusEventHandler<HTMLElement>;
   onNavigate?: () => void;
   onOpenSettings?: () => void;
+  onOpenSpotlight?: () => void;
   mobile?: boolean;
   headerButtonRef?: Ref<HTMLButtonElement>;
 };
@@ -58,6 +59,7 @@ export function Sidebar({
   onBlurCapture,
   onNavigate,
   onOpenSettings,
+  onOpenSpotlight,
   mobile = false,
   headerButtonRef,
 }: SidebarProps) {
@@ -153,7 +155,7 @@ export function Sidebar({
 
       <div className="flex min-h-0 flex-1 flex-col py-2">
         <SidebarNewButton onNavigate={onNavigate} />
-        <SidebarPrimaryNav onNavigate={onNavigate} />
+        <SidebarPrimaryNav onNavigate={onNavigate} onOpenSpotlight={onOpenSpotlight} />
         <div className="mt-3 min-h-0 flex-1">
           <WorkspaceTreeSection
             pages={shell.pages}

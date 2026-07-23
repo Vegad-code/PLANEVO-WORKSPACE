@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadProductFiles, summarizeStorageBytes } from "./product-files.ts";
 import { matchesFileFilterTab, mimeFamily } from "../types/files.ts";
+import {
+  STORAGE_CAP_BYTES_BY_PLAN,
+  exceedsStorageCap,
+} from "../types/plans.ts";
 
 function fileRow(overrides = {}) {
   return {
@@ -62,19 +66,35 @@ test("loadProductFiles hides unclaimed task-attachment reservations", async () =
   assert.deepEqual(result.map((file) => file.id), ["claimed"]);
 });
 
-test("loadProductFiles workspace scope short-circuits with no linked files", async () => {
+test("loadProductFiles workspace scope includes files in that workspace", async () => {
+  const rows = [fileRow({ workspace_id: "w1" })];
+  const queriedTables = [];
   const client = {
     from: (table) => {
-      assert.equal(table, "workspace_links");
+      queriedTables.push(table);
+      if (table === "workspace_links") {
+        return {
+          select: () => ({
+            eq: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }),
+          }),
+        };
+      }
       return {
         select: () => ({
-          eq: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }),
+          eq: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: async () => ({ data: rows, error: null }),
+              }),
+            }),
+          }),
         }),
       };
     },
   };
   const result = await loadProductFiles(client, "u1", { workspaceId: "w1" });
-  assert.deepEqual(result, []);
+  assert.ok(queriedTables.includes("file_sources"));
+  assert.equal(result.length, 1);
 });
 
 test("summarizeStorageBytes sums sizes treating null as zero", () => {
@@ -84,6 +104,20 @@ test("summarizeStorageBytes sums sizes treating null as zero", () => {
     { size_bytes: 50 },
   ]);
   assert.equal(total, 150);
+});
+
+test("exceedsStorageCap gates uploads at the plan cap", () => {
+  const freeCap = STORAGE_CAP_BYTES_BY_PLAN.free;
+  // Exactly filling the cap is allowed; one byte over is not.
+  assert.equal(exceedsStorageCap(freeCap - 10, 10, "free"), false);
+  assert.equal(exceedsStorageCap(freeCap - 10, 11, "free"), true);
+  assert.equal(exceedsStorageCap(freeCap, 1, "free"), true);
+  // A payload that fits free also fits the larger plans.
+  assert.equal(exceedsStorageCap(freeCap, 1, "plus"), false);
+  assert.equal(exceedsStorageCap(freeCap, 1, "pro"), false);
+  // Plans are strictly larger free < plus < pro.
+  assert.ok(STORAGE_CAP_BYTES_BY_PLAN.free < STORAGE_CAP_BYTES_BY_PLAN.plus);
+  assert.ok(STORAGE_CAP_BYTES_BY_PLAN.plus < STORAGE_CAP_BYTES_BY_PLAN.pro);
 });
 
 test("mimeFamily buckets MIME types into filter tabs", () => {

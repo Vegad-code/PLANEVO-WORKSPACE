@@ -115,13 +115,20 @@
   --color-files-folder: #f5c518;
   --color-files-folder-tint: #fef9e7;
   --color-files-surface-muted: #f7f6f3;
+  /* Storage pill segments — Apple-craft category hues (Images / PDFs / Documents) */
+  --color-files-storage-images: #f5c518;
+  --color-files-storage-pdfs: #2383e2;
+  --color-files-storage-documents: #ff9f0a;
+  --color-files-storage-available: #e9e9e7;
   --radius-files-card: 12px;
-  --radius-files-modal: 16px;
+  --radius-files-modal: 24px;
 
   /* Layout */
   --spacing-sidebar: 210px;
   --sidebar-width: var(--spacing-sidebar);
   --spacing-rail: 56px; /* retired icon-rail; kept for any residual utilities */
+  /* Clears fixed hamburger at top-3 left-3 (12px + 32px control + gap) */
+  --sidebar-reveal-safe-inset: 3rem;
 
   /* Sidebar motion — Notion-caliber peek/expand timing */
   --sidebar-motion-duration-enter: 280ms;
@@ -157,6 +164,9 @@
   --color-brick-tint: #f1f1ef;
   --color-meadow-tint: #f1f1ef;
   --color-ocean-tint: #f1f1ef;
+  --color-files-storage-images: #9b9a97;
+  --color-files-storage-pdfs: #9b9a97;
+  --color-files-storage-documents: #9b9a97;
 }
 
 /* Dark mode — Notion-caliber cool neutrals (design-brief §1).
@@ -193,6 +203,10 @@
   --color-files-border-strong: #373737;
   --color-files-cta: #2383e2;
   --color-files-cta-text: #ffffff;
+  --color-files-storage-images: #f5c518;
+  --color-files-storage-pdfs: #2383e2;
+  --color-files-storage-documents: #ff9f0a;
+  --color-files-storage-available: #373737;
 
   --color-spotlight-backdrop: rgba(0, 0, 0, 0.58);
   --color-spotlight-glass: rgba(44, 44, 46, 0.82);
@@ -216,6 +230,9 @@
   --color-meadow-tint: #2f2f2f;
   --color-ocean-tint: #2f2f2f;
   --color-files-cta: #8a8a8a;
+  --color-files-storage-images: #8a8a8a;
+  --color-files-storage-pdfs: #8a8a8a;
+  --color-files-storage-documents: #8a8a8a;
 }
 
 body {

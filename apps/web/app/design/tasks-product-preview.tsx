@@ -146,6 +146,20 @@ const CANCELLED_TASK: TaskWithMeta = {
   fileCount: 0,
 };
 
+const SPARSE_TASK: TaskWithMeta = {
+  ...DEFAULT_TASK,
+  id: "design-task-sparse",
+  title: "Capture a quiet idea",
+  status: "not_started",
+  priority: null,
+  due_at: null,
+  description_json: {},
+  position: 3,
+  subtaskTotal: 0,
+  subtaskDone: 0,
+  fileCount: 0,
+};
+
 const PEEK_TASK: TaskWithMeta = {
   ...DEFAULT_TASK,
   description_json: {
@@ -199,7 +213,11 @@ const INITIAL_BOARD_TASKS = [
   SECOND_DONE_TASK,
   DONE_TASK,
 ];
-const LIST_AND_TABLE_TASKS = [...INITIAL_BOARD_TASKS, CANCELLED_TASK];
+const LIST_AND_TABLE_TASKS = [
+  ...INITIAL_BOARD_TASKS,
+  SPARSE_TASK,
+  CANCELLED_TASK,
+];
 
 export function TasksProductPreview() {
   const [tasks, setTasks] = useState<TaskWithMeta[]>(INITIAL_BOARD_TASKS);
@@ -209,6 +227,15 @@ export function TasksProductPreview() {
   const [createStatus, setCreateStatus] =
     useState<TaskBoardStatus>("not_started");
   const [peekOpen, setPeekOpen] = useState(false);
+  const [listGrouping, setListGrouping] = useState<"status" | "priority">(
+    "status",
+  );
+  const [hideDone, setHideDone] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([
+    "status:cancelled",
+  ]);
+  const [previewTasks, setPreviewTasks] =
+    useState<TaskWithMeta[]>(LIST_AND_TABLE_TASKS);
 
   function handleStatusChange(
     taskId: string,
@@ -421,12 +448,52 @@ export function TasksProductPreview() {
       </div>
 
       <div>
-        <h3 className="text-h3">Status-grouped list</h3>
+        <h3 className="text-h3">Premium list (smart metadata)</h3>
         <p className="mt-1 text-small text-text-secondary">
-          Dense rows preserve task metadata and every product status.
+          Empty due/priority/subtasks/files stay hidden. Checkbox complete, group
+          collapse, hide done, and segmented group-by are interactive in this
+          preview.
         </p>
         <div className="mt-4">
-          <TaskList tasks={LIST_AND_TABLE_TASKS} />
+          <TaskList
+            tasks={previewTasks}
+            grouping={listGrouping}
+            onGroupingChange={setListGrouping}
+            collapsedGroups={collapsedGroups}
+            onCollapsedGroupsChange={setCollapsedGroups}
+            hideDone={hideDone}
+            onHideDoneChange={setHideDone}
+            onToggleComplete={(taskId) => {
+              setPreviewTasks((current) =>
+                current.map((task) =>
+                  task.id === taskId
+                    ? {
+                        ...task,
+                        status: task.status === "done" ? "not_started" : "done",
+                      }
+                    : task,
+                ),
+              );
+            }}
+            onTaskPatch={(taskId, patch) => {
+              setPreviewTasks((current) =>
+                current.map((task) =>
+                  task.id === taskId
+                    ? {
+                        ...task,
+                        status: patch.status ?? task.status,
+                        priority:
+                          patch.priority !== undefined
+                            ? patch.priority
+                            : task.priority,
+                        due_at:
+                          patch.dueAt !== undefined ? patch.dueAt : task.due_at,
+                      }
+                    : task,
+                ),
+              );
+            }}
+          />
         </div>
       </div>
 
@@ -449,13 +516,47 @@ export function TasksProductPreview() {
       </div>
 
       <div>
-        <h3 className="text-h3">Sortable table</h3>
+        <h3 className="text-h3">Premium table</h3>
         <p className="mt-1 text-small text-text-secondary">
-          Every column sorts on the client. Activate a header again to reverse
-          its direction.
+          Sticky title with checkbox and icon, blank empty cells, inline
+          status/priority/due editors, and VALUES footer.
         </p>
         <div className="mt-4">
-          <TaskTable tasks={LIST_AND_TABLE_TASKS} />
+          <TaskTable
+            tasks={previewTasks}
+            hideDone={hideDone}
+            onHideDoneChange={setHideDone}
+            onToggleComplete={(taskId) => {
+              setPreviewTasks((current) =>
+                current.map((task) =>
+                  task.id === taskId
+                    ? {
+                        ...task,
+                        status: task.status === "done" ? "not_started" : "done",
+                      }
+                    : task,
+                ),
+              );
+            }}
+            onTaskPatch={(taskId, patch) => {
+              setPreviewTasks((current) =>
+                current.map((task) =>
+                  task.id === taskId
+                    ? {
+                        ...task,
+                        status: patch.status ?? task.status,
+                        priority:
+                          patch.priority !== undefined
+                            ? patch.priority
+                            : task.priority,
+                        due_at:
+                          patch.dueAt !== undefined ? patch.dueAt : task.due_at,
+                      }
+                    : task,
+                ),
+              );
+            }}
+          />
         </div>
       </div>
     </div>
