@@ -2,15 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { LayoutGroup, motion } from "framer-motion";
-import { usePathname } from "next/navigation";
 import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
-import {
-  SHELL_TOP_BAR_HEIGHT_PX,
-  useScrollChrome,
-} from "@/lib/motion/use-scroll-chrome";
 import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import type { WorkspaceShellData } from "@/lib/queries/workspace-shell";
-import { pageBreadcrumbLabels } from "@/lib/onboarding/page-breadcrumb";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import {
   reduceMobileNavigation,
@@ -31,24 +25,15 @@ import {
   type SidebarState,
 } from "@planevo/core/state/sidebar-state";
 import { CommandBar } from "@/features/command-bar/command-bar";
+import { subscribeSpotlightOpen } from "@/features/command-bar/spotlight-bridge";
 import { createPageAndOpen } from "@/app/(workspace)/actions";
 import { SettingsDialog } from "@/features/settings/settings-dialog";
-import { TopBar } from "@/features/shell/top-bar";
 import { SidebarLayoutProvider } from "@/features/shell/sidebar-layout-context";
 
 const SIDEBAR_PREFERENCE_KEY = "planevo.sidebar.preference";
 const SIDEBAR_WIDTH_KEY = "planevo.sidebar.width";
 const DISMISS_PEEK_DELAY_MS = 100;
 const PEEK_EXIT_MS = 200;
-
-/** Product routes where scroll should reclaim vertical space (Notion / Linear pattern). */
-const AUTO_HIDE_CHROME_PREFIXES = ["/tasks", "/calendar", "/files"];
-
-function shouldAutoHideChrome(pathname: string): boolean {
-  return AUTO_HIDE_CHROME_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
 
 export function AppShell({
   children,
@@ -57,7 +42,6 @@ export function AppShell({
   children: React.ReactNode;
   shell: WorkspaceShellData;
 }) {
-  const pathname = usePathname();
   const prefersReducedMotion = usePrefersReducedMotion();
   const shellLayoutTransition = getShellLayoutTransition(prefersReducedMotion);
   const [sidebarState, setSidebarState] = useState<SidebarState>(
@@ -66,6 +50,7 @@ export function AppShell({
   const [restored, setRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
+  const [spotlightQuery, setSpotlightQuery] = useState<string | undefined>(undefined);
   const [peekExiting, setPeekExiting] = useState(false);
   const [mobileNavigation, dispatchMobileNavigation] = useReducer(
     reduceMobileNavigation,
@@ -76,11 +61,12 @@ export function AppShell({
   const peekGuardUntil = useRef(0);
   const preventHoverUntil = useRef(0);
   const mobileMenuTrigger = useRef<HTMLButtonElement>(null);
-  const topBarSettingsTrigger = useRef<HTMLButtonElement>(null);
   const settingsReturnFocus = useRef<HTMLElement | null>(null);
-  const mainScrollRef = useRef<HTMLElement>(null);
-  const autoHideChrome = shouldAutoHideChrome(pathname);
-  const topBarVisible = useScrollChrome(mainScrollRef, { enabled: autoHideChrome });
+
+  const openSpotlight = useCallback((query?: string) => {
+    setSpotlightQuery(query);
+    setCommandBarOpen(true);
+  }, []);
 
   const dispatch = useCallback((event: SidebarEvent) => {
     setSidebarState((state) => {
@@ -138,6 +124,12 @@ export function AppShell({
   }, [restored, sidebarState.preference, sidebarState.width]);
 
   useEffect(() => {
+    return subscribeSpotlightOpen((query) => {
+      openSpotlight(query);
+    });
+  }, [openSpotlight]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (matchesSidebarShortcut(event)) {
         event.preventDefault();
@@ -146,7 +138,7 @@ export function AppShell({
         dispatch({ type: "toggle" });
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandBarOpen(true);
+        openSpotlight();
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
         event.preventDefault();
         void createPageAndOpen();
@@ -162,6 +154,7 @@ export function AppShell({
     clearDismissTimer,
     clearPeekTimer,
     dispatch,
+    openSpotlight,
     sidebarState.peeked,
   ]);
 
@@ -227,9 +220,7 @@ export function AppShell({
   function openSettings(returnFocus?: HTMLElement | null) {
     settingsReturnFocus.current =
       returnFocus ??
-      (document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : topBarSettingsTrigger.current);
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setSettingsOpen(true);
   }
 
@@ -241,16 +232,9 @@ export function AppShell({
       const returnTarget = settingsReturnFocus.current;
       if (returnTarget?.isConnected) {
         returnTarget.focus();
-      } else {
-        topBarSettingsTrigger.current?.focus();
       }
     });
   }
-
-  const pageIdMatch = pathname.match(/^\/pages\/([^/]+)/);
-  const pageBreadcrumb = pageIdMatch
-    ? pageBreadcrumbLabels(shell.pages, pageIdMatch[1]!)
-    : undefined;
 
   const sidebarPresentation = getSidebarPresentation(sidebarState);
   const isExpanded = sidebarPresentation.spacer === "expanded";
@@ -297,6 +281,7 @@ export function AppShell({
                 dispatch({ type: "set-width", width: nextWidth })
               }
               onOpenSettings={() => openSettings()}
+              onOpenSpotlight={() => openSpotlight()}
             />
           )}
         </motion.div>
@@ -318,6 +303,7 @@ export function AppShell({
             }
           }}
           onOpenSettings={() => openSettings()}
+          onOpenSpotlight={() => openSpotlight()}
         />
       )}
 
@@ -326,34 +312,8 @@ export function AppShell({
         transition={shellLayoutTransition}
         className="flex min-w-0 flex-1 flex-col"
       >
-        <motion.div
-          layout
-          animate={{
-            height: topBarVisible || !autoHideChrome ? SHELL_TOP_BAR_HEIGHT_PX : 0,
-            opacity: topBarVisible || !autoHideChrome ? 1 : 0,
-          }}
-          transition={shellLayoutTransition}
-          className="shrink-0 overflow-hidden"
-        >
-          <TopBar
-            breadcrumb={
-              pageBreadcrumb && pageBreadcrumb.length > 0
-                ? pageBreadcrumb
-                : undefined
-            }
-            userDisplayName={shell.userDisplayName}
-            userInitials={shell.userInitials}
-            menuButtonRef={mobileMenuTrigger}
-            settingsButtonRef={topBarSettingsTrigger}
-            onOpenNavigation={() => dispatchMobileNavigation({ type: "open" })}
-            onOpenSettings={() => openSettings()}
-            navigationOpen={mobileNavigation.open}
-            showSidebarReveal={showRevealButton}
-          />
-        </motion.div>
         <SidebarLayoutProvider value={sidebarLayoutValue}>
           <main
-            ref={mainScrollRef}
             aria-label="Workspace canvas"
             className="min-h-0 flex-1 overflow-auto bg-paper"
           >
@@ -371,6 +331,10 @@ export function AppShell({
           dispatchMobileNavigation({ type: "navigate" });
           openSettings(mobileMenuTrigger.current);
         }}
+        onOpenSpotlight={() => {
+          dispatchMobileNavigation({ type: "navigate" });
+          openSpotlight();
+        }}
       />
       <SettingsDialog
         open={settingsOpen}
@@ -379,21 +343,28 @@ export function AppShell({
       />
       <CommandBar
         open={commandBarOpen}
-        onClose={() => setCommandBarOpen(false)}
+        initialQuery={spotlightQuery}
+        onClose={() => {
+          setCommandBarOpen(false);
+          setSpotlightQuery(undefined);
+        }}
         onOpenSettings={() => {
           setCommandBarOpen(false);
+          setSpotlightQuery(undefined);
           openSettings();
         }}
       />
 
-      {showEdgeTrigger && (
-        <SidebarPeekTrigger
-          showRevealButton={showRevealButton}
-          onOpenPeek={openPeekNow}
-          onSchedulePeek={schedulePeek}
-          onScheduleDismissPeek={scheduleDismissPeek}
-        />
-      )}
+      <SidebarPeekTrigger
+        showEdgeTrigger={showEdgeTrigger}
+        showRevealButton={showRevealButton}
+        onOpenPeek={openPeekNow}
+        onSchedulePeek={schedulePeek}
+        onScheduleDismissPeek={scheduleDismissPeek}
+        onOpenNavigation={() => dispatchMobileNavigation({ type: "open" })}
+        navigationOpen={mobileNavigation.open}
+        menuButtonRef={mobileMenuTrigger}
+      />
       </div>
     </LayoutGroup>
   );
