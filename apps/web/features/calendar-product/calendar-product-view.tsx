@@ -324,10 +324,7 @@ export function CalendarProductView({
     <section
       aria-labelledby="calendar-product-title"
       aria-busy={isPending}
-      className={cn(
-        "flex h-full w-full flex-col bg-surface-raised",
-        showRevealChrome && "md:pl-[length:var(--sidebar-reveal-safe-inset)]",
-      )}
+      className="flex h-full w-full flex-col bg-surface-raised"
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <CalendarDndContext onScheduleTask={handleScheduleTask}>
@@ -363,8 +360,15 @@ export function CalendarProductView({
             </div>
           </motion.aside>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-raised pl-2">
-            <div className="shrink-0 px-6 pt-5 pb-3">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-raised">
+            <div
+              className={cn(
+                "shrink-0 pr-6 pt-5 pb-3",
+                showRevealChrome
+                  ? "pl-[length:var(--sidebar-reveal-safe-inset)]"
+                  : "pl-6",
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <AnimatePresence initial={false}>
@@ -428,7 +432,7 @@ export function CalendarProductView({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-4">
+            <div className="flex min-h-0 flex-1 flex-col pt-2">
               {view === "year" ? (
                 <div className="min-h-0 flex-1">
                   <YearView

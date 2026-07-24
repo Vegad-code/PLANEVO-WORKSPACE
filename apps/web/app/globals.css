@@ -126,7 +126,7 @@
   /* Calendar product — Maximal soft (GCal-adjacent craft) */
   --radius-calendar-shell: 24px;
   --radius-calendar-control: 999px;
-  --radius-calendar-event: 999px;
+  --radius-calendar-event: 8px;
   --size-calendar-today-disc: 1.75rem;
 
   /* Layout */
@@ -485,17 +485,23 @@ body {
   --fc-highlight-color: color-mix(in srgb, var(--color-ocean) 18%, transparent);
   /* GCal-like all-day: fixed thin reserved band (Union Council — no :has collapse). */
   --fc-planevo-allday-min-height: 1.5rem;
-  border-radius: var(--radius-calendar-shell);
+  border-radius: var(--radius-calendar-shell) var(--radius-calendar-shell) 0 0;
   overflow: hidden;
   border: 1px solid var(--color-border);
   background: var(--color-surface-raised);
+  width: 100%;
   height: 100%;
 }
 
 .planevo-fc .fc {
+  width: 100%;
   height: 100%;
   font-family: inherit;
   color: var(--color-ink);
+}
+
+.planevo-fc .fc-view-harness {
+  width: 100%;
 }
 
 .planevo-fc .fc-theme-standard td,
@@ -565,6 +571,7 @@ body {
   border: 0;
   background: transparent;
   box-shadow: none;
+  margin-inline: 1px;
 }
 
 .planevo-fc .fc-event .fc-event-main {
@@ -575,6 +582,27 @@ body {
 .planevo-fc .fc-planevo-event-inner {
   min-height: 100%;
   border-radius: var(--radius-calendar-event);
+}
+
+/* GCal-like fills — calendar tint on light; saturated mix on dark so blocks stay visible. */
+[data-theme="dark"] .planevo-fc .fc-planevo-event--slate .fc-planevo-event-inner {
+  background: color-mix(in srgb, var(--color-slate) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-fc .fc-planevo-event--marigold .fc-planevo-event-inner {
+  background: color-mix(in srgb, var(--color-marigold) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-fc .fc-planevo-event--meadow .fc-planevo-event-inner {
+  background: color-mix(in srgb, var(--color-meadow) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-fc .fc-planevo-event--brick .fc-planevo-event-inner {
+  background: color-mix(in srgb, var(--color-brick) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-fc .fc-planevo-event--ocean .fc-planevo-event-inner {
+  background: color-mix(in srgb, var(--color-ocean) 55%, var(--color-paper));
 }
 
 .planevo-fc .fc-now-indicator-line {

@@ -78,7 +78,7 @@ function PlanevoEventContent({ arg }: { arg: EventContentArg }) {
   return (
     <div
       className={cn(
-        "fc-planevo-event-inner flex h-full min-h-0 flex-col overflow-hidden border-l-[3px] px-1.5 py-0.5",
+        "fc-planevo-event-inner flex h-full min-h-0 flex-col overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5",
         CALENDAR_COLOR_BLOCK_CLASS[color],
         CALENDAR_COLOR_BORDER_CLASS[color],
       )}
