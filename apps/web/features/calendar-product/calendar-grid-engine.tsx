@@ -59,7 +59,7 @@ function PlanevoDayHeader({ arg }: { arg: DayHeaderContentArg }) {
   const label = formatDayHeaderAccessibleLabel(date)
   return (
     <span
-      className="fc-planevo-day-header flex flex-col items-center gap-0.5"
+      className="fc-planevo-day-header flex flex-col items-center"
       aria-label={label}
       aria-current={arg.isToday ? "date" : undefined}
     >

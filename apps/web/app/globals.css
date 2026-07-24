@@ -127,7 +127,18 @@
   --radius-calendar-shell: 24px;
   --radius-calendar-control: 999px;
   --radius-calendar-event: 8px;
-  --size-calendar-today-disc: 1.75rem;
+  --size-calendar-today-disc: 2.25rem;
+  --text-calendar-day-weekday: 11px;
+  --text-calendar-day-weekday--line-height: 16px;
+  --text-calendar-day-weekday--letter-spacing: 0.05em;
+  --text-calendar-day-weekday--font-weight: 500;
+  --text-calendar-day-number: 22px;
+  --text-calendar-day-number--line-height: 28px;
+  --text-calendar-day-number--font-weight: 400;
+  --spacing-calendar-day-header-gap: 0.25rem;
+  --color-calendar-today-disc: #6495ed;
+  --color-calendar-today-disc-foreground: #ffffff;
+  --color-calendar-today-label: #6495ed;
 
   /* Layout */
   --spacing-sidebar: 210px;
@@ -198,6 +209,11 @@
   --color-brick-tint: #594141;
   --color-slate-tint: #443f57;
   --color-ocean-tint: #364954;
+
+  /* Calendar today — solid cornflower (GCal-adjacent, opaque on dark) */
+  --color-calendar-today-disc: #7eb0f5;
+  --color-calendar-today-disc-foreground: #0c2d5c;
+  --color-calendar-today-label: #7eb0f5;
 
   /* Files product — same Notion tiers, scoped via [data-product="files"] */
   --color-files-bg: #191919;
@@ -491,6 +507,9 @@ body {
   background: var(--color-surface-raised);
   width: 100%;
   height: 100%;
+  font-family: var(--font-product);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .planevo-fc .fc {
@@ -509,54 +528,60 @@ body {
   border-color: var(--color-border);
 }
 
+.planevo-fc .fc-col-header-cell {
+  min-height: 3.5rem;
+}
+
 .planevo-fc .fc-col-header-cell-cushion {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
+  gap: var(--spacing-calendar-day-header-gap);
   padding-top: 0.5rem;
-  padding-bottom: 0.35rem;
+  padding-bottom: 0.5rem;
   text-decoration: none;
   color: var(--color-text-secondary);
   font-weight: 500;
 }
 
 .planevo-fc .fc-timegrid-slot-label-cushion {
-  color: var(--color-text-secondary);
-  font-weight: 500;
+  font-size: var(--text-product-meta);
+  font-weight: 400;
+  color: var(--color-text-muted);
 }
 
 .planevo-fc .fc-planevo-day-weekday {
-  font-size: var(--text-product-meta);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  line-height: 1.2;
+  font-size: var(--text-calendar-day-weekday);
+  line-height: var(--text-calendar-day-weekday--line-height);
+  letter-spacing: var(--text-calendar-day-weekday--letter-spacing);
+  font-weight: var(--text-calendar-day-weekday--font-weight);
   color: var(--color-text-muted);
-  text-transform: uppercase;
 }
 
 .planevo-fc .fc-planevo-day-number {
+  font-size: var(--text-calendar-day-number);
+  line-height: var(--text-calendar-day-number--line-height);
+  font-weight: var(--text-calendar-day-number--font-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.planevo-fc .fc-col-header-cell.fc-day-today .fc-planevo-day-weekday {
+  color: var(--color-calendar-today-label);
+  font-weight: 600;
+}
+
+.planevo-fc .fc-col-header-cell.fc-day-today .fc-planevo-day-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: var(--size-calendar-today-disc);
   min-height: var(--size-calendar-today-disc);
-  padding-inline: 0.2rem;
-  font-size: var(--text-product-body);
-  font-weight: 600;
-  line-height: 1;
-  color: var(--color-ink);
+  font-weight: 500;
   border-radius: var(--radius-calendar-control);
-}
-
-.planevo-fc .fc-col-header-cell.fc-day-today .fc-planevo-day-weekday {
-  color: var(--color-ocean);
-}
-
-.planevo-fc .fc-col-header-cell.fc-day-today .fc-planevo-day-number {
-  background: var(--color-ocean);
-  color: var(--color-paper);
+  background: var(--color-calendar-today-disc);
+  color: var(--color-calendar-today-disc-foreground);
 }
 
 .planevo-fc .fc-timegrid-slot {
