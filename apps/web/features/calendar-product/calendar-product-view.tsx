@@ -428,7 +428,7 @@ export function CalendarProductView({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col px-4 pt-1 pb-4">
+            <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-4">
               {view === "year" ? (
                 <div className="min-h-0 flex-1">
                   <YearView
@@ -439,6 +439,7 @@ export function CalendarProductView({
                 </div>
               ) : (
                 <CalendarGridEngine
+                  className="min-h-0 flex-1"
                   view={view}
                   anchor={gridAnchor}
                   calendars={calendars}
