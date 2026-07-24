@@ -13,6 +13,7 @@ import {
   togglePlanningSection,
   type PlanningSectionId,
 } from "@/lib/calendar/planning-collapse";
+import { cn } from "@/lib/utils";
 import { CalendarDateSection } from "./calendar-date-section";
 import { CalendarPlanningSection } from "./calendar-planning-section";
 import { CalendarSourcesSection } from "./calendar-sources-section";
@@ -37,13 +38,15 @@ export type CalendarPlanningSidebarProps = {
     bucket: "week" | "month" | "none",
   ) => void;
   onCollapse: () => void;
+  /** Extra left inset on the title row when the app nav hamburger is visible. */
+  clearRevealChrome?: boolean;
   /** Hide the collapse control in the mobile drawer (drawer has its own close). */
   hideCollapseControl?: boolean;
 };
 
 /**
- * Unified Planning sidebar for Calendar: accordion stack of Date, Tasks, and
- * Calendars — patterned after the Files Library rail.
+ * Calendar left rail (Files Library parity): accordion stack of Date, Tasks,
+ * and Calendars. Title mirrors Library — short product noun, not a verb.
  */
 export function CalendarPlanningSidebar({
   calendars,
@@ -57,6 +60,7 @@ export function CalendarPlanningSidebar({
   onToggleTask,
   onQuickAddTask,
   onCollapse,
+  clearRevealChrome = false,
   hideCollapseControl = false,
 }: CalendarPlanningSidebarProps) {
   const [collapsedSections, setCollapsedSections] = useState<
@@ -82,12 +86,20 @@ export function CalendarPlanningSidebar({
 
   return (
     <div className="flex h-full w-full flex-col gap-3 px-4 pt-4 pb-4 pr-3">
-      <div className="flex items-center justify-between gap-2 pt-0.5">
-        <h2 className="text-h3 font-semibold text-ink">Planning</h2>
+      <div
+        className={cn(
+          "flex min-h-8 items-center justify-between gap-2",
+          // Clear fixed nav hamburger (top-3 left-3 size-8) with ~8px air after it.
+          // Container already has px-4; add the rest of the safe inset + gap.
+          clearRevealChrome &&
+            "md:pl-[calc(var(--sidebar-reveal-safe-inset)-0.5rem)]",
+        )}
+      >
+        <h2 className="text-h3 font-semibold text-ink">Agenda</h2>
         {!hideCollapseControl ? (
           <button
             type="button"
-            aria-label="Collapse planning sidebar"
+            aria-label="Collapse agenda"
             onClick={onCollapse}
             className="flex size-7 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
@@ -97,7 +109,7 @@ export function CalendarPlanningSidebar({
       </div>
 
       <nav
-        aria-label="Planning"
+        aria-label="Agenda"
         className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1"
       >
         <CalendarPlanningSection

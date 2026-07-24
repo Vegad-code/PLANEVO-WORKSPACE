@@ -80,7 +80,7 @@ export function CalendarResizeHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize planning sidebar. Click to collapse."
+      aria-label="Resize agenda. Click to collapse."
       title="Drag to resize · click to collapse"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

@@ -302,12 +302,12 @@ export function CalendarProductPreview() {
 
       <figure>
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Planning collapsed — reveal control
+          Agenda collapsed — reveal control
         </figcaption>
         <div className="calendar-panel-glass flex w-80 items-center gap-2 rounded-xl p-4">
           <button
             type="button"
-            aria-label="Show planning sidebar"
+            aria-label="Show agenda"
             className="flex size-8 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             <PanelLeft aria-hidden="true" className="size-4" />
@@ -339,12 +339,12 @@ export function CalendarProductPreview() {
 
       <figure>
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Mobile planning drawer
+          Mobile agenda drawer
         </figcaption>
         <div className="relative h-[28rem] w-80 overflow-hidden rounded-xl bg-ink/40">
           <div className="calendar-rail-glass absolute inset-y-0 right-0 flex w-full flex-col">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <p className="text-product-body font-medium text-ink">Planning</p>
+              <p className="text-product-body font-medium text-ink">Agenda</p>
               <span className="text-product-meta text-text-secondary">Close</span>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">

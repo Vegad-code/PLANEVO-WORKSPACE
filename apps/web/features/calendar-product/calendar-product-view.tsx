@@ -317,6 +317,7 @@ export function CalendarProductView({
       onToggleTask={handleToggleTask}
       onQuickAddTask={handleQuickAddTask}
       onCollapse={() => setSidebarCollapsed(true)}
+      clearRevealChrome={showRevealChrome}
     />
   )
 
@@ -364,7 +365,7 @@ export function CalendarProductView({
             <div
               className={cn(
                 "shrink-0 pr-6 pt-5 pb-3",
-                showRevealChrome
+                showRevealChrome && sidebarCollapsed
                   ? "pl-[length:var(--sidebar-reveal-safe-inset)]"
                   : "pl-6",
               )}
@@ -376,7 +377,7 @@ export function CalendarProductView({
                       <motion.button
                         key="show-planning"
                         type="button"
-                        aria-label="Show planning sidebar"
+                        aria-label="Show agenda"
                         onClick={() => setSidebarCollapsed(false)}
                         initial={
                           prefersReducedMotion
@@ -415,7 +416,7 @@ export function CalendarProductView({
                   className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink lg:hidden"
                   onClick={() => setPlanningDrawerOpen(true)}
                 >
-                  Planning
+                  Agenda
                 </button>
               </div>
               <div className="mt-4">
@@ -462,14 +463,14 @@ export function CalendarProductView({
             <div className="fixed inset-0 z-40 lg:hidden">
               <button
                 type="button"
-                aria-label="Close planning sidebar"
+                aria-label="Close agenda"
                 className="absolute inset-0 bg-ink/40"
                 onClick={() => setPlanningDrawerOpen(false)}
               />
               <div className="calendar-rail-glass absolute inset-y-0 right-0 flex w-[min(100%,20rem)] flex-col shadow-spotlight">
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <p className="text-product-body font-medium text-ink">
-                    Planning
+                    Agenda
                   </p>
                   <button
                     type="button"
