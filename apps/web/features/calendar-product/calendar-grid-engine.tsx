@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import FullCalendar from "@fullcalendar/react"
 import type {
   DateSelectArg,
+  DayHeaderContentArg,
   EventClickArg,
   EventContentArg,
   EventDropArg,
@@ -21,6 +22,11 @@ import {
   getPlanevoEventId,
   toFullCalendarEvents,
 } from "@/lib/calendar/calendar-event-adapter"
+import {
+  formatDayHeaderAccessibleLabel,
+  formatDayHeaderDayNumber,
+  formatDayHeaderWeekday,
+} from "@/lib/calendar/day-header-model"
 import { cn } from "@/lib/utils"
 import {
   CALENDAR_COLOR_BLOCK_CLASS,
@@ -48,12 +54,31 @@ function scrollTimeNearNow(): string {
   return `${String(hour).padStart(2, "0")}:00:00`
 }
 
+function PlanevoDayHeader({ arg }: { arg: DayHeaderContentArg }) {
+  const date = arg.date
+  const label = formatDayHeaderAccessibleLabel(date)
+  return (
+    <span
+      className="fc-planevo-day-header flex flex-col items-center gap-0.5"
+      aria-label={label}
+      aria-current={arg.isToday ? "date" : undefined}
+    >
+      <span className="fc-planevo-day-weekday" aria-hidden="true">
+        {formatDayHeaderWeekday(date)}
+      </span>
+      <span className="fc-planevo-day-number" aria-hidden="true">
+        {formatDayHeaderDayNumber(date)}
+      </span>
+    </span>
+  )
+}
+
 function PlanevoEventContent({ arg }: { arg: EventContentArg }) {
   const color = getEventColor(arg.event)
   return (
     <div
       className={cn(
-        "fc-planevo-event-inner flex h-full min-h-0 flex-col overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5",
+        "fc-planevo-event-inner flex h-full min-h-0 flex-col overflow-hidden border-l-[3px] px-1.5 py-0.5",
         CALENDAR_COLOR_BLOCK_CLASS[color],
         CALENDAR_COLOR_BORDER_CLASS[color],
       )}
@@ -232,10 +257,7 @@ export function CalendarGridEngine({
           minute: "2-digit",
           meridiem: "short",
         }}
-        dayHeaderFormat={{
-          weekday: "short",
-          day: "numeric",
-        }}
+        dayHeaderContent={(arg) => <PlanevoDayHeader arg={arg} />}
       />
     </div>
   )
