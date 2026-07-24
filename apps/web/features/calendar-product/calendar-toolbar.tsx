@@ -90,7 +90,7 @@ export function CalendarToolbar({
         <button
           type="button"
           onClick={onNavigateToday}
-          className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          className="rounded-full border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           Today
         </button>
@@ -105,7 +105,7 @@ export function CalendarToolbar({
                   : "Previous week"
             }
             onClick={onNavigatePrevious}
-            className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            className="flex size-8 items-center justify-center rounded-full border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             <ChevronLeft aria-hidden="true" className="size-4" />
           </button>
@@ -119,7 +119,7 @@ export function CalendarToolbar({
                   : "Next week"
             }
             onClick={onNavigateNext}
-            className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            className="flex size-8 items-center justify-center rounded-full border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             <ChevronRight aria-hidden="true" className="size-4" />
           </button>
@@ -136,7 +136,7 @@ export function CalendarToolbar({
         <div
           role="group"
           aria-label="Calendar view"
-          className="flex rounded-lg border border-border bg-surface-raised p-0.5"
+          className="flex rounded-full border border-border bg-surface-raised p-0.5"
         >
           {CALENDAR_VIEWS.map((option) => {
             const isSelected = view === option;
@@ -146,7 +146,7 @@ export function CalendarToolbar({
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => onViewChange(option)}
-                className={`rounded-md px-3 py-1.5 text-product-body font-medium outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
+                className={`rounded-full px-3 py-1.5 text-product-body font-medium outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                   isSelected
                     ? "bg-paper text-ink"
                     : "text-text-secondary hover:text-ink"
@@ -164,7 +164,7 @@ export function CalendarToolbar({
             aria-expanded={filterOpen}
             aria-controls="calendar-scope-filter"
             onClick={() => setFilterOpen((open) => !open)}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            className="flex items-center gap-1.5 rounded-full border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
           >
             <SlidersHorizontal aria-hidden="true" className="size-4" />
             Filter
