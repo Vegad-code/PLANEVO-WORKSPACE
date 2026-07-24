@@ -123,6 +123,12 @@
   --radius-files-card: 12px;
   --radius-files-modal: 24px;
 
+  /* Calendar product — Maximal soft (GCal-adjacent craft) */
+  --radius-calendar-shell: 24px;
+  --radius-calendar-control: 999px;
+  --radius-calendar-event: 999px;
+  --size-calendar-today-disc: 1.75rem;
+
   /* Layout */
   --spacing-sidebar: 210px;
   --sidebar-width: var(--spacing-sidebar);
@@ -479,6 +485,10 @@ body {
   --fc-highlight-color: color-mix(in srgb, var(--color-ocean) 18%, transparent);
   /* GCal-like all-day: fixed thin reserved band (Union Council — no :has collapse). */
   --fc-planevo-allday-min-height: 1.5rem;
+  border-radius: var(--radius-calendar-shell);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
   height: 100%;
 }
 
@@ -493,15 +503,54 @@ body {
   border-color: var(--color-border);
 }
 
-.planevo-fc .fc-col-header-cell-cushion,
+.planevo-fc .fc-col-header-cell-cushion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.35rem;
+  text-decoration: none;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
 .planevo-fc .fc-timegrid-slot-label-cushion {
   color: var(--color-text-secondary);
   font-weight: 500;
 }
 
-.planevo-fc .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
-  color: var(--color-ink);
+.planevo-fc .fc-planevo-day-weekday {
+  font-size: var(--text-product-meta);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.planevo-fc .fc-planevo-day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-calendar-today-disc);
+  min-height: var(--size-calendar-today-disc);
+  padding-inline: 0.2rem;
+  font-size: var(--text-product-body);
   font-weight: 600;
+  line-height: 1;
+  color: var(--color-ink);
+  border-radius: var(--radius-calendar-control);
+}
+
+.planevo-fc .fc-col-header-cell.fc-day-today .fc-planevo-day-weekday {
+  color: var(--color-ocean);
+}
+
+.planevo-fc .fc-col-header-cell.fc-day-today .fc-planevo-day-number {
+  background: var(--color-ocean);
+  color: var(--color-paper);
 }
 
 .planevo-fc .fc-timegrid-slot {
@@ -525,6 +574,7 @@ body {
 
 .planevo-fc .fc-planevo-event-inner {
   min-height: 100%;
+  border-radius: var(--radius-calendar-event);
 }
 
 .planevo-fc .fc-now-indicator-line {
@@ -539,6 +589,10 @@ body {
 
 .planevo-fc .fc-highlight {
   background: var(--fc-highlight-color);
+}
+
+.planevo-fc .fc-scrollgrid {
+  border-radius: inherit;
 }
 
 .planevo-fc .fc-scrollgrid,
