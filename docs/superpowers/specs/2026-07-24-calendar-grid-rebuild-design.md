@@ -46,12 +46,27 @@ app-shell
 
 - Sunday-start week (`firstDay: 0`) — matches `calendar-range.ts`
 - 24h axis, scroll to ~now on mount
-- All-day row for `all_day` events
+- All-day row for `all_day` events (see Union Council below)
 - Current-time indicator
 - Drag-move + resize timed events
 - Click / drag-select empty → create
 - Click event → peek
 - Task from Planning → grid schedules 1h block
+
+## Union Council — all-day band (2026-07-24)
+
+Senior FE council (Architect / Skeptic / Pragmatist / Critic / Craft) ratified **display-first GCal chassis**:
+
+| Decision | Rationale |
+|----------|-----------|
+| Keep `allDaySlot` | Hiding it also hides all-day events |
+| `allDayContent` → `sr-only` “All day” | No visible gutter label (GCal); keep a11y name |
+| Fixed thin `min-height` token band | No `:has()` empty-collapse (layout jump) |
+| `selectAllow: !allDay` this pass | Band click must not open timed create |
+| `stickyHeaderDates` + `dayMaxEventRows: 3` | Sticky day headers; overflow “+more” |
+| Defer all-day create/persist | Exclusive-end + duration-picker contract is a follow-up |
+
+**Shipped in:** `calendar-grid-engine.tsx` + `.planevo-fc` in `globals.css` only.
 
 ## Craft / tokens
 

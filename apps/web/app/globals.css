@@ -477,6 +477,8 @@ body {
   --fc-now-indicator-color: var(--color-ink);
   --fc-list-event-hover-bg-color: var(--color-surface-raised);
   --fc-highlight-color: color-mix(in srgb, var(--color-ocean) 18%, transparent);
+  /* GCal-like all-day: fixed thin reserved band (Union Council — no :has collapse). */
+  --fc-planevo-allday-min-height: 1.5rem;
   height: 100%;
 }
 
@@ -542,5 +544,29 @@ body {
 .planevo-fc .fc-scrollgrid,
 .planevo-fc .fc-scrollgrid-section > td {
   border-color: var(--color-border);
+}
+
+/* All-day band — unlabeled (sr-only via allDayContent), thin when empty, grows with events. */
+.planevo-fc .fc-timegrid .fc-daygrid-body,
+.planevo-fc .fc-timegrid .fc-daygrid-day-frame,
+.planevo-fc .fc-timegrid .fc-daygrid-day-events {
+  min-height: var(--fc-planevo-allday-min-height);
+}
+
+.planevo-fc .fc-timegrid .fc-daygrid-day-events {
+  margin-bottom: 0;
+}
+
+.planevo-fc .fc-timegrid .fc-daygrid-event-harness + .fc-daygrid-event-harness {
+  margin-top: 0.125rem;
+}
+
+.planevo-fc .fc-timegrid-axis-cushion {
+  padding: 0;
+}
+
+.planevo-fc .fc-timegrid-divider {
+  border-color: var(--color-border);
+  padding: 0;
 }
 

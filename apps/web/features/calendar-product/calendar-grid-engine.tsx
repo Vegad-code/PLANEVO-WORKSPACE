@@ -81,6 +81,7 @@ export function CalendarGridEngine({
   className,
 }: CalendarGridEngineProps) {
   const calendarRef = useRef<FullCalendar>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const fcEvents = useMemo(
     () => toFullCalendarEvents(events, calendars),
     [events, calendars],
@@ -99,6 +100,27 @@ export function CalendarGridEngine({
     if (api.view.type !== fcView) api.changeView(fcView)
     api.gotoDate(anchor)
   }, [anchor, fcView])
+
+  // Planning rail collapse/resize changes the flex width under FC. FullCalendar
+  // only remeasures on window resize / updateSize — without this, the grid
+  // stays stuck until the user triggers another layout action.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || typeof ResizeObserver === "undefined") return
+
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        calendarRef.current?.getApi().updateSize()
+      })
+    })
+    observer.observe(container)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [])
 
   function handleSelect(info: DateSelectArg) {
     onSlotSelect(info.start)
@@ -156,6 +178,7 @@ export function CalendarGridEngine({
 
   return (
     <div
+      ref={containerRef}
       className={cn("planevo-fc min-h-0 h-full w-full", className)}
       data-calendar-grid="fullcalendar"
       aria-label="Calendar grid"
@@ -169,10 +192,15 @@ export function CalendarGridEngine({
         height="100%"
         // Sunday-start to mirror Google Calendar; loader expands Mon week by -1d.
         firstDay={0}
+        // GCal-like all-day: keep the slot (events need it), strip visible label.
+        // Union Council: fixed thin band (no :has collapse); defer all-day create.
         allDaySlot
+        allDayContent={() => <span className="sr-only">All day</span>}
+        stickyHeaderDates
         nowIndicator
         selectable
         selectMirror
+        selectAllow={(arg) => !arg.allDay}
         editable
         eventStartEditable
         eventDurationEditable
@@ -183,7 +211,10 @@ export function CalendarGridEngine({
         scrollTime={scrollTimeNearNow()}
         scrollTimeReset={false}
         weekends
-        dayMaxEvents
+        views={{
+          timeGridWeek: { dayMaxEventRows: 3 },
+          timeGridDay: { dayMaxEventRows: 3 },
+        }}
         events={fcEvents}
         select={handleSelect}
         eventClick={handleEventClick}
