@@ -13,6 +13,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/planevo-icon";
 import { toast } from "@/components/ui/toast";
@@ -642,14 +643,16 @@ export function FilesProductView({
                     <div className="flex items-center gap-2 text-h3 font-semibold text-files-text">
                       Tags
                       {selectedTag ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedTag(null)}
-                          className="flex items-center gap-1 rounded-full border border-files-border bg-files-surface-muted px-2 py-0.5 text-product-meta font-normal text-files-text outline-none hover:text-files-text focus-visible:outline focus-visible:outline-offset-1 focus-visible:outline-files-cta"
-                        >
-                          #{selectedTag}
-                          <X aria-hidden="true" className="size-3" />
-                        </button>
+                        <Badge asChild variant="secondary">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTag(null)}
+                            className="outline-none focus-visible:outline focus-visible:outline-offset-1 focus-visible:outline-files-cta"
+                          >
+                            #{selectedTag}
+                            <X aria-hidden="true" className="size-3" />
+                          </button>
+                        </Badge>
                       ) : null}
                     </div>
                   )}

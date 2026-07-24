@@ -33,11 +33,11 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
 
 const PRIORITY_STYLES: Record<
   TaskPriority,
-  { label: string; variant: "high" | "medium" | "low" }
+  { label: string; variant: "destructive" | "secondary" | "outline" }
 > = {
-  high: { label: "High", variant: "high" },
-  medium: { label: "Medium", variant: "medium" },
-  low: { label: "Low", variant: "low" },
+  high: { label: "High", variant: "destructive" },
+  medium: { label: "Medium", variant: "secondary" },
+  low: { label: "Low", variant: "outline" },
 };
 
 function dueDateDetails(task: TaskWithMeta): {
@@ -128,9 +128,9 @@ export function TaskCard({
             <span
               aria-hidden="true"
               className={`size-1.5 rounded-full ${
-                priority.variant === "high"
-                  ? "bg-brick"
-                  : priority.variant === "medium"
+                priority.variant === "destructive"
+                  ? "bg-paper"
+                  : priority.variant === "secondary"
                     ? "bg-text-secondary"
                     : "bg-meadow"
               }`}

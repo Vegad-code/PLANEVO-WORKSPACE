@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import { weekParam, weekRange } from "@planevo/core/state/calendar-state";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/planevo-icon";
 import type { CalendarScope } from "@/lib/calendar/scope-prefs";
 
-export const CALENDAR_VIEWS = ["day", "week"] as const;
+export const CALENDAR_VIEWS = ["day", "week", "year"] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
 
 const VIEW_LABELS: Record<CalendarView, string> = {
   day: "Day",
   week: "Week",
+  year: "Year",
 };
 
 const SCOPE_OPTIONS = [
@@ -32,14 +32,39 @@ type CalendarToolbarProps = {
 };
 
 function toolbarLabel(anchor: Date, view: CalendarView): string {
-  const { start } = weekRange(anchor);
-  const labelDate = view === "day" ? anchor : start;
-  const monthYear = labelDate.toLocaleDateString(undefined, {
-    month: "short",
-    year: "numeric",
-  });
+  if (view === "year") {
+    return String(anchor.getFullYear());
+  }
+  if (view === "day") {
+    return anchor.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+  const { start, end } = weekRange(anchor);
+  const endLabel = new Date(end);
+  endLabel.setDate(endLabel.getDate() - 1);
   const week = weekParam(anchor).split("-")[1];
-  return `${monthYear} / ${week}`;
+  const range =
+    start.getMonth() === endLabel.getMonth()
+      ? `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} - ${endLabel.getDate()}, ${endLabel.getFullYear()}`
+      : `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} - ${endLabel.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+  return `${range} / ${week}`;
+}
+
+function timezoneLabel(): string {
+  try {
+    const offsetMinutes = -new Date().getTimezoneOffset();
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const absolute = Math.abs(offsetMinutes);
+    const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
+    const minutes = String(absolute % 60).padStart(2, "0");
+    return `UTC${sign}${hours}:${minutes}`;
+  } catch {
+    return "Local";
+  }
 }
 
 export function CalendarToolbar({
@@ -53,6 +78,7 @@ export function CalendarToolbar({
   onNavigateToday,
 }: CalendarToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
+  const tz = useMemo(() => timezoneLabel(), []);
 
   return (
     <div
@@ -60,7 +86,51 @@ export function CalendarToolbar({
       aria-label="Calendar controls"
       className="flex flex-wrap items-center justify-between gap-3"
     >
-      <h2 className="text-h3 tabular-nums">{toolbarLabel(anchor, view)}</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={onNavigateToday}
+          className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          Today
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={
+              view === "day"
+                ? "Previous day"
+                : view === "year"
+                  ? "Previous year"
+                  : "Previous week"
+            }
+            onClick={onNavigatePrevious}
+            className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            <ChevronLeft aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            aria-label={
+              view === "day"
+                ? "Next day"
+                : view === "year"
+                  ? "Next year"
+                  : "Next week"
+            }
+            onClick={onNavigateNext}
+            className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+        <h2 className="text-h3 tabular-nums text-ink">
+          {toolbarLabel(anchor, view)}
+        </h2>
+        <span className="rounded-full border border-border bg-surface-raised px-2.5 py-1 text-product-meta text-text-secondary">
+          {tz}
+        </span>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div
@@ -78,8 +148,8 @@ export function CalendarToolbar({
                 onClick={() => onViewChange(option)}
                 className={`rounded-md px-3 py-1.5 text-product-body font-medium outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none ${
                   isSelected
-                    ? "border border-border bg-paper text-ink"
-                    : "border border-transparent text-text-secondary hover:text-ink"
+                    ? "bg-paper text-ink"
+                    : "text-text-secondary hover:text-ink"
                 }`}
               >
                 {VIEW_LABELS[option]}
@@ -123,7 +193,10 @@ export function CalendarToolbar({
                   {SCOPE_OPTIONS.map((option) => {
                     const isSelected = scope === option.value;
                     return (
-                      <label key={option.value} className="block cursor-pointer">
+                      <label
+                        key={option.value}
+                        className="block cursor-pointer"
+                      >
                         <input
                           type="radio"
                           name="calendar-scope"
@@ -152,34 +225,6 @@ export function CalendarToolbar({
             </>
           ) : null}
         </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label={view === "day" ? "Previous day" : "Previous week"}
-            onClick={onNavigatePrevious}
-            className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            <ChevronLeft aria-hidden="true" className="size-4" />
-          </button>
-          <button
-            type="button"
-            aria-label={view === "day" ? "Next day" : "Next week"}
-            onClick={onNavigateNext}
-            className="flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            <ChevronRight aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-
-        {/* The view's single marigold element. */}
-        <Button type="button" onClick={onNavigateToday}>
-          Today
-        </Button>
-
-        <Button type="button" variant="outline" disabled title="Sharing comes later">
-          Share
-        </Button>
       </div>
     </div>
   );

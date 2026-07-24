@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { upsertRecordValue } from "@/app/(workspace)/databases/[databaseId]/actions";
+import { Badge } from "@/components/ui/badge";
 
 type RelationTarget = {
   id: string;
@@ -105,7 +106,7 @@ export function RelationPicker({
         className="flex min-h-8 w-full items-center rounded-md border border-transparent px-2 text-left text-small outline-none hover:border-border focus:border-ink"
       >
         {label ? (
-          <span className="rounded-full border border-border px-2 py-0.5">{label}</span>
+          <Badge variant="outline">{label}</Badge>
         ) : (
           <span className="text-text-muted">Link record…</span>
         )}

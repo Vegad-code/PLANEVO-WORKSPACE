@@ -413,11 +413,10 @@ export default function DesignPage() {
           <Button variant="ink">Ink</Button>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Badge>Default</Badge>
-          <Badge variant="high">High</Badge>
-          <Badge variant="medium">Medium</Badge>
-          <Badge variant="low">Low</Badge>
-          <Badge variant="muted">Muted</Badge>
+          <Badge>Badge</Badge>
+          <Badge variant="secondary">Secondary</Badge>
+          <Badge variant="destructive">Destructive</Badge>
+          <Badge variant="outline">Outline</Badge>
         </div>
         <div className="mt-4 max-w-xs">
           <SelectField label="Priority" defaultValue="medium">
@@ -432,7 +431,7 @@ export default function DesignPage() {
         <TasksProductPreview />
       </Section>
 
-      <Section title="Calendar product: sidebar, today column, week grid">
+      <Section title="Calendar product: Planning rail + FullCalendar week grid">
         <CalendarProductPreview />
       </Section>
 

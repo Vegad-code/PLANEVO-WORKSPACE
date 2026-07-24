@@ -64,7 +64,7 @@ export function CreateEventPopover({
       open
       onClose={onClose}
       labelledBy="create-event-title"
-      className="m-4 w-[min(100%,24rem)] overflow-hidden rounded-2xl border border-border bg-surface-raised p-0 text-ink shadow-lg backdrop:bg-ink/30 sm:m-auto"
+      className="spotlight-glass-panel m-4 w-[min(100%,24rem)] overflow-hidden rounded-2xl p-0 text-ink backdrop:bg-ink/30 sm:m-auto"
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">

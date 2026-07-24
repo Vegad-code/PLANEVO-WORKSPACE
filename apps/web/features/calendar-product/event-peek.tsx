@@ -113,7 +113,7 @@ export function EventPeek({
           keyEvent.preventDefault();
           onClose();
         }}
-        className="fixed z-40 flex flex-col gap-3 rounded-card border border-border bg-surface-raised p-4 shadow-lg outline-none"
+        className="spotlight-glass-panel fixed z-40 flex flex-col gap-3 rounded-card p-4 outline-none"
       >
         <header className="flex items-start justify-between gap-2">
           <h3 className="text-h3 text-ink">{event.title}</h3>

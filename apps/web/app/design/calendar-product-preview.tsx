@@ -4,42 +4,99 @@ import { DndContext } from "@dnd-kit/core";
 import type {
   CalendarEventRow,
   CalendarRow,
-  TaskDueChip,
 } from "@planevo/core/types/calendar";
 import { useState } from "react";
-import { CalendarSidebar } from "@/features/calendar-product/calendar-sidebar";
-import { CalendarToolbar } from "@/features/calendar-product/calendar-toolbar";
+import { PanelLeft } from "lucide-react";
+import { CalendarGridEngine } from "@/features/calendar-product/calendar-grid-engine";
+import { CalendarPlanningSidebar } from "@/features/calendar-product/calendar-planning-sidebar";
+import { CalendarTasksSection } from "@/features/calendar-product/calendar-tasks-section";
 import { CreateEventPopover } from "@/features/calendar-product/create-event-popover";
 import { EventPeek } from "@/features/calendar-product/event-peek";
-import { TodayColumn } from "@/features/calendar-product/today-column";
 import type { TodayColumnTask } from "@/features/calendar-product/today-task-row";
-import { WeekGrid } from "@/features/calendar-product/week-grid";
 
 /** Fixed clock so preview states do not drift day to day. */
 const DESIGN_NOW = new Date(2026, 6, 15, 13, 0);
+const DESIGN_WEEK_START = new Date(2026, 6, 13);
 
 const DESIGN_TODAY_TASKS: TodayColumnTask[] = [
-  { id: "task-marketing", title: "Marketing page", status: "not_started", due_at: "2026-07-15T17:00:00.000Z" },
-  { id: "task-wireframe", title: "Wireframe — Paper", status: "in_progress", due_at: "2026-07-14T09:00:00.000Z" },
-  { id: "task-invoice", title: "Invoice template design", status: "not_started", due_at: "2026-07-17T12:00:00.000Z" },
-  { id: "task-research", title: "UX research flow", status: "not_started", due_at: null },
-  { id: "task-widgets", title: "Review UI widgets", status: "not_started", due_at: null },
-  { id: "task-done", title: "Landing page", status: "done", due_at: "2026-07-15T10:00:00.000Z" },
+  {
+    id: "task-marketing",
+    title: "Marketing page",
+    status: "not_started",
+    due_at: "2026-07-15T17:00:00.000Z",
+  },
+  {
+    id: "task-wireframe",
+    title: "Wireframe - Paper",
+    status: "in_progress",
+    due_at: "2026-07-14T09:00:00.000Z",
+  },
+  {
+    id: "task-invoice",
+    title: "Invoice template design",
+    status: "not_started",
+    due_at: "2026-07-17T12:00:00.000Z",
+  },
+  {
+    id: "task-research",
+    title: "UX research flow",
+    status: "not_started",
+    due_at: null,
+  },
+  {
+    id: "task-widgets",
+    title: "Review UI widgets",
+    status: "not_started",
+    due_at: null,
+  },
+  {
+    id: "task-done",
+    title: "Landing page",
+    status: "done",
+    due_at: "2026-07-15T10:00:00.000Z",
+  },
 ];
 
 export const DESIGN_CALENDARS: CalendarRow[] = [
-  { id: "cal-personal", user_id: "design-owner", name: "Personal", color: "marigold", is_visible: true, position: 0, created_at: "2026-07-01T00:00:00.000Z" },
-  { id: "cal-work", user_id: "design-owner", name: "Work", color: "ocean", is_visible: true, position: 1, created_at: "2026-07-01T00:00:00.000Z" },
-  { id: "cal-holidays", user_id: "design-owner", name: "Holidays", color: "meadow", is_visible: false, position: 2, created_at: "2026-07-01T00:00:00.000Z" },
+  {
+    id: "cal-personal",
+    user_id: "design-owner",
+    name: "Personal",
+    color: "ocean",
+    is_visible: true,
+    position: 0,
+    created_at: "2026-07-01T00:00:00.000Z",
+  },
+  {
+    id: "cal-work",
+    user_id: "design-owner",
+    name: "Work",
+    color: "slate",
+    is_visible: true,
+    position: 1,
+    created_at: "2026-07-01T00:00:00.000Z",
+  },
+  {
+    id: "cal-holidays",
+    user_id: "design-owner",
+    name: "Holidays",
+    color: "meadow",
+    is_visible: false,
+    position: 2,
+    created_at: "2026-07-01T00:00:00.000Z",
+  },
 ];
 
-/** Local-time ISO builder for the fixed preview week (Jul 13–19, 2026). */
 function previewTime(dayOfMonth: number, hour: number, minute = 0): string {
   return new Date(2026, 6, dayOfMonth, hour, minute).toISOString();
 }
 
 function previewEvent(
-  overrides: Partial<CalendarEventRow> & Pick<CalendarEventRow, "id" | "title" | "starts_at" | "ends_at" | "calendar_id">,
+  overrides: Partial<CalendarEventRow> &
+    Pick<
+      CalendarEventRow,
+      "id" | "title" | "starts_at" | "ends_at" | "calendar_id"
+    >,
 ): CalendarEventRow {
   return {
     user_id: "design-owner",
@@ -55,23 +112,76 @@ function previewEvent(
   };
 }
 
-const DESIGN_WEEK_START = new Date(2026, 6, 13);
-
 const DESIGN_EVENTS: CalendarEventRow[] = [
-  previewEvent({ id: "ev-standup", title: "Standup call", calendar_id: "cal-work", starts_at: previewTime(13, 12), ends_at: previewTime(13, 13) }),
-  previewEvent({ id: "ev-design", title: "Design system", calendar_id: "cal-work", starts_at: previewTime(14, 10), ends_at: previewTime(14, 11) }),
-  previewEvent({ id: "ev-review", title: "Tuesday review", calendar_id: "cal-personal", starts_at: previewTime(14, 14), ends_at: previewTime(14, 15, 30) }),
-  previewEvent({ id: "ev-cricket", title: "Cricket", calendar_id: "cal-personal", starts_at: previewTime(17, 14, 30), ends_at: previewTime(17, 16, 45), location: "Mumbai, Maharastra" }),
-  previewEvent({ id: "ev-hidden", title: "Holiday planning", calendar_id: "cal-holidays", starts_at: previewTime(15, 9), ends_at: previewTime(15, 10) }),
-];
-
-const DESIGN_TASK_DUES: TaskDueChip[] = [
-  { taskId: "task-marketing", title: "Marketing page", dueAt: previewTime(15, 17), status: "not_started" },
-  { taskId: "task-invoice", title: "Invoice template design", dueAt: previewTime(17, 12), status: "not_started" },
+  previewEvent({
+    id: "ev-standup",
+    title: "Standup call",
+    calendar_id: "cal-work",
+    starts_at: previewTime(13, 12),
+    ends_at: previewTime(13, 13),
+  }),
+  previewEvent({
+    id: "ev-design",
+    title: "Design system",
+    calendar_id: "cal-work",
+    starts_at: previewTime(14, 10),
+    ends_at: previewTime(14, 11),
+  }),
+  previewEvent({
+    id: "ev-review",
+    title: "Tuesday review",
+    calendar_id: "cal-personal",
+    starts_at: previewTime(14, 14),
+    ends_at: previewTime(14, 15, 30),
+    task_id: "task-wireframe",
+  }),
+  previewEvent({
+    id: "ev-cricket",
+    title: "Cricket",
+    calendar_id: "cal-personal",
+    starts_at: previewTime(17, 14, 30),
+    ends_at: previewTime(17, 16, 45),
+    location: "Mumbai, Maharastra",
+  }),
+  previewEvent({
+    id: "ev-hidden",
+    title: "Holiday planning",
+    calendar_id: "cal-holidays",
+    starts_at: previewTime(15, 9),
+    ends_at: previewTime(15, 10),
+  }),
 ];
 
 function noop() {
   // Design previews render interactions inert.
+}
+
+function PlanningSidebarFrame({
+  todayTasks = DESIGN_TODAY_TASKS,
+  calendars = DESIGN_CALENDARS,
+}: {
+  todayTasks?: TodayColumnTask[];
+  calendars?: CalendarRow[];
+}) {
+  return (
+    <div className="calendar-rail-glass h-full w-80 overflow-hidden rounded-xl">
+      <DndContext>
+        <CalendarPlanningSidebar
+          calendars={calendars}
+          events={DESIGN_EVENTS}
+          todayTasks={todayTasks}
+          now={DESIGN_NOW}
+          weekStart={DESIGN_WEEK_START}
+          onSelectDay={noop}
+          onToggleVisibility={noop}
+          onCreateCalendar={noop}
+          onToggleTask={noop}
+          onQuickAddTask={noop}
+          onCollapse={noop}
+        />
+      </DndContext>
+    </div>
+  );
 }
 
 function EventPeekDemo() {
@@ -136,107 +246,141 @@ function CreateEventDemo() {
 export function CalendarProductPreview() {
   return (
     <div className="flex flex-wrap gap-8">
-      <figure>
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Sidebar — three calendars, one hidden
-        </figcaption>
-        <div className="w-56 rounded-card border border-border bg-paper p-3">
-          <CalendarSidebar
-            calendars={DESIGN_CALENDARS}
-            onToggleVisibility={noop}
-            onCreateCalendar={noop}
-          />
-        </div>
-      </figure>
-      <figure>
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Sidebar — empty
-        </figcaption>
-        <div className="w-56 rounded-card border border-border bg-paper p-3">
-          <CalendarSidebar
-            calendars={[]}
-            onToggleVisibility={noop}
-            onCreateCalendar={noop}
-          />
-        </div>
-      </figure>
-      <figure>
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Today column — populated (done task filtered out)
-        </figcaption>
-        <div className="h-96 w-72 overflow-hidden rounded-card border border-border bg-paper pt-3">
-          <DndContext>
-            <TodayColumn tasks={DESIGN_TODAY_TASKS} now={DESIGN_NOW} />
-          </DndContext>
-        </div>
-      </figure>
-      <figure>
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Today column — empty
-        </figcaption>
-        <div className="h-96 w-72 overflow-hidden rounded-card border border-border bg-paper pt-3">
-          <DndContext>
-            <TodayColumn tasks={[]} now={DESIGN_NOW} />
-          </DndContext>
-        </div>
-      </figure>
       <figure className="w-full">
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Toolbar + week grid — 4 visible events, hidden calendar filtered, due
-          chips, now line
+          Two-pane product — Planning rail · FullCalendar week grid
         </figcaption>
-        <div className="flex h-144 flex-col gap-3 overflow-hidden rounded-card border border-border bg-paper p-3">
-          <CalendarToolbar
-            anchor={DESIGN_NOW}
-            view="week"
-            scope="all"
-            onViewChange={noop}
-            onScopeChange={noop}
-            onNavigatePrevious={noop}
-            onNavigateNext={noop}
-            onNavigateToday={noop}
-          />
-          <div className="min-h-0 flex-1">
-            <DndContext>
-              <WeekGrid
-                weekStart={DESIGN_WEEK_START}
+        <div className="flex h-[36rem] gap-3 overflow-hidden rounded-xl bg-sidebar p-3">
+          <DndContext>
+            <div className="calendar-rail-glass w-80 shrink-0 overflow-hidden rounded-xl">
+              <CalendarPlanningSidebar
                 calendars={DESIGN_CALENDARS}
                 events={DESIGN_EVENTS}
-                taskDues={DESIGN_TASK_DUES}
+                todayTasks={DESIGN_TODAY_TASKS}
                 now={DESIGN_NOW}
+                weekStart={DESIGN_WEEK_START}
+                onSelectDay={noop}
+                onToggleVisibility={noop}
+                onCreateCalendar={noop}
+                onToggleTask={noop}
+                onQuickAddTask={noop}
+                onCollapse={noop}
               />
-            </DndContext>
+            </div>
+            <div className="calendar-panel-glass min-w-0 flex-1 overflow-hidden rounded-xl p-2">
+              <CalendarGridEngine
+                view="week"
+                anchor={DESIGN_WEEK_START}
+                calendars={DESIGN_CALENDARS}
+                events={DESIGN_EVENTS}
+                onSlotSelect={noop}
+                onEventSelect={noop}
+                onEventTimesChange={noop}
+              />
+            </div>
+          </DndContext>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Planning rail — all sections open
+        </figcaption>
+        <div className="h-[32rem]">
+          <PlanningSidebarFrame />
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Planning rail — empty tasks + empty calendars
+        </figcaption>
+        <div className="h-[28rem]">
+          <PlanningSidebarFrame todayTasks={[]} calendars={[]} />
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Planning collapsed — reveal control
+        </figcaption>
+        <div className="calendar-panel-glass flex w-80 items-center gap-2 rounded-xl p-4">
+          <button
+            type="button"
+            aria-label="Show planning sidebar"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            <PanelLeft aria-hidden="true" className="size-4" />
+          </button>
+          <div>
+            <p className="text-product-meta text-text-muted">Calendar</p>
+            <p className="text-h3 font-semibold text-ink">Calendar</p>
           </div>
         </div>
       </figure>
+
+      <figure>
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Tasks section — empty buckets
+        </figcaption>
+        <div className="calendar-rail-glass w-80 overflow-hidden rounded-xl p-4">
+          <DndContext>
+            <CalendarTasksSection
+              tasks={[]}
+              events={[]}
+              calendars={DESIGN_CALENDARS}
+              now={DESIGN_NOW}
+              onToggleTask={noop}
+              onQuickAddTask={noop}
+            />
+          </DndContext>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Mobile planning drawer
+        </figcaption>
+        <div className="relative h-[28rem] w-80 overflow-hidden rounded-xl bg-ink/40">
+          <div className="calendar-rail-glass absolute inset-y-0 right-0 flex w-full flex-col">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <p className="text-product-body font-medium text-ink">Planning</p>
+              <span className="text-product-meta text-text-secondary">Close</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <DndContext>
+                <CalendarPlanningSidebar
+                  calendars={DESIGN_CALENDARS}
+                  events={DESIGN_EVENTS}
+                  todayTasks={DESIGN_TODAY_TASKS}
+                  now={DESIGN_NOW}
+                  weekStart={DESIGN_WEEK_START}
+                  onSelectDay={noop}
+                  onToggleVisibility={noop}
+                  onCreateCalendar={noop}
+                  onToggleTask={noop}
+                  onQuickAddTask={noop}
+                  onCollapse={noop}
+                  hideCollapseControl
+                />
+              </DndContext>
+            </div>
+          </div>
+        </div>
+      </figure>
+
       <figure>
         <figcaption className="mb-2 text-label uppercase text-text-muted">
           Event peek — anchored popover with cross-links
         </figcaption>
         <EventPeekDemo />
       </figure>
+
       <figure>
         <figcaption className="mb-2 text-label uppercase text-text-muted">
           Create event — from grid slot click
         </figcaption>
         <CreateEventDemo />
-      </figure>
-      <figure className="w-full max-w-md">
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Day view — single column
-        </figcaption>
-        <div className="h-96 overflow-hidden rounded-card border border-border bg-paper p-3">
-          <DndContext>
-            <WeekGrid
-              weekStart={new Date(2026, 6, 14)}
-              dayCount={1}
-              calendars={DESIGN_CALENDARS}
-              events={DESIGN_EVENTS}
-              taskDues={DESIGN_TASK_DUES}
-              now={DESIGN_NOW}
-            />
-          </DndContext>
-        </div>
       </figure>
     </div>
   );

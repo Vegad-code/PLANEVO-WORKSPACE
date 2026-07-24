@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import type { QuickCaptureDraft } from "@planevo/core/parsing/natural-capture";
 import type { CommandResultItem } from "@planevo/core/search/command-model";
+import { Badge } from "@/components/ui/badge";
 import { Icon, type IconName } from "@/components/ui/planevo-icon";
 import { cn } from "@/lib/utils";
 import {
@@ -99,10 +100,10 @@ function PreviewChrome({
                   {query || "Find anything…"}
                 </span>
                 {scopeLabel ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface-sunken px-2.5 py-0.5 text-label text-ink">
+                  <Badge variant="secondary">
                     {scopeLabel}
                     <span className="text-text-secondary">×</span>
-                  </span>
+                  </Badge>
                 ) : null}
               </div>
             </div>
@@ -208,12 +209,9 @@ export function CommandBarPreview() {
       <PreviewChrome label="Capture — physics homework friday 6pm" query="Physics homework friday 6pm" expanded activeScope="tasks">
         <div className="flex flex-wrap gap-2 px-5 pb-2 pt-1">
           {["Fri, Jul 18", "6:00 PM", "#school", "high"].map((chip) => (
-            <span
-              key={chip}
-              className="rounded-full border border-border bg-surface-sunken px-2.5 py-0.5 text-label text-text-secondary"
-            >
+            <Badge key={chip} variant="secondary">
               {chip}
-            </span>
+            </Badge>
           ))}
         </div>
         <PreviewRow item={SAMPLE_RESULTS[0]!} active />

@@ -1,32 +1,48 @@
-import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/lib/utils";
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
+import { Slot } from "radix-ui"
+
+import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-label font-medium",
+  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-label font-medium whitespace-nowrap transition-[color,box-shadow] outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink aria-invalid:border-brick aria-invalid:outline-brick [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
-        default: "border-border bg-surface-raised text-ink",
-        high: "border-brick bg-brick-tint text-ink",
-        medium: "border-border-strong bg-surface-raised text-ink",
-        low: "border-meadow bg-meadow-tint text-ink",
-        muted: "border-border bg-paper text-text-secondary",
+        default: "bg-ink text-paper [a&]:hover:bg-ink/90",
+        secondary:
+          "bg-surface-raised text-ink [a&]:hover:bg-surface-raised/90",
+        destructive:
+          "bg-brick text-paper [a&]:hover:bg-brick/90",
+        outline:
+          "border-border text-ink [a&]:hover:bg-surface-raised",
+        ghost: "text-ink [a&]:hover:bg-surface-raised",
+        link: "text-marigold underline-offset-4 [a&]:hover:underline",
       },
     },
     defaultVariants: {
       variant: "default",
     },
   },
-);
+)
 
-export type BadgeProps = React.HTMLAttributes<HTMLSpanElement> &
-  VariantProps<typeof badgeVariants>;
+function Badge({
+  className,
+  variant = "default",
+  asChild = false,
+  ...props
+}: React.ComponentProps<"span"> &
+  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  const Comp = asChild ? Slot.Root : "span"
 
-export function Badge({ className, variant, ...props }: BadgeProps) {
   return (
-    <span className={cn(badgeVariants({ variant, className }))} {...props} />
-  );
+    <Comp
+      data-slot="badge"
+      data-variant={variant}
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
+  )
 }
 
-export { badgeVariants };
+export { Badge, badgeVariants }

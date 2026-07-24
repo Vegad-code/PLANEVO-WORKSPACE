@@ -44,7 +44,11 @@ export async function loadCalendarPageData(
   }
 
   const anchor = parseWeekParam(weekValue) ?? new Date();
-  const { start, end } = weekRange(anchor);
+  const { start: mondayStart, end: mondayEnd } = weekRange(anchor);
+  // Expand one day earlier so Sunday-start FullCalendar weeks include Sunday events.
+  const start = new Date(mondayStart);
+  start.setDate(start.getDate() - 1);
+  const end = mondayEnd;
   const workspaceId = currentWorkspace?.workspace.id ?? null;
   const workspaceFilter =
     scope === "workspace" && workspaceId ? { workspaceId } : {};
@@ -68,7 +72,7 @@ export async function loadCalendarPageData(
   return {
     status: "ready",
     scope,
-    weekStart: start,
+    weekStart: mondayStart,
     todayTasks,
     workspaceId,
     ...week,

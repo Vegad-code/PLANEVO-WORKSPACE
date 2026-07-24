@@ -7,13 +7,22 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   low: "Low",
 }
 
+const PRIORITY_VARIANTS: Record<
+  TaskPriority,
+  "destructive" | "secondary" | "outline"
+> = {
+  high: "destructive",
+  medium: "secondary",
+  low: "outline",
+}
+
 type TaskPriorityPillProps = {
   priority: TaskPriority
 }
 
 export function TaskPriorityPill({ priority }: TaskPriorityPillProps) {
   return (
-    <Badge variant={priority}>
+    <Badge variant={PRIORITY_VARIANTS[priority]}>
       <span className="sr-only">Priority: </span>
       {PRIORITY_LABELS[priority]}
     </Badge>

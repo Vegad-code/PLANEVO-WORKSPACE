@@ -8,6 +8,7 @@ import {
   type SpotlightResultGroup,
 } from "@planevo/core/search/command-model";
 import { parseQuickCapture } from "@planevo/core/parsing/natural-capture";
+import { Badge } from "@/components/ui/badge";
 import { Icon, type IconName } from "@/components/ui/planevo-icon";
 import { HighlightedText } from "./highlighted-text";
 import type { SpotlightScope } from "./spotlight-scope";
@@ -44,12 +45,9 @@ export function CaptureChips({ draft }: { draft: ReturnType<typeof parseQuickCap
   return (
     <div className="flex flex-wrap gap-2 px-5 pb-2 pt-1">
       {chips.map((chip) => (
-        <span
-          key={chip.key}
-          className="rounded-full border border-border bg-surface-sunken px-2.5 py-0.5 text-label text-text-secondary"
-        >
+        <Badge key={chip.key} variant="secondary">
           {chip.label}
-        </span>
+        </Badge>
       ))}
     </div>
   );

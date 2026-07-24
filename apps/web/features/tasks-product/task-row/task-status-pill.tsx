@@ -1,15 +1,19 @@
 import {
   TASK_STATUS_LABELS,
-  TASK_STATUSES,
   type TaskStatus,
 } from "@planevo/core/types/tasks"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
-const STATUS_STYLES: Record<(typeof TASK_STATUSES)[number], string> = {
-  not_started: "border-border bg-paper text-text-secondary",
-  in_progress: "border-border-strong bg-sidebar text-ink",
-  in_review: "border-border bg-surface-raised text-ink",
-  done: "border-meadow bg-meadow-tint text-ink",
-  cancelled: "border-border bg-paper text-text-muted",
+const STATUS_VARIANTS: Record<
+  TaskStatus,
+  "default" | "secondary" | "outline" | "ghost"
+> = {
+  not_started: "outline",
+  in_progress: "default",
+  in_review: "secondary",
+  done: "secondary",
+  cancelled: "ghost",
 }
 
 type TaskStatusPillProps = {
@@ -19,11 +23,9 @@ type TaskStatusPillProps = {
 
 export function TaskStatusPill({ status, className = "" }: TaskStatusPillProps) {
   return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-0.5 text-product-meta ${STATUS_STYLES[status]} ${className}`}
-    >
+    <Badge variant={STATUS_VARIANTS[status]} className={cn(className)}>
       <span className="sr-only">Status: </span>
       {TASK_STATUS_LABELS[status]}
-    </span>
+    </Badge>
   )
 }

@@ -11,6 +11,7 @@ import {
   updateCalendarEvent,
   updateCalendarVisibility,
 } from "@planevo/core/mutations/product-calendar";
+import { createTask, updateTaskStatus } from "@planevo/core/mutations/product-tasks";
 import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
 import { CALENDAR_COLORS } from "@planevo/core/types/calendar";
 import type { DataAccess } from "@/lib/data/access";
@@ -201,6 +202,105 @@ export async function scheduleTaskFromDragAction(input: {
   }
 }
 
+const setTaskStatusSchema = z.object({
+  taskId: z.string().uuid(),
+  status: z.enum(["not_started", "done"]),
+});
+
+/**
+ * Toggle a task done/undone from the Today-column checkbox. Only the two
+ * checkbox states are accepted; ownership is re-checked before the write.
+ */
+export async function setTaskStatusAction(input: {
+  taskId: string;
+  status: "not_started" | "done";
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = setTaskStatusSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid task update." };
+    const { data: task, error } = await access.client
+      .from("tasks")
+      .select("id")
+      .eq("id", parsed.data.taskId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!task) return { ok: false, error: "Task not found." };
+
+    await updateTaskStatus(
+      access.client,
+      access.ownerId,
+      task.id,
+      parsed.data.status,
+    );
+    revalidatePath("/calendar");
+    revalidatePath("/tasks");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the task.");
+  }
+}
+
+/** Sunday 23:59 of the current week (Monday-start), for a "this week" quick-add. */
+function endOfWeekIso(now: Date): string {
+  const date = new Date(now);
+  const daysUntilSunday = (7 - date.getDay()) % 7;
+  date.setDate(date.getDate() + daysUntilSunday);
+  date.setHours(23, 59, 0, 0);
+  return date.toISOString();
+}
+
+/** Last day of the current month at 23:59, for a "this month" quick-add. */
+function endOfMonthIso(now: Date): string {
+  return new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    0,
+    0,
+  ).toISOString();
+}
+
+const quickAddTaskSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  bucket: z.enum(["week", "month", "none"]),
+});
+
+/**
+ * Quick-add a task from a Today-rail group's "+" control. The bucket picks a
+ * due date so the new task lands back in the same group after refresh.
+ */
+export async function quickAddTaskAction(input: {
+  title: string;
+  bucket: "week" | "month" | "none";
+}): Promise<CalendarActionResult<{ taskId: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = quickAddTaskSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Enter a task title." };
+    const now = new Date();
+    const dueAt =
+      parsed.data.bucket === "week"
+        ? endOfWeekIso(now)
+        : parsed.data.bucket === "month"
+          ? endOfMonthIso(now)
+          : null;
+    const task = await createTask(access.client, access.ownerId, {
+      operationKey: randomUUID(),
+      title: parsed.data.title,
+      due_at: dueAt,
+    });
+    revalidatePath("/calendar");
+    revalidatePath("/tasks");
+    return { ok: true, data: { taskId: task.id } };
+  } catch (cause) {
+    return actionError(cause, "Could not add the task.");
+  }
+}
+
 async function requireOwnedEvent(
   access: DataAccess,
   eventId: string,
@@ -213,6 +313,39 @@ async function requireOwnedEvent(
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Event not found.");
+}
+
+const updateEventTimesSchema = z
+  .object({
+    eventId: z.string().uuid(),
+    startsAt: isoDateTimeSchema,
+    endsAt: isoDateTimeSchema,
+  })
+  .refine(
+    (input) => new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
+    { message: "The event must end after it starts." },
+  );
+
+/** Move or resize an event on the grid (react-big-calendar drop/resize). */
+export async function updateEventTimesAction(input: {
+  eventId: string;
+  startsAt: string;
+  endsAt: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = updateEventTimesSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Choose a valid time." };
+    await requireOwnedEvent(access, parsed.data.eventId);
+    await updateCalendarEvent(access.client, access.ownerId, parsed.data.eventId, {
+      startsAt: parsed.data.startsAt,
+      endsAt: parsed.data.endsAt,
+    });
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the event.");
+  }
 }
 
 const eventIdSchema = z.object({ eventId: z.string().uuid() });

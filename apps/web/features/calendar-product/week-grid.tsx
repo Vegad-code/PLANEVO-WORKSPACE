@@ -1,22 +1,23 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { dateKey } from "@planevo/core/state/calendar-state";
 import type {
   CalendarColor,
   CalendarEventRow,
   CalendarRow,
-  TaskDueChip,
 } from "@planevo/core/types/calendar";
-import { CALENDAR_COLOR_BLOCK_CLASS } from "./calendar-color-dot";
 import { EventBlock } from "./event-block";
 import {
   DAY_START_HOUR,
-  GRID_HEIGHT_REM,
+  DEFAULT_SCROLL_HOUR,
+  SLOT_MIN_REM,
   TimeAxis,
   VISIBLE_HOURS,
   formatTimeLabel,
-  remOffsetForTime,
+  hoursIntoDayWindow,
+  percentOffsetForTime,
 } from "./time-axis";
 
 const SLOTS_PER_DAY = VISIBLE_HOURS * 2;
@@ -27,7 +28,6 @@ export type WeekGridProps = {
   dayCount?: 1 | 7;
   calendars: CalendarRow[];
   events: CalendarEventRow[];
-  taskDues: TaskDueChip[];
   now: Date;
   onSlotClick?: (slotStart: Date) => void;
   onEventSelect?: (event: CalendarEventRow, anchor: HTMLElement) => void;
@@ -59,7 +59,10 @@ function SlotCell({
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `slot-${slotStart.getTime()}`,
-    data: { type: "slot", startsAt: slotStart.toISOString() } satisfies SlotDropData,
+    data: {
+      type: "slot",
+      startsAt: slotStart.toISOString(),
+    } satisfies SlotDropData,
   });
   const isHourBoundary = slotStart.getMinutes() === 30;
 
@@ -73,26 +76,29 @@ function SlotCell({
         day: "numeric",
       })} ${formatTimeLabel(slotStart)}`}
       onClick={() => onSlotClick?.(slotStart)}
-      className={`h-7 w-full cursor-pointer border-b ${
+      style={{ minHeight: `${SLOT_MIN_REM}rem` }}
+      className={`w-full flex-1 cursor-pointer border-b ${
         isHourBoundary ? "border-border/70" : "border-border/30"
-      } ${isOver ? "bg-marigold-tint/50" : "hover:bg-surface-raised"}`}
+      } ${isOver ? "bg-ocean-tint/40" : "hover:bg-surface-raised"}`}
     />
   );
 }
 
 function DayHeaderCell({ day, isToday }: { day: Date; isToday: boolean }) {
-  const label = day
+  const weekday = day
     .toLocaleDateString(undefined, { weekday: "short" })
-    .substring(0, 3)
     .toUpperCase();
+
   return (
-    <div className="flex-1 border-l border-border px-1 py-2 text-center flex flex-col items-center justify-center">
-      <span className="text-label uppercase font-medium text-text-muted mb-1">
-        {label}
+    <div className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border px-1 py-3">
+      <span className="text-label uppercase tracking-wide text-text-muted">
+        {weekday}
       </span>
       <span
-        className={`text-product-body flex size-7 items-center justify-center rounded-full ${
-          isToday ? "bg-ink text-paper font-medium" : "text-ink"
+        className={`flex size-8 items-center justify-center rounded-full text-h3 tabular-nums ${
+          isToday
+            ? "bg-ink font-medium text-paper"
+            : "font-medium text-ink"
         }`}
       >
         {day.getDate()}
@@ -106,7 +112,6 @@ export function WeekGrid({
   dayCount = 7,
   calendars,
   events,
-  taskDues,
   now,
   onSlotClick,
   onEventSelect,
@@ -126,22 +131,15 @@ export function WeekGrid({
       .filter((calendar) => calendar.is_visible)
       .map((calendar) => calendar.id),
   );
-  const visibleEvents = events.filter((event) =>
-    visibleCalendarIds.has(event.calendar_id),
+  const visibleEvents = events.filter(
+    (event) =>
+      visibleCalendarIds.has(event.calendar_id) && !event.all_day,
   );
 
   const timedEventsByDay = new Map<string, CalendarEventRow[]>();
-  const allDayEventsByDay = new Map<string, CalendarEventRow[]>();
   for (const event of visibleEvents) {
     const key = dateKey(new Date(event.starts_at));
-    const bucket = event.all_day ? allDayEventsByDay : timedEventsByDay;
-    bucket.set(key, [...(bucket.get(key) ?? []), event]);
-  }
-
-  const dueChipsByDay = new Map<string, TaskDueChip[]>();
-  for (const chip of taskDues) {
-    const key = dateKey(new Date(chip.dueAt));
-    dueChipsByDay.set(key, [...(dueChipsByDay.get(key) ?? []), chip]);
+    timedEventsByDay.set(key, [...(timedEventsByDay.get(key) ?? []), event]);
   }
 
   const todayKey = dateKey(now);
@@ -151,10 +149,33 @@ export function WeekGrid({
     nowHour >= DAY_START_HOUR &&
     nowHour < DAY_START_HOUR + VISIBLE_HOURS;
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const didInitialScroll = useRef(false);
+
+  // Google-style viewing point: on open (and on each remount from week/day
+  // navigation) scroll so the current time sits centered in the pane. Uses the
+  // measured scrollHeight so it is correct regardless of how tall the flex-fill
+  // grid resolved to, and clamps so it can never land in the void past midnight.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || didInitialScroll.current) return;
+    const todayInView = days.some((day) => dateKey(day) === todayKey);
+    const fraction = todayInView
+      ? hoursIntoDayWindow(now) / VISIBLE_HOURS
+      : DEFAULT_SCROLL_HOUR / VISIBLE_HOURS;
+    const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    const target = fraction * scroller.scrollHeight - scroller.clientHeight / 2;
+    scroller.scrollTop = Math.min(Math.max(target, 0), maxScroll);
+    didInitialScroll.current = true;
+  }, [days, todayKey, now]);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex border-b border-border">
-        <div className="w-14 shrink-0" />
+        <div
+          className="w-20 shrink-0 border-r border-border pl-2"
+          aria-hidden="true"
+        />
         {days.map((day) => (
           <DayHeaderCell
             key={dateKey(day)}
@@ -164,62 +185,19 @@ export function WeekGrid({
         ))}
       </div>
 
-      <div className="flex min-h-9 border-b border-border">
-        <div className="flex w-14 shrink-0 items-center justify-end pr-2">
-          <span className="text-product-meta text-text-muted">Due</span>
-        </div>
-        {days.map((day) => {
-          const key = dateKey(day);
-          const chips = dueChipsByDay.get(key) ?? [];
-          const allDayEvents = allDayEventsByDay.get(key) ?? [];
-          return (
-            <div
-              key={key}
-              className="flex min-w-0 flex-1 flex-col gap-1 border-l border-border p-1"
-            >
-              {allDayEvents.map((event) => (
-                <button
-                  key={event.id}
-                  type="button"
-                  onClick={(clickEvent) =>
-                    onEventSelect?.(event, clickEvent.currentTarget)
-                  }
-                  className={`truncate rounded-full px-2 py-0.5 text-left text-product-meta text-ink ${
-                    CALENDAR_COLOR_BLOCK_CLASS[
-                      colorByCalendarId.get(event.calendar_id) ?? "slate"
-                    ]
-                  }`}
-                >
-                  {event.title}
-                </button>
-              ))}
-              {chips.map((chip) => (
-                <span
-                  key={chip.taskId}
-                  title={`Task due: ${chip.title}`}
-                  className="truncate rounded-full border border-border bg-surface-raised px-2 py-0.5 text-product-meta text-ink"
-                >
-                  {chip.title}
-                </span>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="flex flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex min-h-0 flex-1 overflow-y-auto">
         <TimeAxis />
-        <div
-          className="relative flex flex-1"
-          style={{ height: `${GRID_HEIGHT_REM}rem` }}
-        >
+        <div className="relative flex min-h-full flex-1">
           {days.map((day) => {
             const key = dateKey(day);
             const dayEvents = timedEventsByDay.get(key) ?? [];
+            const isToday = key === todayKey;
             return (
               <div
                 key={key}
-                className="relative min-w-0 flex-1 border-l border-border"
+                className={`relative flex min-h-full min-w-0 flex-1 flex-col border-l border-border ${
+                  isToday ? "bg-surface-raised/30" : ""
+                }`}
               >
                 {Array.from({ length: SLOTS_PER_DAY }, (_, slotIndex) => {
                   const slotStart = slotStartForIndex(day, slotIndex);
@@ -246,7 +224,7 @@ export function WeekGrid({
           {showNowLine ? (
             <div
               aria-hidden="true"
-              style={{ top: `${remOffsetForTime(now)}rem` }}
+              style={{ top: `${percentOffsetForTime(now)}%` }}
               className="pointer-events-none absolute inset-x-0 z-20"
             >
               <div className="relative border-t border-brick">

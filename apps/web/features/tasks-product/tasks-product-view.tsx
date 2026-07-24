@@ -12,6 +12,7 @@ import { LayoutGrid } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks"
 import type { TaskStatus } from "@planevo/core/types/tasks"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/toast"
 import type { TaskAttachmentCleanupTarget } from "@/lib/tasks/task-attachment-cleanup"
 import {
@@ -477,16 +478,17 @@ export function TasksProductView({
             <h1 id="tasks-product-title" className="text-h1 font-medium tracking-tight">
               Tasks
             </h1>
-            <span
+            <Badge
+              variant="secondary"
               aria-label={
                 visibleTasks.length === 1
                   ? "1 task"
                   : `${visibleTasks.length} tasks`
               }
-              className="rounded-full border border-border bg-surface-raised px-2 py-0.5 text-product-meta tabular-nums text-text-muted"
+              className="tabular-nums"
             >
               {visibleTasks.length}
-            </span>
+            </Badge>
           </div>
         </div>
       </header>

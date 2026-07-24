@@ -397,6 +397,33 @@ body {
   -webkit-box-decoration-break: clone;
 }
 
+/* Calendar surfaces — dark liquid glass (founder override for this revamp). The
+   rail and grid panel read as elevated translucent glass; event cards float
+   above the grid with a soft shadow. Opacity is kept high so text stays crisp. */
+.calendar-rail-glass,
+.calendar-panel-glass {
+  background: color-mix(in srgb, var(--color-surface-raised) 72%, transparent);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+}
+
+.calendar-event-glass {
+  background: color-mix(in srgb, var(--color-surface-raised) 90%, transparent);
+  border: 1px solid var(--color-border);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
+  backdrop-filter: blur(8px) saturate(130%);
+}
+
+.calendar-event-glass:hover {
+  background: color-mix(in srgb, var(--color-surface-raised) 96%, transparent);
+  border-color: var(--color-border-strong);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spotlight-panel-list,
   .spotlight-panel-sizer {
@@ -417,5 +444,103 @@ body {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+
+  .calendar-rail-glass,
+  .calendar-panel-glass,
+  .calendar-event-glass {
+    background: var(--color-surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* FullCalendar → Planevo tokens (Google-like week/day grid skin). */
+.planevo-fc {
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
+  --fc-neutral-text-color: var(--color-text-muted);
+  --fc-border-color: var(--color-border);
+  --fc-button-text-color: var(--color-ink);
+  --fc-button-bg-color: var(--color-surface-raised);
+  --fc-button-border-color: var(--color-border);
+  --fc-button-hover-bg-color: var(--color-paper);
+  --fc-button-hover-border-color: var(--color-border-strong);
+  --fc-button-active-bg-color: var(--color-ink);
+  --fc-button-active-border-color: var(--color-ink);
+  --fc-event-bg-color: transparent;
+  --fc-event-border-color: transparent;
+  --fc-event-text-color: var(--color-ink);
+  --fc-event-selected-overlay-color: rgb(0 0 0 / 0.12);
+  --fc-more-link-bg-color: var(--color-surface-raised);
+  --fc-more-link-text-color: var(--color-text-secondary);
+  --fc-today-bg-color: color-mix(in srgb, var(--color-ink) 4%, transparent);
+  --fc-now-indicator-color: var(--color-ink);
+  --fc-list-event-hover-bg-color: var(--color-surface-raised);
+  --fc-highlight-color: color-mix(in srgb, var(--color-ocean) 18%, transparent);
+  height: 100%;
+}
+
+.planevo-fc .fc {
+  height: 100%;
+  font-family: inherit;
+  color: var(--color-ink);
+}
+
+.planevo-fc .fc-theme-standard td,
+.planevo-fc .fc-theme-standard th {
+  border-color: var(--color-border);
+}
+
+.planevo-fc .fc-col-header-cell-cushion,
+.planevo-fc .fc-timegrid-slot-label-cushion {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.planevo-fc .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.planevo-fc .fc-timegrid-slot {
+  height: 2.5rem;
+}
+
+.planevo-fc .fc-timegrid-slot-minor {
+  border-top-style: dotted;
+}
+
+.planevo-fc .fc-event {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.planevo-fc .fc-event .fc-event-main {
+  padding: 0;
+  color: inherit;
+}
+
+.planevo-fc .fc-planevo-event-inner {
+  min-height: 100%;
+}
+
+.planevo-fc .fc-now-indicator-line {
+  border-color: var(--color-ink);
+}
+
+.planevo-fc .fc-now-indicator-arrow {
+  border-color: var(--color-ink);
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.planevo-fc .fc-highlight {
+  background: var(--fc-highlight-color);
+}
+
+.planevo-fc .fc-scrollgrid,
+.planevo-fc .fc-scrollgrid-section > td {
+  border-color: var(--color-border);
 }
 

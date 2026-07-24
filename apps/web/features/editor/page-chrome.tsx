@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition, type ReactNode } from "react";
 import { deletePage, duplicatePageAsTemplate } from "@/app/(workspace)/pages/[pageId]/actions";
+import { Badge } from "@/components/ui/badge";
 import { DeleteEntityControl } from "@/components/ui/delete-entity-control";
 import { Icon } from "@/components/ui/planevo-icon";
 import { useOutsidePointer } from "@/features/database/use-outside-pointer";
@@ -86,9 +87,7 @@ export function PageChrome({
       </div>
 
       <div className="hidden items-center gap-3 sm:flex">
-        <span className="rounded-full border border-border bg-surface-raised px-2 py-0.5 text-label text-text-muted">
-          Private
-        </span>
+        <Badge variant="secondary">Private</Badge>
         <span className="text-label text-text-muted">
           Edited {formatRelativeEditTime(updatedAt)}
         </span>

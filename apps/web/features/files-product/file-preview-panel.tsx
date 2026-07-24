@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, FileQuestion, X } from "lucide-react";
 import { mimeFamily } from "@planevo/core/types/files";
+import { Badge } from "@/components/ui/badge";
 import {
   MAX_PREVIEW_WIDTH,
   MIN_PREVIEW_WIDTH,
@@ -240,10 +241,7 @@ export function FilePreviewPanel({
         <h3 className="text-label uppercase text-files-text-muted">Tags</h3>
         <div className="flex flex-wrap gap-1.5">
           {file.tags.map((tag) => (
-            <span
-              key={tag}
-              className="flex items-center gap-1 rounded-full border border-files-border bg-files-surface-muted px-2 py-0.5 text-product-meta text-files-text"
-            >
+            <Badge key={tag} variant="secondary">
               {tag}
               <button
                 type="button"
@@ -253,7 +251,7 @@ export function FilePreviewPanel({
               >
                 <X aria-hidden="true" className="size-3" />
               </button>
-            </span>
+            </Badge>
           ))}
           {file.tags.length === 0 ? (
             <span className="text-product-meta text-files-text-muted">No tags yet</span>

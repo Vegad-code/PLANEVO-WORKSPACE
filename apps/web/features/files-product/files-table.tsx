@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { FileSourceWithMeta } from "@planevo/core/queries/product-files";
 import { mimeFamily } from "@planevo/core/types/files";
+import { Badge } from "@/components/ui/badge";
 import { fileDragId, type FolderTreeItem, type OwnerDisplay } from "./kb-contracts";
 import { formatBytes } from "./storage-meter";
 
@@ -51,15 +52,9 @@ function IngestionBadge({ status }: { status: string }) {
   if (status === "ready") return null;
   const label = status === "failed" ? "Failed" : "Processing";
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-product-meta ${
-        status === "failed"
-          ? "bg-brick-tint text-files-text"
-          : "bg-files-surface-muted text-files-text-muted"
-      }`}
-    >
+    <Badge variant={status === "failed" ? "destructive" : "secondary"}>
       {label}
-    </span>
+    </Badge>
   );
 }
 
