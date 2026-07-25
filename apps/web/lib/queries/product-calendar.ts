@@ -1,80 +1,68 @@
-import "server-only";
+import "server-only"
 
+import { getDataAccess } from "@/lib/data/access"
+import { getCurrentWorkspace } from "@/lib/data/current-workspace"
 import {
-  loadCalendarWeek,
-  type CalendarWeekData,
-} from "@planevo/core/queries/product-calendar";
-import { loadProductTasks } from "@planevo/core/queries/product-tasks";
-import {
-  parseWeekParam,
-  weekRange,
-} from "@planevo/core/state/calendar-state";
-import { getDataAccess } from "@/lib/data/access";
-import { getCurrentWorkspace } from "@/lib/data/current-workspace";
-import type { CalendarScope } from "@/lib/calendar/scope-prefs";
-import type { TodayColumnTask } from "@/features/calendar-product/today-task-row";
+  fetchCalendarPageData,
+  type CalendarPageRequest,
+  type CalendarReadyData,
+  serializeCalendarQueryData,
+  type CalendarQueryPayload,
+} from "@/lib/calendar/fetch-calendar-page-data"
+import type { CalendarScope } from "@/lib/calendar/scope-prefs"
+import type { TodayColumnTask } from "@/features/calendar-product/today-task-row"
+import type { CalendarToolbarView } from "@/lib/calendar/calendar-navigation"
+import type { CalendarWeekData } from "@planevo/core/queries/product-calendar"
+
+export type { CalendarPageRequest, CalendarQueryPayload, CalendarReadyData }
+export { fetchCalendarPageData, serializeCalendarQueryData }
 
 export type CalendarPageData =
   | {
-      status: "unauthenticated";
-      scope: CalendarScope;
+      status: "unauthenticated"
+      scope: CalendarScope
     }
   | ({
-      status: "ready";
-      scope: CalendarScope;
-      weekStart: Date;
-      todayTasks: TodayColumnTask[];
-      workspaceId: string | null;
-    } & CalendarWeekData);
+      status: "ready"
+      scope: CalendarScope
+      anchorDate: Date
+      initialView: CalendarToolbarView
+      todayTasks: TodayColumnTask[]
+      workspaceId: string | null
+    } & CalendarWeekData)
 
 /**
- * Server loader for the Calendar product: one week of calendars/events/task
- * dues plus the Today-column task list. Defaults to the current week when the
- * `week` search param is absent or malformed.
+ * Server loader for the Calendar product. Event window follows `view` + `date`
+ * (Sunday-start weeks). Legacy `week=YYYY-Www` is still accepted.
  */
 export async function loadCalendarPageData(
   scope: CalendarScope = "all",
-  weekValue?: string,
+  request: CalendarPageRequest = {},
 ): Promise<CalendarPageData> {
-  const currentWorkspace = await getCurrentWorkspace();
-  const access = currentWorkspace?.access ?? (await getDataAccess());
+  const currentWorkspace = await getCurrentWorkspace()
+  const access = currentWorkspace?.access ?? (await getDataAccess())
 
   if (!access) {
-    return { status: "unauthenticated", scope };
+    return { status: "unauthenticated", scope }
   }
 
-  const anchor = parseWeekParam(weekValue) ?? new Date();
-  const { start: mondayStart, end: mondayEnd } = weekRange(anchor);
-  // Expand one day earlier so Sunday-start FullCalendar weeks include Sunday events.
-  const start = new Date(mondayStart);
-  start.setDate(start.getDate() - 1);
-  const end = mondayEnd;
-  const workspaceId = currentWorkspace?.workspace.id ?? null;
-  const workspaceFilter =
-    scope === "workspace" && workspaceId ? { workspaceId } : {};
-
-  const [week, tasks] = await Promise.all([
-    loadCalendarWeek(access.client, access.ownerId, {
-      start,
-      end,
-      ...workspaceFilter,
-    }),
-    loadProductTasks(access.client, access.ownerId, workspaceFilter),
-  ]);
-
-  const todayTasks: TodayColumnTask[] = tasks.map((task) => ({
-    id: task.id,
-    title: task.title,
-    status: task.status,
-    due_at: task.due_at,
-  }));
+  const workspaceId = currentWorkspace?.workspace.id ?? null
+  const ready = await fetchCalendarPageData(
+    access,
+    workspaceId,
+    scope,
+    request,
+  )
 
   return {
     status: "ready",
-    scope,
-    weekStart: mondayStart,
-    todayTasks,
-    workspaceId,
-    ...week,
-  };
+    scope: ready.scope,
+    anchorDate: ready.anchorDate,
+    initialView: ready.view,
+    todayTasks: ready.todayTasks,
+    workspaceId: ready.workspaceId,
+    calendars: ready.calendars,
+    events: ready.events,
+    taskDues: ready.taskDues,
+  }
 }

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CalendarDays, LayoutGrid, Link2, Paperclip, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react"
+import { CalendarDays, LayoutGrid, Link2, Paperclip, X } from "lucide-react"
 import {
   attachFileToEventAction,
   linkEventToWorkspaceAction,
@@ -32,10 +31,11 @@ const PANEL_COPY: Record<EventCrossLinkPanel, { title: string; description: stri
 };
 
 type EventCrossLinkDialogsProps = {
-  eventId: string;
-  panel: EventCrossLinkPanel;
-  onClose: () => void;
-};
+  eventId: string
+  panel: EventCrossLinkPanel
+  onClose: () => void
+  onMutationSuccess?: () => void
+}
 
 function OptionRow({
   icon,
@@ -94,8 +94,8 @@ export function EventCrossLinkDialogs({
   eventId,
   panel,
   onClose,
+  onMutationSuccess,
 }: EventCrossLinkDialogsProps) {
-  const router = useRouter();
   const [options, setOptions] = useState<EventCrossLinkOptions | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -136,9 +136,9 @@ export function EventCrossLinkDialogs({
         toast(result.error, { tone: "error" });
         return;
       }
-      toast(successMessage);
-      onClose();
-      router.refresh();
+      toast(successMessage)
+      onClose()
+      onMutationSuccess?.()
     } finally {
       setPendingId(null);
     }

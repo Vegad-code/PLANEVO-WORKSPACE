@@ -140,6 +140,12 @@
   --color-calendar-today-disc-foreground: #ffffff;
   --color-calendar-today-label: #6495ed;
   --color-calendar-grid: var(--color-paper);
+  --text-calendar-month-date: 12px;
+  --text-calendar-month-date--line-height: 16px;
+  --text-calendar-month-date--font-weight: 500;
+  --size-calendar-month-row-min: 6rem;
+  --size-calendar-month-event-row: 1.25rem;
+  --spacing-calendar-month-cell-padding: 0.5rem;
 
   /* Layout */
   --spacing-sidebar: 210px;
@@ -758,6 +764,26 @@ body {
   color: var(--color-calendar-today-disc-foreground);
 }
 
+.planevo-calendar-grid .calendar-month-date {
+  font-size: var(--text-calendar-month-date);
+  line-height: var(--text-calendar-month-date--line-height);
+  font-weight: var(--text-calendar-month-date--font-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.planevo-calendar-grid .calendar-month-date--today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-calendar-today-disc);
+  min-height: var(--size-calendar-today-disc);
+  font-weight: 500;
+  border-radius: var(--radius-calendar-control);
+  background: var(--color-calendar-today-disc);
+  color: var(--color-calendar-today-disc-foreground);
+}
+
 /* Time gutter — clean raised strip; horizontal lines live in day columns only (GCal). */
 .planevo-calendar-grid [data-calendar-time-gutter] {
   background: var(--color-surface-raised);
@@ -803,6 +829,22 @@ body {
 .planevo-rbc .rbc-time-header-gutter,
 .planevo-rbc .rbc-time-gutter {
   background: var(--color-surface-raised);
+}
+
+.planevo-rbc .rbc-time-header-gutter {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 0.25rem 0.375rem 0;
+}
+
+.planevo-rbc .planevo-rbc-timezone-label {
+  font-size: var(--text-product-meta);
+  line-height: var(--text-product-meta--line-height);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .planevo-rbc .rbc-time-gutter .rbc-timeslot-group,
@@ -977,6 +1019,122 @@ body {
 .planevo-rbc--no-allday .rbc-allday-cell {
   display: none;
   min-height: 0;
+}
+
+/* react-big-calendar — month view */
+.planevo-rbc--month .rbc-month-view {
+  display: flex;
+  flex-direction: column;
+  border: none;
+  background: var(--color-calendar-grid);
+}
+
+.planevo-rbc--month .rbc-month-header .rbc-header {
+  padding: 0.375rem 0;
+  min-height: 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-calendar-day-weekday);
+  line-height: var(--text-calendar-day-weekday--line-height);
+  letter-spacing: var(--text-calendar-day-weekday--letter-spacing);
+  font-weight: var(--text-calendar-day-weekday--font-weight);
+  text-transform: uppercase;
+  color: var(--text-secondary, var(--color-text-secondary));
+  background: var(--color-surface-raised);
+}
+
+.planevo-rbc--month .rbc-month-header .rbc-header + .rbc-header {
+  border-left: 1px solid var(--color-border);
+}
+
+.planevo-rbc--month .rbc-month-row {
+  flex: 1 0 0;
+  min-height: var(--size-calendar-month-row-min);
+}
+
+.planevo-rbc--month .rbc-row-content {
+  min-height: 0;
+}
+
+.planevo-rbc--month .rbc-date-cell {
+  padding: 0;
+  text-align: right;
+}
+
+.planevo-rbc--month .rbc-day-bg {
+  border-left: 1px solid var(--color-border);
+}
+
+.planevo-rbc--month .rbc-month-row + .rbc-month-row .rbc-day-bg {
+  border-top: 1px solid var(--color-border);
+}
+
+.planevo-rbc--month .rbc-off-range-bg {
+  background: color-mix(in srgb, var(--color-ink) 3%, var(--color-calendar-grid));
+}
+
+.planevo-rbc--month .rbc-today {
+  background: color-mix(in srgb, var(--color-ink) 4%, var(--color-calendar-grid));
+}
+
+.planevo-rbc--month .rbc-row-segment {
+  padding: 0 1px;
+}
+
+.planevo-rbc--month .rbc-event {
+  border-radius: var(--radius-calendar-event);
+  padding: 0;
+  margin: 0;
+  font-size: var(--text-product-meta, 0.75rem);
+}
+
+.planevo-rbc--month .planevo-rbc-event {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: auto;
+  height: var(--size-calendar-month-event-row);
+  padding: 0 0.375rem;
+}
+
+.planevo-rbc--month .rbc-event-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.planevo-rbc--month .rbc-show-more {
+  font-size: var(--text-product-meta, 0.75rem);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  padding: 0 0.25rem;
+  margin-top: 1px;
+}
+
+.planevo-rbc--month .rbc-show-more:hover,
+.planevo-rbc--month .rbc-show-more:focus-visible {
+  text-decoration: underline;
+  color: var(--color-ink);
+}
+
+.planevo-rbc--month .rbc-overlay {
+  border-radius: var(--radius-calendar-shell);
+  border: 1px solid var(--color-border);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-spotlight);
+  padding: 0.5rem;
+}
+
+.planevo-rbc--month .rbc-overlay-header {
+  border-bottom: 1px solid var(--color-border);
+  margin: -0.5rem -0.5rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-weight: 500;
+  color: var(--color-ink);
 }
 
 .planevo-rbc .rbc-time-content {

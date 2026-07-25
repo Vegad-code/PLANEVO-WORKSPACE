@@ -1,26 +1,21 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import { PanelLeft } from "lucide-react"
-import {
-  addWeeks,
-  weekParam,
-  weekRange,
-} from "@planevo/core/state/calendar-state"
-import type {
-  CalendarColor,
-  CalendarEventRow,
-  CalendarRow,
-  TaskDueChip,
-} from "@planevo/core/types/calendar"
+import type { CalendarColor, CalendarEventRow } from "@planevo/core/types/calendar"
 import { toast } from "@/components/ui/toast"
 import { useSidebarLayout } from "@/features/shell/sidebar-layout-context"
+import { startOfWeekSunday } from "@/lib/calendar/calendar-navigation"
 import {
   DEFAULT_PLANNING_WIDTH,
   getPlanningWidth,
 } from "@/lib/calendar/planning-prefs"
+import {
+  getCalendarScope,
+  setCalendarScope,
+  type CalendarScope,
+} from "@/lib/calendar/scope-prefs"
 import { getShellLayoutTransition } from "@/lib/motion/shell-spring"
 import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion"
 import { cn } from "@/lib/utils"
@@ -33,32 +28,26 @@ import {
   toggleCalendarVisibilityAction,
   updateEventTimesAction,
 } from "@/app/(workspace)/calendar/actions"
-import {
-  getCalendarScope,
-  setCalendarScope,
-  type CalendarScope,
-} from "@/lib/calendar/scope-prefs"
 import { CalendarDndContext } from "./calendar-dnd-context"
 import { CalendarGridEngine } from "./calendar-grid-engine"
 import { CalendarPlanningSidebar } from "./calendar-planning-sidebar"
 import { CalendarResizeHandle } from "./calendar-resize-handle"
-import { CalendarToolbar, type CalendarView } from "./calendar-toolbar"
+import { CalendarToolbar } from "./calendar-toolbar"
 import { CreateEventPopover, type CreateEventInput } from "./create-event-popover"
 import {
   EventCrossLinkDialogs,
   type EventCrossLinkPanel,
 } from "./event-cross-links"
 import { EventPeek } from "./event-peek"
-import type { TodayColumnTask } from "./today-task-row"
+import {
+  useCalendarData,
+  useInvalidateCalendarData,
+} from "./use-calendar-data"
+import { useCalendarNavigation } from "./use-calendar-navigation"
 import { YearView } from "./year-view"
+import { CalendarViewTransition } from "./calendar-view-transition"
 
 type CalendarProductViewProps = {
-  weekStart: Date
-  calendars: CalendarRow[]
-  events: CalendarEventRow[]
-  /** Reserved for a future all-day / due-chip row; unused while that bar is removed. */
-  taskDues: TaskDueChip[]
-  todayTasks: TodayColumnTask[]
   initialScope: CalendarScope
   workspaceId: string | null
 }
@@ -73,36 +62,29 @@ const PLANNING_TOGGLE_TRANSITION = {
   ease: [0.16, 1, 0.3, 1] as const,
 }
 
-function calendarPath(scope: CalendarScope, week?: string): string {
-  const params = new URLSearchParams()
-  if (scope === "workspace") params.set("scope", "workspace")
-  if (week) params.set("week", week)
-  const query = params.toString()
-  return query ? `/calendar?${query}` : "/calendar"
-}
-
 export function CalendarProductView({
-  weekStart,
-  calendars,
-  events,
-  taskDues: _taskDues,
-  todayTasks,
   initialScope,
   workspaceId,
 }: CalendarProductViewProps) {
-  const router = useRouter()
   const { showRevealChrome } = useSidebarLayout()
   const prefersReducedMotion = usePrefersReducedMotion()
   const planningLayoutTransition = getShellLayoutTransition(prefersReducedMotion)
   const [isPending, startTransition] = useTransition()
-  const [view, setView] = useState<CalendarView>("week")
+  const invalidateCalendar = useInvalidateCalendarData()
+  const {
+    anchorDate,
+    view,
+    scope,
+    navMotion,
+    setScope,
+    handleNavigatePrevious,
+    handleNavigateNext,
+    handleNavigateToday,
+    handleViewChange,
+    handleSelectDay,
+  } = useCalendarNavigation(initialScope)
+  const calendarQuery = useCalendarData(scope, view, anchorDate)
   const [now, setNow] = useState(() => new Date())
-  const [dayAnchor, setDayAnchor] = useState<Date>(() => {
-    const today = new Date()
-    const { start, end } = weekRange(weekStart)
-    return today >= start && today < end ? today : weekStart
-  })
-  const [yearAnchor, setYearAnchor] = useState(() => weekStart.getFullYear())
   const [selectedEvent, setSelectedEvent] = useState<SelectedEvent | null>(null)
   const [crossLinkPanel, setCrossLinkPanel] =
     useState<EventCrossLinkPanel | null>(null)
@@ -112,6 +94,12 @@ export function CalendarProductView({
   const [planningWidth, setPlanningWidthState] = useState(DEFAULT_PLANNING_WIDTH)
   const [isPlanningResizing, setIsPlanningResizing] = useState(false)
   const [planningWidthRestored, setPlanningWidthRestored] = useState(false)
+
+  const calendars = calendarQuery.data?.calendars ?? []
+  const events = calendarQuery.data?.events ?? []
+  const todayTasks = calendarQuery.data?.todayTasks ?? []
+  const isFetchingNewRange =
+    calendarQuery.isFetching && !calendarQuery.isPlaceholderData
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60 * 1000)
@@ -125,73 +113,27 @@ export function CalendarProductView({
 
   useEffect(() => {
     const storedScope = getCalendarScope()
-    if (storedScope === initialScope) return
+    if (storedScope === scope) return
     if (storedScope === "workspace" && !workspaceId) {
       setCalendarScope("all")
       return
     }
-    router.replace(calendarPath(storedScope, weekParam(weekStart)))
-  }, [initialScope, router, weekStart, workspaceId])
+    setCalendarScope(storedScope)
+    setScope(storedScope)
+  }, [scope, setScope, workspaceId])
 
   function handlePlanningWidthChange(nextWidth: number) {
     setPlanningWidthState(nextWidth)
   }
 
-  function changeScope(scope: CalendarScope) {
-    if (scope === "workspace" && !workspaceId) {
+  function changeScope(nextScope: CalendarScope) {
+    if (nextScope === "workspace" && !workspaceId) {
       toast("Open a workspace before using this filter", { tone: "error" })
       return
     }
-    setCalendarScope(scope)
-    router.push(calendarPath(scope, weekParam(weekStart)))
-  }
-
-  function navigateToWeekOf(anchor: Date) {
-    router.push(calendarPath(initialScope, weekParam(anchor)))
-  }
-
-  function handleNavigatePrevious() {
-    if (view === "year") {
-      setYearAnchor((year) => year - 1)
-      return
-    }
-    if (view === "day") {
-      const previousDay = new Date(dayAnchor)
-      previousDay.setDate(previousDay.getDate() - 1)
-      setDayAnchor(previousDay)
-      if (previousDay < weekStart) navigateToWeekOf(previousDay)
-      return
-    }
-    navigateToWeekOf(addWeeks(weekStart, -1))
-  }
-
-  function handleNavigateNext() {
-    if (view === "year") {
-      setYearAnchor((year) => year + 1)
-      return
-    }
-    if (view === "day") {
-      const nextDay = new Date(dayAnchor)
-      nextDay.setDate(nextDay.getDate() + 1)
-      setDayAnchor(nextDay)
-      if (nextDay >= weekRange(weekStart).end) navigateToWeekOf(nextDay)
-      return
-    }
-    navigateToWeekOf(addWeeks(weekStart, 1))
-  }
-
-  function handleNavigateToday() {
-    const today = new Date()
-    setDayAnchor(today)
-    setYearAnchor(today.getFullYear())
-    setView("week")
-    router.push(calendarPath(initialScope))
-  }
-
-  function handleSelectDay(day: Date) {
-    setDayAnchor(day)
-    setView("day")
-    navigateToWeekOf(day)
+    setCalendarScope(nextScope)
+    setScope(nextScope)
+    invalidateCalendar(nextScope)
   }
 
   function handleToggleVisibility(calendarId: string, isVisible: boolean) {
@@ -201,7 +143,7 @@ export function CalendarProductView({
         isVisible,
       })
       if (!result.ok) toast(result.error, { tone: "error" })
-      router.refresh()
+      invalidateCalendar(scope)
     })
   }
 
@@ -213,7 +155,7 @@ export function CalendarProductView({
         return
       }
       toast("Calendar created")
-      router.refresh()
+      invalidateCalendar(scope)
     })
   }
 
@@ -226,7 +168,7 @@ export function CalendarProductView({
       }
       setCreateSlot(null)
       toast("Event created")
-      router.refresh()
+      invalidateCalendar(scope)
     })
   }
 
@@ -240,7 +182,7 @@ export function CalendarProductView({
         toast(result.error, { tone: "error" })
         return
       }
-      router.refresh()
+      invalidateCalendar(scope)
     })
   }
 
@@ -254,7 +196,7 @@ export function CalendarProductView({
         toast(result.error, { tone: "error" })
         return
       }
-      router.refresh()
+      invalidateCalendar(scope)
     })
   }
 
@@ -270,7 +212,7 @@ export function CalendarProductView({
         return
       }
       toast("Task scheduled")
-      router.refresh()
+      invalidateCalendar(scope)
     })
   }
 
@@ -283,10 +225,10 @@ export function CalendarProductView({
       const result = await updateEventTimesAction(input)
       if (!result.ok) {
         toast(result.error, { tone: "error" })
-        router.refresh()
+        invalidateCalendar(scope)
         return
       }
-      router.refresh()
+      invalidateCalendar(scope)
     })
   }
 
@@ -296,13 +238,7 @@ export function CalendarProductView({
       ) ?? null
     : null
 
-  const gridAnchor = view === "day" ? dayAnchor : weekStart
-  const toolbarAnchor =
-    view === "year"
-      ? new Date(yearAnchor, 0, 1)
-      : view === "day"
-        ? dayAnchor
-        : weekStart
+  const visibleWeekStart = startOfWeekSunday(anchorDate)
 
   const planningSidebar = (
     <CalendarPlanningSidebar
@@ -310,7 +246,7 @@ export function CalendarProductView({
       events={events}
       todayTasks={todayTasks}
       now={now}
-      weekStart={weekStart}
+      weekStart={visibleWeekStart}
       onSelectDay={handleSelectDay}
       onToggleVisibility={handleToggleVisibility}
       onCreateCalendar={handleCreateCalendar}
@@ -324,7 +260,7 @@ export function CalendarProductView({
   return (
     <section
       aria-labelledby="calendar-product-title"
-      aria-busy={isPending}
+      aria-busy={isPending || isFetchingNewRange}
       className="flex h-full w-full flex-col bg-surface-raised"
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -401,15 +337,12 @@ export function CalendarProductView({
                       </motion.button>
                     ) : null}
                   </AnimatePresence>
-                  <div>
-                    <p className="text-product-meta text-text-muted">Calendar</p>
-                    <h1
-                      id="calendar-product-title"
-                      className="mt-0.5 text-h1 tracking-tight text-ink"
-                    >
-                      Calendar
-                    </h1>
-                  </div>
+                  <h1
+                    id="calendar-product-title"
+                    className="text-h2 font-medium tracking-tight text-ink"
+                  >
+                    Calendar
+                  </h1>
                 </div>
                 <button
                   type="button"
@@ -421,32 +354,39 @@ export function CalendarProductView({
               </div>
               <div className="mt-4">
                 <CalendarToolbar
-                  anchor={toolbarAnchor}
+                  anchor={anchorDate}
                   view={view}
-                  scope={initialScope}
-                  onViewChange={setView}
+                  scope={scope}
+                  navMotion={navMotion}
+                  prefersReducedMotion={prefersReducedMotion}
+                  onViewChange={handleViewChange}
                   onScopeChange={changeScope}
                   onNavigatePrevious={handleNavigatePrevious}
                   onNavigateNext={handleNavigateNext}
-                  onNavigateToday={handleNavigateToday}
+                  onNavigateToday={() => handleNavigateToday(now)}
                 />
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col pt-2">
+            <CalendarViewTransition
+              view={view}
+              anchor={anchorDate}
+              navMotion={navMotion}
+              prefersReducedMotion={prefersReducedMotion}
+              isFetchingNewRange={isFetchingNewRange}
+              className="pt-2"
+            >
               {view === "year" ? (
-                <div className="min-h-0 flex-1">
-                  <YearView
-                    year={yearAnchor}
-                    today={now}
-                    onSelectDay={handleSelectDay}
-                  />
-                </div>
+                <YearView
+                  year={anchorDate.getFullYear()}
+                  today={now}
+                  onSelectDay={handleSelectDay}
+                />
               ) : (
                 <CalendarGridEngine
                   className="min-h-0 flex-1"
                   view={view}
-                  anchor={gridAnchor}
+                  anchor={anchorDate}
                   calendars={calendars}
                   events={events}
                   now={now}
@@ -455,9 +395,10 @@ export function CalendarProductView({
                     setSelectedEvent({ event, anchor })
                   }
                   onEventTimesChange={handleEventTimesChange}
+                  onOpenDay={handleSelectDay}
                 />
               )}
-            </div>
+            </CalendarViewTransition>
           </div>
 
           {planningDrawerOpen ? (
@@ -487,7 +428,7 @@ export function CalendarProductView({
                     events={events}
                     todayTasks={todayTasks}
                     now={now}
-                    weekStart={weekStart}
+                    weekStart={visibleWeekStart}
                     onSelectDay={(day) => {
                       handleSelectDay(day)
                       setPlanningDrawerOpen(false)
@@ -534,6 +475,7 @@ export function CalendarProductView({
           eventId={selectedEvent.event.id}
           panel={crossLinkPanel}
           onClose={() => setCrossLinkPanel(null)}
+          onMutationSuccess={() => invalidateCalendar(scope)}
         />
       ) : null}
     </section>

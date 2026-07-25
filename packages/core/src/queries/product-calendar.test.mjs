@@ -128,3 +128,74 @@ test("loadCalendarWeek workspace scope filters events and tasks via workspace_li
   assert.equal(tasksQueried, false);
   assert.deepEqual(result.taskDues, []);
 });
+
+test("loadCalendarWeek overlap mode queries events that span into range", async () => {
+  const events = [
+    {
+      id: "e-span",
+      calendar_id: "c1",
+      user_id: "u1",
+      title: "Spans in",
+      starts_at: "2026-06-28T09:00:00.000Z",
+      ends_at: "2026-07-02T09:00:00.000Z",
+      all_day: false,
+      location: null,
+      description_json: {},
+      task_id: null,
+      google_event_id: null,
+      source: "planevo",
+      created_at: "",
+      updated_at: "",
+    },
+  ];
+  const range = {
+    start: new Date(2026, 6, 1),
+    end: new Date(2026, 6, 8),
+  };
+  const filters = {};
+  const client = {
+    from(table) {
+      if (table === "calendars") return calendarsTable(CALENDAR_ROWS);
+      if (table === "calendar_events") {
+        return {
+          select: () => ({
+            eq: () => ({
+              lt: (_col, ltVal) => {
+                filters.startsLt = ltVal;
+                return {
+                  gt: (_col2, gtVal) => {
+                    filters.endsGt = gtVal;
+                    return { order: async () => ({ data: events, error: null }) };
+                  },
+                };
+              },
+              gte: (_col, gteVal) => ({
+                lt: (_col2, ltVal) => {
+                  filters.startsGte = gteVal;
+                  filters.startsLtLegacy = ltVal;
+                  return { order: async () => ({ data: [], error: null }) };
+                },
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "tasks") {
+        return {
+          select: () => ({
+            eq: () => ({
+              gte: () => ({
+                lt: () => ({ order: async () => ({ data: [], error: null }) }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    },
+  };
+  await loadCalendarWeek(client, "u1", { ...range, eventRange: "overlaps" });
+  assert.equal(filters.startsLt, range.end.toISOString());
+  assert.equal(filters.endsGt, range.start.toISOString());
+  assert.equal(filters.startsGte, undefined);
+});

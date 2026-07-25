@@ -20,6 +20,20 @@ export const formatDayHeaderWeekday = (
 export const formatDayHeaderDayNumber = (date: Date): string =>
   String(date.getDate())
 
+/** Month cell label: "May 1" on the 1st, otherwise day number only. */
+export const formatMonthDateLabel = (
+  date: Date,
+  locale = "en-US",
+): string => {
+  if (date.getDate() === 1) {
+    return date.toLocaleDateString(locale, {
+      month: "short",
+      day: "numeric",
+    })
+  }
+  return String(date.getDate())
+}
+
 export const formatDayHeaderAccessibleLabel = (
   date: Date,
   locale = "en-US",

@@ -41,7 +41,7 @@ function addDays(date: Date, amount: number): Date {
   return next;
 }
 
-function startOfWeekSunday(date: Date): Date {
+export function startOfWeekSunday(date: Date): Date {
   const start = startOfDay(date);
   start.setDate(start.getDate() - start.getDay());
   return start;
@@ -52,9 +52,14 @@ export function calendarRange(
   view: CalendarView,
   date: Date,
 ): { start: Date; end: Date } {
-  if (view === "day" || view === "year") {
+  if (view === "day") {
     const start = startOfDay(date);
     return { start, end: addDays(start, 1) };
+  }
+  if (view === "year") {
+    const start = new Date(date.getFullYear(), 0, 1);
+    const end = new Date(date.getFullYear() + 1, 0, 1);
+    return { start, end };
   }
   if (view === "month") {
     const firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);

@@ -20,6 +20,8 @@ export type LoadCalendarWeekOptions = {
   end: Date;
   /** F-02 "This workspace" filter — only linked events and task dues. */
   workspaceId?: string;
+  /** Default `starts-in`. Use `overlaps` for month grid (multi-day bars). */
+  eventRange?: "starts-in" | "overlaps";
 };
 
 /** All of a user's calendars ordered by position (hidden ones included —
@@ -66,15 +68,23 @@ export async function loadCalendarWeek(
 
   const startIso = options.start.toISOString();
   const endIso = options.end.toISOString();
+  const eventRange = options.eventRange ?? "starts-in";
 
   let events: CalendarEventRow[] = [];
   if (allowedEventIds === null || allowedEventIds.length > 0) {
     let eventQuery = client
       .from("calendar_events")
       .select("*")
-      .eq("user_id", userId)
-      .gte("starts_at", startIso)
-      .lt("starts_at", endIso);
+      .eq("user_id", userId);
+
+    if (eventRange === "overlaps") {
+      eventQuery = eventQuery.lt("starts_at", endIso).gt("ends_at", startIso);
+    } else {
+      eventQuery = eventQuery
+        .gte("starts_at", startIso)
+        .lt("starts_at", endIso);
+    }
+
     if (allowedEventIds) eventQuery = eventQuery.in("id", allowedEventIds);
     const { data, error } = await eventQuery.order("starts_at", {
       ascending: true,

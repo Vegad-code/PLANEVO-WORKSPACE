@@ -17,6 +17,8 @@ import type { TodayColumnTask } from "@/features/calendar-product/today-task-row
 /** Fixed clock so preview states do not drift day to day. */
 const DESIGN_NOW = new Date(2026, 6, 15, 13, 0);
 const DESIGN_WEEK_START = new Date(2026, 6, 13);
+const DESIGN_MONTH_ANCHOR = new Date(2026, 6, 24);
+const DESIGN_MONTH_NOW = new Date(2026, 6, 24, 10, 0);
 
 const DESIGN_TODAY_TASKS: TodayColumnTask[] = [
   {
@@ -152,6 +154,94 @@ const DESIGN_EVENTS: CalendarEventRow[] = [
   }),
 ];
 
+const DESIGN_MONTH_EVENTS: CalendarEventRow[] = [
+  previewEvent({
+    id: "ev-month-span",
+    title: "Team offsite",
+    calendar_id: "cal-work",
+    starts_at: new Date(2026, 5, 30, 9, 0).toISOString(),
+    ends_at: new Date(2026, 6, 3, 17, 0).toISOString(),
+  }),
+  previewEvent({
+    id: "ev-month-allday",
+    title: "Independence Day",
+    calendar_id: "cal-personal",
+    all_day: true,
+    starts_at: new Date(2026, 6, 4, 0, 0).toISOString(),
+    ends_at: new Date(2026, 6, 5, 0, 0).toISOString(),
+  }),
+  previewEvent({
+    id: "ev-month-sync",
+    title: "Team sync",
+    calendar_id: "cal-work",
+    starts_at: previewTime(24, 9, 0),
+    ends_at: previewTime(24, 10, 0),
+  }),
+  previewEvent({
+    id: "ev-month-review",
+    title: "Design review",
+    calendar_id: "cal-work",
+    starts_at: previewTime(24, 11, 30),
+    ends_at: previewTime(24, 12, 30),
+  }),
+  previewEvent({
+    id: "ev-month-lunch",
+    title: "Lunch with Alex",
+    calendar_id: "cal-personal",
+    starts_at: previewTime(24, 12, 0),
+    ends_at: previewTime(24, 13, 0),
+  }),
+  previewEvent({
+    id: "ev-overflow-1",
+    title: "Morning standup",
+    calendar_id: "cal-work",
+    starts_at: previewTime(3, 9, 0),
+    ends_at: previewTime(3, 9, 30),
+  }),
+  previewEvent({
+    id: "ev-overflow-2",
+    title: "Sprint planning",
+    calendar_id: "cal-work",
+    starts_at: previewTime(3, 10, 0),
+    ends_at: previewTime(3, 11, 0),
+  }),
+  previewEvent({
+    id: "ev-overflow-3",
+    title: "Client call",
+    calendar_id: "cal-personal",
+    starts_at: previewTime(3, 11, 30),
+    ends_at: previewTime(3, 12, 30),
+  }),
+  previewEvent({
+    id: "ev-overflow-4",
+    title: "1:1 with manager",
+    calendar_id: "cal-work",
+    starts_at: previewTime(3, 14, 0),
+    ends_at: previewTime(3, 14, 30),
+  }),
+  previewEvent({
+    id: "ev-overflow-5",
+    title: "Docs review",
+    calendar_id: "cal-work",
+    starts_at: previewTime(3, 15, 0),
+    ends_at: previewTime(3, 16, 0),
+  }),
+  previewEvent({
+    id: "ev-overflow-6",
+    title: "Retro",
+    calendar_id: "cal-work",
+    starts_at: previewTime(3, 16, 30),
+    ends_at: previewTime(3, 17, 30),
+  }),
+  previewEvent({
+    id: "ev-aug-1",
+    title: "August kickoff",
+    calendar_id: "cal-personal",
+    starts_at: new Date(2026, 7, 1, 10, 0).toISOString(),
+    ends_at: new Date(2026, 7, 1, 11, 0).toISOString(),
+  }),
+];
+
 function noop() {
   // Design previews render interactions inert.
 }
@@ -277,9 +367,31 @@ export function CalendarProductPreview() {
                 onSlotSelect={noop}
                 onEventSelect={noop}
                 onEventTimesChange={noop}
+                onOpenDay={noop}
               />
             </div>
           </DndContext>
+        </div>
+      </figure>
+
+      <figure className="w-full">
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Month view — weekday header, today disc, compact bars, overflow
+        </figcaption>
+        <div className="flex h-[36rem] gap-3 overflow-hidden rounded-xl bg-sidebar p-3">
+          <div className="calendar-panel-glass min-w-0 flex-1 overflow-hidden rounded-xl p-2">
+            <CalendarGridEngine
+              view="month"
+              anchor={DESIGN_MONTH_ANCHOR}
+              calendars={DESIGN_CALENDARS}
+              events={DESIGN_MONTH_EVENTS}
+              now={DESIGN_MONTH_NOW}
+              onSlotSelect={noop}
+              onEventSelect={noop}
+              onEventTimesChange={noop}
+              onOpenDay={noop}
+            />
+          </div>
         </div>
       </figure>
 
