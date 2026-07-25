@@ -4,7 +4,10 @@ import type {
   CalendarColor,
   CalendarEventRow,
 } from "@planevo/core/types/calendar";
-import { CALENDAR_COLOR_BORDER_CLASS } from "./calendar-color-dot";
+import {
+  CALENDAR_COLOR_BLOCK_CLASS,
+  CALENDAR_COLOR_BORDER_CLASS,
+} from "./calendar-color-dot"
 import { eventBlockPosition, formatTimeLabel } from "./time-axis";
 
 type EventBlockProps = {
@@ -27,7 +30,7 @@ export function EventBlock({ event, color, onSelect }: EventBlockProps) {
       type="button"
       onClick={(clickEvent) => onSelect?.(event, clickEvent.currentTarget)}
       style={{ top: `${topPercent}%`, height: `${heightPercent}%` }}
-      className={`calendar-event-glass absolute inset-x-0.5 z-10 flex flex-col overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left outline-none focus-visible:outline focus-visible:outline-offset-1 focus-visible:outline-ink ${CALENDAR_COLOR_BORDER_CLASS[color]}`}
+      className={`absolute inset-x-0.5 z-10 flex flex-col overflow-hidden rounded-[var(--radius-calendar-event)] border-l-[3px] px-1.5 py-0.5 text-left outline-none focus-visible:outline focus-visible:outline-offset-1 focus-visible:outline-ink ${CALENDAR_COLOR_BLOCK_CLASS[color]} ${CALENDAR_COLOR_BORDER_CLASS[color]}`}
     >
       <span className="truncate text-product-meta text-text-secondary">
         {timeLabel}

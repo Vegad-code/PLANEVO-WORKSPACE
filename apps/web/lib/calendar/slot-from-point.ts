@@ -1,7 +1,8 @@
 /**
- * Resolve a drop datetime from a pointer position over a FullCalendar
- * timeGrid. Used to bridge @dnd-kit task drags onto the FC grid without
- * wiring FC's HTML5 Draggable (which fights dnd-kit sensors).
+ * Resolve a drop datetime from a pointer position over the calendar grid.
+ * Bridges @dnd-kit task drags when the droppable slot target is not hit directly.
+ * Works with react-big-calendar slots (via slotPropGetter data attrs) and the
+ * legacy native week-grid markers.
  */
 export function startsAtFromCalendarPoint(
   clientX: number,
@@ -10,15 +11,14 @@ export function startsAtFromCalendarPoint(
   const hit = document.elementFromPoint(clientX, clientY)
   if (!(hit instanceof Element)) return null
 
-  const slot = hit.closest<HTMLElement>(".fc-timegrid-slot")
-  const col = hit.closest<HTMLElement>(".fc-timegrid-col[data-date]")
+  const slot = hit.closest<HTMLElement>("[data-calendar-slot-time]")
+  const col = hit.closest<HTMLElement>("[data-calendar-day]")
   if (!slot || !col) return null
 
-  const dateStr = col.dataset.date
-  const timeStr = slot.dataset.time
+  const dateStr = col.dataset.calendarDay
+  const timeStr = slot.dataset.calendarSlotTime
   if (!dateStr || !timeStr) return null
 
-  // FC data-time is typically "HH:MM:SS"
   const [hours, minutes] = timeStr.split(":").map(Number)
   if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
 

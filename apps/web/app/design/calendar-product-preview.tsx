@@ -248,7 +248,7 @@ export function CalendarProductPreview() {
     <div className="flex flex-wrap gap-8">
       <figure className="w-full">
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Two-pane product — Planning rail · FullCalendar week grid
+          Two-pane product — Planning rail · react-big-calendar week grid
         </figcaption>
         <div className="flex h-[36rem] gap-3 overflow-hidden rounded-xl bg-sidebar p-3">
           <DndContext>
@@ -273,6 +273,7 @@ export function CalendarProductPreview() {
                 anchor={DESIGN_WEEK_START}
                 calendars={DESIGN_CALENDARS}
                 events={DESIGN_EVENTS}
+                now={DESIGN_NOW}
                 onSlotSelect={noop}
                 onEventSelect={noop}
                 onEventTimesChange={noop}

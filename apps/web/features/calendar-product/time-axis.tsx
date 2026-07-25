@@ -10,7 +10,7 @@ export const DEFAULT_SCROLL_HOUR = 8;
  * pane (no gap); on a short pane they hold this minimum and the grid scrolls,
  * bottoming out exactly at midnight (no void below 11 PM).
  */
-export const HOUR_MIN_REM = 3.5;
+export const HOUR_MIN_REM = 4.5;
 export const SLOT_MIN_REM = HOUR_MIN_REM / 2;
 
 export const VISIBLE_HOURS = DAY_END_HOUR - DAY_START_HOUR;
@@ -59,16 +59,16 @@ export function eventBlockPosition(
   return { topPercent, heightPercent };
 }
 
-export function TimeAxis() {
+export function TimeAxis({ className }: { className?: string }) {
   const hours = Array.from(
     { length: VISIBLE_HOURS },
     (_, index) => DAY_START_HOUR + index,
-  );
+  )
 
   return (
     <div
       aria-hidden="true"
-      className="flex min-h-full w-20 shrink-0 flex-col border-r border-border bg-surface-raised pl-2 pr-1"
+      className={`flex min-h-full shrink-0 flex-col border-r border-border bg-surface-raised pl-2 pr-1 ${className ?? "w-20"}`}
     >
       {hours.map((hour) => (
         <div
@@ -76,11 +76,11 @@ export function TimeAxis() {
           style={{ minHeight: `${HOUR_MIN_REM}rem` }}
           className="relative flex-1"
         >
-          <span className="absolute top-0 right-2 -translate-y-1/2 text-product-body font-medium tabular-nums text-text-secondary">
+          <span className="absolute top-1 right-2 leading-none text-product-meta font-normal tabular-nums text-text-muted">
             {formatHourLabel(hour)}
           </span>
         </div>
       ))}
     </div>
-  );
+  )
 }

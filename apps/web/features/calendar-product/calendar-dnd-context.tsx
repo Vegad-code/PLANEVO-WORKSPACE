@@ -7,7 +7,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core"
-import { startsAtFromCalendarPoint } from "@/lib/calendar/fc-slot-from-point"
+import { startsAtFromCalendarPoint } from "@/lib/calendar/slot-from-point"
 import type { TaskDragData } from "./today-task-row"
 import type { SlotDropData } from "./week-grid"
 
@@ -17,8 +17,7 @@ type CalendarDndContextProps = {
 }
 
 /**
- * Bridges Planning-rail task drags onto grid drops.
- * Supports legacy week-grid SlotDropData and FullCalendar timeGrid via pointer hit-testing.
+ * Bridges Planning-rail task drags onto native grid slot drops.
  */
 export function CalendarDndContext({
   onScheduleTask,

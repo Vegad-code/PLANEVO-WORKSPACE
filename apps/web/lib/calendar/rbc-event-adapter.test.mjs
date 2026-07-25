@@ -3,8 +3,8 @@ import { test } from "node:test"
 import {
   getEventColor,
   getPlanevoEventId,
-  toFullCalendarEvents,
-} from "./calendar-event-adapter.ts"
+  toRbcEvents,
+} from "./rbc-event-adapter.ts"
 
 const calendars = [
   {
@@ -62,30 +62,19 @@ const events = [
   },
 ]
 
-test("toFullCalendarEvents filters hidden calendars and maps fields", () => {
-  const mapped = toFullCalendarEvents(events, calendars)
+test("toRbcEvents filters hidden calendars and maps fields", () => {
+  const mapped = toRbcEvents(events, calendars)
   assert.equal(mapped.length, 1)
   assert.equal(mapped[0].id, "evt-1")
+  assert.equal(mapped[0].planevoEventId, "evt-1")
+  assert.equal(mapped[0].color, "ocean")
   assert.equal(mapped[0].title, "Standup")
-  assert.equal(mapped[0].start, "2026-07-15T15:00:00.000Z")
-  assert.equal(mapped[0].end, "2026-07-15T15:30:00.000Z")
-  assert.equal(mapped[0].allDay, false)
-  assert.equal(mapped[0].extendedProps.color, "ocean")
-  assert.equal(mapped[0].extendedProps.planevoEventId, "evt-1")
+  assert.equal(mapped[0].start.toISOString(), "2026-07-15T15:00:00.000Z")
+  assert.equal(mapped[0].end.toISOString(), "2026-07-15T15:30:00.000Z")
 })
 
-test("getPlanevoEventId prefers extendedProps", () => {
-  assert.equal(
-    getPlanevoEventId({
-      id: "fc-temp",
-      extendedProps: { planevoEventId: "evt-1" },
-    }),
-    "evt-1",
-  )
-  assert.equal(getPlanevoEventId({ id: "evt-1" }), "evt-1")
-})
-
-test("getEventColor falls back to slate", () => {
-  assert.equal(getEventColor({ extendedProps: { color: "meadow" } }), "meadow")
-  assert.equal(getEventColor({ extendedProps: {} }), "slate")
+test("getPlanevoEventId and getEventColor read adapter fields", () => {
+  const [event] = toRbcEvents(events, calendars)
+  assert.equal(getPlanevoEventId(event), "evt-1")
+  assert.equal(getEventColor(event), "ocean")
 })

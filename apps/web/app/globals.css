@@ -139,6 +139,7 @@
   --color-calendar-today-disc: #6495ed;
   --color-calendar-today-disc-foreground: #ffffff;
   --color-calendar-today-label: #6495ed;
+  --color-calendar-grid: var(--color-paper);
 
   /* Layout */
   --spacing-sidebar: 210px;
@@ -478,8 +479,8 @@ body {
 
 /* FullCalendar → Planevo tokens (Google-like week/day grid skin). */
 .planevo-fc {
-  --fc-page-bg-color: transparent;
-  --fc-neutral-bg-color: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
+  --fc-page-bg-color: var(--color-calendar-grid);
+  --fc-neutral-bg-color: var(--color-calendar-grid);
   --fc-neutral-text-color: var(--color-text-muted);
   --fc-border-color: var(--color-border);
   --fc-button-text-color: var(--color-ink);
@@ -495,7 +496,7 @@ body {
   --fc-event-selected-overlay-color: rgb(0 0 0 / 0.12);
   --fc-more-link-bg-color: var(--color-surface-raised);
   --fc-more-link-text-color: var(--color-text-secondary);
-  --fc-today-bg-color: color-mix(in srgb, var(--color-ink) 4%, transparent);
+  --fc-today-bg-color: color-mix(in srgb, var(--color-ink) 4%, var(--color-calendar-grid));
   --fc-now-indicator-color: var(--color-ink);
   --fc-list-event-hover-bg-color: var(--color-surface-raised);
   --fc-highlight-color: color-mix(in srgb, var(--color-ocean) 18%, transparent);
@@ -504,7 +505,7 @@ body {
   border-radius: var(--radius-calendar-shell) var(--radius-calendar-shell) 0 0;
   overflow: hidden;
   border: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
+  background: var(--color-calendar-grid);
   width: 100%;
   height: 100%;
   font-family: var(--font-product);
@@ -526,6 +527,46 @@ body {
 .planevo-fc .fc-theme-standard td,
 .planevo-fc .fc-theme-standard th {
   border-color: var(--color-border);
+}
+
+/* GCal-style tiering: chrome on raised; grid fill on slot lanes (under event overlay). */
+.planevo-fc .fc-col-header,
+.planevo-fc .fc-col-header-cell,
+.planevo-fc .fc-scrollgrid-section-header > td,
+.planevo-fc .fc-timegrid-axis,
+.planevo-fc .fc-timegrid-col.fc-timegrid-axis,
+.planevo-fc .fc-scrollgrid-shrink-frame,
+.planevo-fc .fc-timegrid-slot-label {
+  background: var(--color-surface-raised);
+}
+
+/* Grid surface — bottom slot layer; event column overlay stays transparent. */
+.planevo-fc .fc-scrollgrid-section-body > td:not(.fc-timegrid-axis),
+.planevo-fc .fc-timegrid-body,
+.planevo-fc .fc-timegrid-slot-lane,
+.planevo-fc .fc-daygrid-day,
+.planevo-fc .fc-daygrid-day-frame {
+  background: var(--color-calendar-grid);
+}
+
+/* GCal column dividers — border-right on column shells (same hairline in header + body). */
+.planevo-fc .fc-col-header-cell,
+.planevo-fc .fc-timegrid-slot-lane,
+.planevo-fc .fc-timegrid-col:not(.fc-timegrid-axis),
+.planevo-fc .fc-timegrid .fc-daygrid-day {
+  border-right: 1px solid var(--color-border);
+}
+
+/* Event overlay layer: transparent so slot-lane dividers + fills show through. */
+.planevo-fc .fc-timegrid-cols,
+.planevo-fc .fc-timegrid-cols table,
+.planevo-fc .fc-timegrid-col-frame {
+  background: transparent;
+}
+
+/* FC: column border cells must span full scrollable body height. */
+.planevo-fc .fc-scrollgrid-section .fc-timegrid-cols table {
+  height: 100%;
 }
 
 .planevo-fc .fc-col-header-cell {
@@ -675,5 +716,280 @@ body {
 .planevo-fc .fc-timegrid-divider {
   border-color: var(--color-border);
   padding: 0;
+}
+
+/* Native calendar grid (week-grid) — GCal column dividers via border-l on day columns. */
+.planevo-calendar-grid {
+  font-family: var(--font-product);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.planevo-calendar-grid .calendar-day-weekday {
+  font-size: var(--text-calendar-day-weekday);
+  line-height: var(--text-calendar-day-weekday--line-height);
+  letter-spacing: var(--text-calendar-day-weekday--letter-spacing);
+  font-weight: var(--text-calendar-day-weekday--font-weight);
+  color: var(--color-text-muted);
+}
+
+.planevo-calendar-grid .calendar-day-number {
+  font-size: var(--text-calendar-day-number);
+  line-height: var(--text-calendar-day-number--line-height);
+  font-weight: var(--text-calendar-day-number--font-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.planevo-calendar-grid .calendar-day-weekday--today {
+  color: var(--color-calendar-today-label);
+  font-weight: 600;
+}
+
+.planevo-calendar-grid .calendar-day-number--today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-calendar-today-disc);
+  min-height: var(--size-calendar-today-disc);
+  font-weight: 500;
+  border-radius: var(--radius-calendar-control);
+  background: var(--color-calendar-today-disc);
+  color: var(--color-calendar-today-disc-foreground);
+}
+
+/* Time gutter — clean raised strip; horizontal lines live in day columns only (GCal). */
+.planevo-calendar-grid [data-calendar-time-gutter] {
+  background: var(--color-surface-raised);
+}
+
+/* react-big-calendar — week/day grid with DnD move + resize. */
+.planevo-rbc {
+  font-family: var(--font-product);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.planevo-rbc .rbc-calendar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: transparent;
+}
+
+.planevo-rbc .rbc-time-view {
+  flex: 1;
+  min-height: 0;
+  border: none;
+  background: transparent;
+}
+
+.planevo-rbc .rbc-time-header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.planevo-rbc .rbc-time-header-content {
+  border-left: none;
+}
+
+.planevo-rbc .rbc-header {
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  font-weight: inherit;
+}
+
+.planevo-rbc .rbc-time-header-gutter,
+.planevo-rbc .rbc-time-gutter {
+  background: var(--color-surface-raised);
+}
+
+.planevo-rbc .rbc-time-gutter .rbc-timeslot-group,
+.planevo-rbc .rbc-time-gutter .rbc-time-slot {
+  border: none;
+}
+
+.planevo-rbc .rbc-label {
+  padding: 0 0.5rem 0 0.5rem;
+  font-size: var(--text-product-meta);
+  line-height: var(--text-product-meta--line-height);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.planevo-rbc .rbc-timeslot-group {
+  min-height: 4.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.planevo-rbc .rbc-day-slot {
+  border-left: 1px solid var(--color-border);
+  background: var(--color-calendar-grid);
+}
+
+.planevo-rbc .rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+
+.planevo-rbc .rbc-day-slot .rbc-timeslot-group .rbc-time-slot:first-child {
+  border-top: none;
+}
+
+.planevo-rbc .rbc-today {
+  background: color-mix(in srgb, var(--color-ink) 4%, var(--color-calendar-grid));
+}
+
+.planevo-rbc .rbc-event {
+  border: none;
+  padding: 0.125rem 0.375rem;
+  margin-inline: 2px;
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+  border-radius: var(--radius-calendar-event);
+}
+
+.planevo-rbc .planevo-rbc-event {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-height: 100%;
+  border-left-width: 3px;
+  border-left-style: solid;
+  background: var(--planevo-rbc-event-bg, var(--color-slate-tint));
+  border-left-color: var(--planevo-rbc-event-accent, var(--color-slate));
+}
+
+.planevo-rbc .planevo-rbc-event--slate {
+  --planevo-rbc-event-bg: var(--color-slate-tint);
+  --planevo-rbc-event-accent: var(--color-slate);
+}
+
+.planevo-rbc .planevo-rbc-event--marigold {
+  --planevo-rbc-event-bg: var(--color-marigold-tint);
+  --planevo-rbc-event-accent: var(--color-marigold);
+}
+
+.planevo-rbc .planevo-rbc-event--meadow {
+  --planevo-rbc-event-bg: var(--color-meadow-tint);
+  --planevo-rbc-event-accent: var(--color-meadow);
+}
+
+.planevo-rbc .planevo-rbc-event--brick {
+  --planevo-rbc-event-bg: var(--color-brick-tint);
+  --planevo-rbc-event-accent: var(--color-brick);
+}
+
+.planevo-rbc .planevo-rbc-event--ocean {
+  --planevo-rbc-event-bg: var(--color-ocean-tint);
+  --planevo-rbc-event-accent: var(--color-ocean);
+}
+
+/* GCal-like fills — saturated mix on dark so blocks stay visible. */
+[data-theme="dark"] .planevo-rbc .planevo-rbc-event--slate {
+  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-slate) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-rbc .planevo-rbc-event--marigold {
+  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-marigold) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-rbc .planevo-rbc-event--meadow {
+  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-meadow) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-rbc .planevo-rbc-event--brick {
+  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-brick) 55%, var(--color-paper));
+}
+
+[data-theme="dark"] .planevo-rbc .planevo-rbc-event--ocean {
+  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-ocean) 55%, var(--color-paper));
+}
+
+.planevo-rbc .rbc-event:focus {
+  outline: none;
+}
+
+.planevo-rbc .rbc-event.rbc-selected {
+  background: transparent;
+}
+
+.planevo-rbc .rbc-event-label {
+  display: none;
+}
+
+.planevo-rbc .rbc-event-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.planevo-rbc .rbc-addons-dnd-drag-preview,
+.planevo-rbc .rbc-addons-dnd-dragged-event {
+  border-radius: var(--radius-calendar-event);
+  overflow: hidden;
+}
+
+.planevo-rbc .rbc-current-time-indicator {
+  height: 2px;
+  background: var(--color-brick);
+  pointer-events: none;
+}
+
+.planevo-rbc .rbc-current-time-indicator::before {
+  content: "";
+  position: absolute;
+  left: -0.375rem;
+  top: 50%;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-top: -0.3125rem;
+  border-radius: 9999px;
+  background: var(--color-brick);
+}
+
+.planevo-rbc .rbc-slot-selection {
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  border: 1px solid var(--color-border-strong);
+}
+
+.planevo-rbc .rbc-addons-dnd-resizable {
+  position: relative;
+  height: 100%;
+}
+
+.planevo-rbc .rbc-addons-dnd-resize-ns-anchor {
+  width: 100%;
+  height: 0.5rem;
+  cursor: ns-resize;
+}
+
+.planevo-rbc .rbc-addons-dnd-resize-ns-icon {
+  display: none;
+}
+
+.planevo-rbc--no-allday .rbc-allday-cell {
+  display: none;
+  min-height: 0;
+}
+
+.planevo-rbc .rbc-time-content {
+  border-top: none;
+}
+
+.planevo-rbc .rbc-time-content > * + * > * {
+  border-left: none;
+}
+
+.planevo-rbc .rbc-time-view-resources .rbc-time-gutter,
+.planevo-rbc .rbc-time-view-resources .rbc-time-header-gutter {
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
 }
 

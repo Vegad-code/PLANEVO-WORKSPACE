@@ -449,6 +449,7 @@ export function CalendarProductView({
                   anchor={gridAnchor}
                   calendars={calendars}
                   events={events}
+                  now={now}
                   onSlotSelect={setCreateSlot}
                   onEventSelect={(event, anchor) =>
                     setSelectedEvent({ event, anchor })
