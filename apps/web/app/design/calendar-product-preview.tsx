@@ -363,10 +363,12 @@ export function CalendarProductPreview() {
                 anchor={DESIGN_WEEK_START}
                 calendars={DESIGN_CALENDARS}
                 events={DESIGN_EVENTS}
+                taskDues={[]}
                 now={DESIGN_NOW}
                 onSlotSelect={noop}
                 onEventSelect={noop}
                 onEventTimesChange={noop}
+                onToggleTask={noop}
                 onOpenDay={noop}
               />
             </div>
@@ -385,10 +387,12 @@ export function CalendarProductPreview() {
               anchor={DESIGN_MONTH_ANCHOR}
               calendars={DESIGN_CALENDARS}
               events={DESIGN_MONTH_EVENTS}
+              taskDues={[]}
               now={DESIGN_MONTH_NOW}
               onSlotSelect={noop}
               onEventSelect={noop}
               onEventTimesChange={noop}
+              onToggleTask={noop}
               onOpenDay={noop}
             />
           </div>

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react"
 import {
   Calendar,
   type DateHeaderProps,
+  type EventProps,
   type HeaderProps,
   type SlotInfo,
   type View,
@@ -13,13 +14,20 @@ import { format } from "date-fns/format"
 import type {
   CalendarEventRow,
   CalendarRow,
+  TaskDueChip,
 } from "@planevo/core/types/calendar"
 import {
+  getMonthItemInteraction,
   getPlanevoEventId,
+  isMonthRbcEvent,
+  toMonthRbcEvents,
   toRbcEvents,
+  type CalendarRbcEvent,
   type PlanevoRbcEvent,
 } from "@/lib/calendar/rbc-event-adapter"
 import { calendarLocalizer } from "@/lib/calendar/rbc-localizer"
+import { MONTH_GRID_BEHAVIOR } from "@/lib/calendar/month-grid-behavior"
+import { toMonthItems } from "@/lib/calendar/month-items"
 import { cn } from "@/lib/utils"
 import { MonthDayAgendaPopover } from "./month-day-agenda-popover"
 import { RbcDayHeader } from "./rbc-day-header"
@@ -41,13 +49,13 @@ type RbcInteractionInfo = {
 }
 
 type DragAndDropCalendarProps = React.ComponentProps<
-  typeof Calendar<PlanevoRbcEvent>
+  typeof Calendar<CalendarRbcEvent>
 > & {
   onEventDrop?: (info: RbcInteractionInfo) => void
   onEventResize?: (info: RbcInteractionInfo) => void
   resizable?: boolean
-  draggableAccessor?: (event: PlanevoRbcEvent) => boolean
-  resizableAccessor?: (event: PlanevoRbcEvent) => boolean
+  draggableAccessor?: (event: CalendarRbcEvent) => boolean
+  resizableAccessor?: (event: CalendarRbcEvent) => boolean
 }
 
 const DragAndDropCalendar = withDragAndDrop(
@@ -59,6 +67,7 @@ type CalendarGridEngineProps = {
   anchor: Date
   calendars: CalendarRow[]
   events: CalendarEventRow[]
+  taskDues: TaskDueChip[]
   now: Date
   onSlotSelect: (slotStart: Date) => void
   onEventSelect: (event: CalendarEventRow, anchor: HTMLElement) => void
@@ -67,6 +76,7 @@ type CalendarGridEngineProps = {
     startsAt: string
     endsAt: string
   }) => void
+  onToggleTask: (taskId: string, done: boolean) => void
   onOpenDay: (date: Date) => void
   className?: string
 }
@@ -98,23 +108,35 @@ export function CalendarGridEngine({
   anchor,
   calendars,
   events,
+  taskDues,
   now,
   onSlotSelect,
   onEventSelect,
   onEventTimesChange,
+  onToggleTask,
   onOpenDay,
   className,
 }: CalendarGridEngineProps) {
-  const [agendaDate, setAgendaDate] = useState<Date | null>(null)
-  const [agendaAnchor, setAgendaAnchor] = useState<DOMRect | null>(null)
+  const [agenda, setAgenda] = useState<{
+    date: Date
+    origin: HTMLElement
+  } | null>(null)
 
   const rbcView: View =
     view === "day" ? "day" : view === "month" ? "month" : "week"
   const isMonthView = view === "month"
 
-  const rbcEvents = useMemo(
+  const timeGridEvents = useMemo(
     () => toRbcEvents(events, calendars),
     [events, calendars],
+  )
+  const monthItems = useMemo(
+    () => toMonthItems(events, taskDues, calendars),
+    [events, taskDues, calendars],
+  )
+  const monthEvents = useMemo(
+    () => toMonthRbcEvents(monthItems),
+    [monthItems],
   )
   const eventsById = useMemo(() => {
     const map = new Map<string, CalendarEventRow>()
@@ -123,27 +145,36 @@ export function CalendarGridEngine({
   }, [events])
 
   const hasAllDayEvents = useMemo(
-    () => rbcEvents.some((event) => event.allDay),
-    [rbcEvents],
+    () => timeGridEvents.some((event) => event.allDay),
+    [timeGridEvents],
   )
 
   const scrollToTime = useMemo(() => scrollTimeNearNow(), [])
 
   const openAgenda = useCallback((date: Date, target: HTMLElement) => {
-    setAgendaDate(date)
-    setAgendaAnchor(target.getBoundingClientRect())
+    setAgenda({ date, origin: target })
   }, [])
 
-  const closeAgenda = useCallback(() => {
-    setAgendaDate(null)
-    setAgendaAnchor(null)
-  }, [])
+  const closeAgenda = useCallback(
+    (restoreFocus = true) => {
+      const origin = agenda?.origin
+      setAgenda(null)
+      if (restoreFocus && origin?.isConnected) origin.focus()
+    },
+    [agenda],
+  )
 
   const handleShowMore = useCallback(
-    (_events: PlanevoRbcEvent[], date: Date) => {
+    (_events: CalendarRbcEvent[], date: Date) => {
       const dayKey = format(date, "yyyy-MM-dd")
       const cell = document.querySelector(`[data-calendar-day="${dayKey}"]`)
-      const target = cell instanceof HTMLElement ? cell : document.body
+      const focusedElement = document.activeElement
+      const target =
+        focusedElement instanceof HTMLElement
+          ? focusedElement
+          : cell instanceof HTMLElement
+            ? cell
+            : document.body
       openAgenda(date, target)
     },
     [openAgenda],
@@ -153,7 +184,16 @@ export function CalendarGridEngine({
     () => ({
       toolbar: () => null,
       header: (props: HeaderProps) => <RbcMonthWeekdayHeader {...props} />,
-      event: RbcMonthEventContent,
+      event: (props: EventProps<CalendarRbcEvent>) => {
+        if (!isMonthRbcEvent(props.event)) return null
+        return (
+          <RbcMonthEventContent
+            {...props}
+            event={props.event}
+            onToggleTask={onToggleTask}
+          />
+        )
+      },
       timeGutterHeader: RbcTimeGutterHeader,
       month: {
         dateHeader: (props: DateHeaderProps) => (
@@ -169,6 +209,7 @@ export function CalendarGridEngine({
       }) => (
         <div
           data-calendar-day={format(value, "yyyy-MM-dd")}
+          tabIndex={-1}
           onDoubleClick={() => {
             closeAgenda()
             onOpenDay(value)
@@ -178,14 +219,17 @@ export function CalendarGridEngine({
         </div>
       ),
     }),
-    [closeAgenda, now, onOpenDay],
+    [closeAgenda, now, onOpenDay, onToggleTask],
   )
 
   const timeGridComponents = useMemo(
     () => ({
       toolbar: () => null,
       header: (props: HeaderProps) => <RbcDayHeader {...props} now={now} />,
-      event: RbcEventContent,
+      event: (props: EventProps<CalendarRbcEvent>) => {
+        if (isMonthRbcEvent(props.event)) return null
+        return <RbcEventContent {...props} event={props.event} />
+      },
       timeGutterHeader: RbcTimeGutterHeader,
     }),
     [now],
@@ -196,8 +240,18 @@ export function CalendarGridEngine({
   const handleSelectSlot = useCallback(
     (slotInfo: SlotInfo) => {
       if (view === "month") {
+        const dayKey = format(slotInfo.start, "yyyy-MM-dd")
+        const dayCell = document.querySelector(
+          `[data-calendar-day="${dayKey}"]`,
+        )
         const target =
-          slotInfo.box instanceof HTMLElement ? slotInfo.box : document.body
+          dayCell instanceof HTMLElement
+            ? dayCell
+            : slotInfo.box instanceof HTMLElement
+            ? slotInfo.box
+            : document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : document.body
         openAgenda(slotInfo.start, target)
         return
       }
@@ -207,7 +261,17 @@ export function CalendarGridEngine({
   )
 
   const handleSelectEvent = useCallback(
-    (rbcEvent: PlanevoRbcEvent, e: React.SyntheticEvent<HTMLElement>) => {
+    (rbcEvent: CalendarRbcEvent, e: React.SyntheticEvent<HTMLElement>) => {
+      if (isMonthRbcEvent(rbcEvent)) {
+        const interaction = getMonthItemInteraction(rbcEvent.monthItem)
+        if (interaction.kind === "task") return
+        const anchorEl =
+          e.currentTarget instanceof HTMLElement
+            ? e.currentTarget
+            : document.body
+        onEventSelect(interaction.event, anchorEl)
+        return
+      }
       const row = eventsById.get(getPlanevoEventId(rbcEvent))
       if (!row) return
       const anchorEl =
@@ -231,7 +295,28 @@ export function CalendarGridEngine({
     [onEventTimesChange],
   )
 
-  const eventPropGetter = useCallback((event: PlanevoRbcEvent) => {
+  const eventPropGetter = useCallback((event: CalendarRbcEvent) => {
+    if (isMonthRbcEvent(event)) {
+      const item = event.monthItem
+      if (item.kind === "task") {
+        return {
+          className: cn(
+            "planevo-rbc-event",
+            "planevo-rbc-event--month-task",
+            item.completed && "planevo-rbc-event--month-task-completed",
+          ),
+        }
+      }
+
+      return {
+        className: cn(
+          "planevo-rbc-event",
+          `planevo-rbc-event--${item.calendarColor}`,
+          `planevo-rbc-event--month-${item.displayStyle}`,
+        ),
+      }
+    }
+
     return {
       className: cn("planevo-rbc-event", `planevo-rbc-event--${event.color}`),
     }
@@ -261,13 +346,16 @@ export function CalendarGridEngine({
           date={anchor}
           view={rbcView}
           views={["month", "week", "day"]}
-          events={rbcEvents}
+          events={isMonthView ? monthEvents : timeGridEvents}
           getNow={() => now}
           toolbar={false}
           selectable={isMonthView ? "ignoreEvents" : true}
-          popup={isMonthView}
+          popup={isMonthView ? MONTH_GRID_BEHAVIOR.popup : false}
+          doShowMoreDrillDown={
+            isMonthView ? MONTH_GRID_BEHAVIOR.doShowMoreDrillDown : undefined
+          }
           drilldownView={isMonthView ? null : undefined}
-          resizable={!isMonthView}
+          resizable={isMonthView ? MONTH_GRID_BEHAVIOR.resizable : true}
           step={30}
           timeslots={2}
           min={DAY_MIN}
@@ -283,8 +371,16 @@ export function CalendarGridEngine({
           }}
           eventPropGetter={eventPropGetter}
           slotPropGetter={slotPropGetter}
-          draggableAccessor={() => !isMonthView}
-          resizableAccessor={() => !isMonthView}
+          draggableAccessor={(event) =>
+            isMonthView
+              ? MONTH_GRID_BEHAVIOR.draggable
+              : !isMonthRbcEvent(event)
+          }
+          resizableAccessor={(event) =>
+            isMonthView
+              ? MONTH_GRID_BEHAVIOR.resizable
+              : !isMonthRbcEvent(event)
+          }
           onNavigate={() => {}}
           onView={() => {}}
           onSelectSlot={handleSelectSlot}
@@ -295,21 +391,21 @@ export function CalendarGridEngine({
           style={{ height: "100%" }}
         />
       </div>
-      {agendaDate ? (
+      {agenda ? (
         <MonthDayAgendaPopover
-          date={agendaDate}
-          events={events}
-          calendars={calendars}
-          anchorRect={agendaAnchor}
+          date={agenda.date}
+          items={monthItems}
+          anchorRect={agenda.origin.getBoundingClientRect()}
           onClose={closeAgenda}
           onOpenDay={(day) => {
-            closeAgenda()
+            closeAgenda(false)
             onOpenDay(day)
           }}
           onSelectEvent={(event, anchorEl) => {
-            closeAgenda()
+            closeAgenda(false)
             onEventSelect(event, anchorEl)
           }}
+          onToggleTask={onToggleTask}
         />
       ) : null}
     </>

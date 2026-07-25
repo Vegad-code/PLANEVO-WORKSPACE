@@ -97,6 +97,7 @@ export function CalendarProductView({
 
   const calendars = calendarQuery.data?.calendars ?? []
   const events = calendarQuery.data?.events ?? []
+  const taskDues = calendarQuery.data?.taskDues ?? []
   const todayTasks = calendarQuery.data?.todayTasks ?? []
   const isFetchingNewRange =
     calendarQuery.isFetching && !calendarQuery.isPlaceholderData
@@ -389,12 +390,14 @@ export function CalendarProductView({
                   anchor={anchorDate}
                   calendars={calendars}
                   events={events}
+                  taskDues={taskDues}
                   now={now}
                   onSlotSelect={setCreateSlot}
                   onEventSelect={(event, anchor) =>
                     setSelectedEvent({ event, anchor })
                   }
                   onEventTimesChange={handleEventTimesChange}
+                  onToggleTask={handleToggleTask}
                   onOpenDay={handleSelectDay}
                 />
               )}

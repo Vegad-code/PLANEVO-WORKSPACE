@@ -1096,6 +1096,21 @@ body {
   padding: 0 0.375rem;
 }
 
+/* Month item semantics. Task 3 owns the final tokenized visual treatment. */
+.planevo-rbc--month .planevo-rbc-event--month-timed {
+  border-left-width: 0;
+  background: transparent;
+}
+
+.planevo-rbc--month .calendar-month-event-dot {
+  background: var(--planevo-rbc-event-accent);
+}
+
+.planevo-rbc--month .planevo-rbc-event--month-task {
+  border-left-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
 .planevo-rbc--month .rbc-event-content {
   display: flex;
   flex-direction: row;
@@ -1150,4 +1165,3 @@ body {
   border-right: 1px solid var(--color-border);
   background: var(--color-surface-raised);
 }
-

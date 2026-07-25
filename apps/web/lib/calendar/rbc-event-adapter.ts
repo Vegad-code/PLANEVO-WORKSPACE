@@ -3,6 +3,7 @@ import type {
   CalendarEventRow,
   CalendarRow,
 } from "@planevo/core/types/calendar"
+import type { MonthItem } from "./month-items"
 
 export type PlanevoRbcEvent = {
   id: string
@@ -14,6 +15,18 @@ export type PlanevoRbcEvent = {
   calendarId: string
   color: CalendarColor
 }
+
+/** A Month-only RBC input backed by the unified event/task item model. */
+export type MonthRbcEvent = {
+  id: string
+  title: string
+  start: Date
+  end: Date
+  allDay: boolean
+  monthItem: MonthItem
+}
+
+export type CalendarRbcEvent = PlanevoRbcEvent | MonthRbcEvent
 
 /** Map Planevo events to react-big-calendar inputs, honoring calendar visibility. */
 export function toRbcEvents(
@@ -52,4 +65,61 @@ export function getPlanevoEventId(event: PlanevoRbcEvent): string {
 
 export function getEventColor(event: PlanevoRbcEvent): CalendarColor {
   return event.color
+}
+
+/**
+ * RBC owns the visible row limit and therefore the +N more count. Supplying
+ * every unified Month item here means due tasks and events share that limit.
+ */
+export function toMonthRbcEvents(items: MonthItem[]): MonthRbcEvent[] {
+  return items.map((item) => {
+    if (item.kind === "task") {
+      const taskDay = new Date(item.dueAt)
+      taskDay.setHours(0, 0, 0, 0)
+      const nextDay = new Date(taskDay)
+      nextDay.setDate(nextDay.getDate() + 1)
+
+      return {
+        id: item.id,
+        title: item.title,
+        // RBC's Month sorter puts longer items ahead. An open task occupies
+        // its due day only (exclusive next-day end) so it follows bars and
+        // precedes timed events; completed tasks retain a zero-length sort key.
+        start: taskDay,
+        end: item.completed ? taskDay : nextDay,
+        allDay: false,
+        monthItem: item,
+      }
+    }
+
+    return {
+      id: item.id,
+      title: item.title,
+      start: item.start,
+      end: item.end,
+      allDay: item.allDay,
+      monthItem: item,
+    }
+  })
+}
+
+export function isMonthRbcEvent(
+  event: CalendarRbcEvent,
+): event is MonthRbcEvent {
+  return "monthItem" in event
+}
+
+export type MonthItemInteraction =
+  | { kind: "event"; event: CalendarEventRow }
+  | { kind: "task"; taskId: string; nextCompleted: boolean }
+
+/** The interaction dispatch used by both the Month rows and its day agenda. */
+export function getMonthItemInteraction(item: MonthItem): MonthItemInteraction {
+  if (item.kind === "event") return { kind: "event", event: item.event }
+
+  return {
+    kind: "task",
+    taskId: item.toggle.taskId,
+    nextCompleted: item.toggle.nextCompleted,
+  }
 }
