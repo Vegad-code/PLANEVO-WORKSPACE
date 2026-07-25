@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { loadDatabaseBundle } from "@planevo/core/queries/records";
 import { findPropertyByRole } from "@planevo/core/types/property-roles";
 import { propertyValueToString } from "@planevo/core/validation/property-values";
+import { mapTypedError } from "@/lib/api/typed-errors";
 import { requireDataAccess } from "@/lib/data/access";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server";
 
 async function requireOwnedDatabase(databaseId: string) {
   const access = await requireDataAccess();
@@ -31,6 +33,7 @@ export async function GET(request: Request) {
     if (!access) {
       return NextResponse.json({ error: "Database not found." }, { status: 404 });
     }
+    await enforceRateLimit(access, "relation-targets:get", RATE_LIMITS.read);
 
     const bundle = await loadDatabaseBundle(access.client, databaseId);
     if (!bundle) {
@@ -52,6 +55,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ targets });
   } catch (cause) {
+    const mapped = mapTypedError(cause);
+    if (mapped) return mapped;
     const message = cause instanceof Error ? cause.message : "Failed to load targets.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -70,6 +75,7 @@ export async function POST(request: Request) {
     if (!access) {
       return NextResponse.json({ error: "Database not found." }, { status: 404 });
     }
+    await enforceRateLimit(access, "relation-targets:post", RATE_LIMITS.mutate);
 
     const bundle = await loadDatabaseBundle(access.client, databaseId);
     if (!bundle) {
@@ -110,6 +116,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ id: record.id, title });
   } catch (cause) {
+    const mapped = mapTypedError(cause);
+    if (mapped) return mapped;
     const message = cause instanceof Error ? cause.message : "Failed to create record.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

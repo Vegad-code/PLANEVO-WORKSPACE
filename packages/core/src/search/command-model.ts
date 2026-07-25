@@ -1,11 +1,11 @@
 /**
- * Pure model behind the one Cmd+K surface (F-13 quick capture + F-46 command
- * bar). Modes are chosen by the query's leading character:
+ * Pure model behind the one Cmd+K Spotlight surface (F-13 quick capture + F-46
+ * command bar). Modes are chosen by the query's leading character:
  *   ""  -> recents
  *   ">" -> commands
  *   "@" -> records
  *   "#" -> databases
- *   else -> fuzzy nav across pages/databases/records, with a capture row FIRST
+ *   else -> fuzzy nav across all indexed kinds, with a capture row FIRST
  *           when the parsed line carries a signal (date, time, priority, #db,
  *           or @person).
  * All ranking runs through fuzzy.ts; capture runs through the shared parser.
@@ -14,12 +14,23 @@
 import { parseQuickCapture, type QuickCaptureDraft } from "../parsing/natural-capture.ts";
 import { fuzzyMatch } from "./fuzzy.ts";
 
+export type CommandIndexKind =
+  | "page"
+  | "database"
+  | "record"
+  | "task"
+  | "file"
+  | "event";
+
 export type CommandIndexEntry = {
-  kind: "page" | "database" | "record";
+  kind: CommandIndexKind;
   id: string;
   title: string;
   subtitle?: string;
   icon?: string;
+  mimeType?: string;
+  starred?: boolean;
+  updatedAt?: string;
 };
 
 export type CommandDef = { id: string; title: string };
@@ -29,7 +40,6 @@ export const COMMANDS: CommandDef[] = [
   { id: "new-database", title: "New database" },
   { id: "settings", title: "Settings" },
   { id: "toggle-minimal", title: "Toggle minimal mode" },
-  { id: "search-page", title: "Search this page" },
 ];
 
 export type CommandResultItem =
@@ -43,6 +53,22 @@ export type CommandInput = {
   recents?: CommandIndexEntry[];
   referenceDate?: Date;
 };
+
+export const COMMAND_INDEX_KINDS: readonly CommandIndexKind[] = [
+  "page",
+  "database",
+  "record",
+  "task",
+  "file",
+  "event",
+] as const;
+
+export function isCommandIndexKind(value: unknown): value is CommandIndexKind {
+  return (
+    typeof value === "string" &&
+    (COMMAND_INDEX_KINDS as readonly string[]).includes(value)
+  );
+}
 
 function hasCaptureSignal(draft: QuickCaptureDraft): boolean {
   return Boolean(
@@ -104,3 +130,54 @@ export function buildCommandResults(input: CommandInput): CommandResultItem[] {
   results.push(...rankEntries(input.entries, query));
   return results;
 }
+
+/** Group entry results for Spotlight section headers. */
+export type SpotlightResultGroup =
+  | "capture"
+  | "commands"
+  | "tasks"
+  | "files"
+  | "calendar"
+  | "workspace"
+  | "recents";
+
+export function spotlightGroupForItem(item: CommandResultItem): SpotlightResultGroup {
+  switch (item.type) {
+    case "capture":
+      return "capture";
+    case "command":
+      return "commands";
+    case "entry": {
+      switch (item.entry.kind) {
+        case "task":
+          return "tasks";
+        case "file":
+          return "files";
+        case "event":
+          return "calendar";
+        case "page":
+        case "database":
+        case "record":
+          return "workspace";
+        default: {
+          const exhaustive: never = item.entry.kind;
+          return exhaustive;
+        }
+      }
+    }
+    default: {
+      const exhaustive: never = item;
+      return exhaustive;
+    }
+  }
+}
+
+export const SPOTLIGHT_GROUP_LABELS: Record<SpotlightResultGroup, string> = {
+  capture: "Quick capture",
+  commands: "Commands",
+  tasks: "Tasks",
+  files: "Files",
+  calendar: "Calendar",
+  workspace: "Workspace",
+  recents: "Recents",
+};

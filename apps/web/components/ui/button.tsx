@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-marigold text-ink hover:opacity-90",
+        default: "bg-marigold text-marigold-foreground hover:opacity-90",
         outline:
           "border border-border-strong bg-paper text-ink hover:bg-surface-raised",
         ghost: "text-ink hover:bg-surface-raised",

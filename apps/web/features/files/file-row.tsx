@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { deleteFile } from "@/app/(workspace)/files/actions";
+import { Badge } from "@/components/ui/badge";
 import { HoverDeleteAction } from "@/components/ui/hover-delete-action";
 import { Icon } from "@/components/ui/planevo-icon";
 import type { FileSourceItem } from "@/lib/queries/files";
@@ -30,9 +31,9 @@ export function FileRow({ file }: { file: FileSourceItem }) {
           }).format(new Date(file.createdAt))}
         </span>
       </span>
-      <span className="shrink-0 rounded-full bg-slate-tint px-2 py-1 text-label capitalize text-ink">
+      <Badge variant="secondary" className="capitalize">
         {file.status}
-      </span>
+      </Badge>
     </>
   );
 

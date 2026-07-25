@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { loadDatabaseBundle } from "@planevo/core/queries/records";
+import { mapTypedError } from "@/lib/api/typed-errors";
 import { requireDataAccess } from "@/lib/data/access";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server";
 
 export async function GET(
   _request: Request,
@@ -10,6 +12,7 @@ export async function GET(
 
   try {
     const access = await requireDataAccess();
+    await enforceRateLimit(access, "record-peek:get", RATE_LIMITS.read);
 
     const { data: record, error: recordError } = await access.client
       .from("records")
@@ -43,6 +46,8 @@ export async function GET(
       contentJson: record.content_json,
     });
   } catch (cause) {
+    const mapped = mapTypedError(cause);
+    if (mapped) return mapped;
     const message = cause instanceof Error ? cause.message : "Failed to load record.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

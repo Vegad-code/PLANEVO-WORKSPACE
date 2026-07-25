@@ -10,6 +10,9 @@ const entries = [
   { kind: "database", id: "d2", title: "Projects" },
   { kind: "record", id: "r1", title: "Read chapter 4" },
   { kind: "record", id: "r2", title: "Physics homework" },
+  { kind: "task", id: "t1", title: "Physics lab prep" },
+  { kind: "file", id: "f1", title: "Physics syllabus.pdf" },
+  { kind: "event", id: "e1", title: "Physics office hours" },
 ];
 
 test("empty query returns recents", () => {
@@ -58,4 +61,19 @@ test("default mode without a signal is pure fuzzy nav", () => {
   const results = buildCommandResults({ query: "physics", entries, referenceDate: REFERENCE });
   assert.ok(results.every((r) => r.type === "entry"));
   assert.ok(results.some((r) => r.entry.id === "p1"));
+});
+
+test("default mode ranks product kinds alongside workspace entries", () => {
+  const results = buildCommandResults({ query: "physics", entries, referenceDate: REFERENCE });
+  const kinds = new Set(
+    results.filter((r) => r.type === "entry").map((r) => r.entry.kind),
+  );
+  assert.ok(kinds.has("task"));
+  assert.ok(kinds.has("file"));
+  assert.ok(kinds.has("event"));
+  assert.ok(kinds.has("page"));
+});
+
+test("COMMANDS no longer includes search-page", () => {
+  assert.ok(!COMMANDS.some((command) => command.id === "search-page"));
 });

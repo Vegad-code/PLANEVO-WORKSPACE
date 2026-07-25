@@ -53,7 +53,7 @@ export function TaskComposer({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className={`inline-flex items-center gap-2 rounded-lg px-3 text-small font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${appearance === "primary" ? "h-9 bg-marigold px-4 text-ink hover:opacity-90" : "h-8 border border-border-strong bg-paper text-ink hover:border-ink"}`}
+          className={`inline-flex items-center gap-2 rounded-lg px-3 text-small font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${appearance === "primary" ? "h-9 bg-marigold px-4 text-marigold-foreground hover:opacity-90" : "h-8 border border-border-strong bg-paper text-ink hover:border-ink"}`}
         >
           <Icon name="tasks" />
           {buttonLabel}

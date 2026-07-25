@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { mapTypedError } from "@/lib/api/typed-errors";
 import { requireMutationDataAccess } from "@/lib/data/access";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
+import { enforceStorageQuota } from "@/lib/files/storage-quota.server";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server";
 import { cleanupOwnedTaskAttachment } from "@/lib/tasks/task-attachment-cleanup.server";
 import type { TaskAttachmentCleanupTarget } from "@/lib/tasks/task-attachment-cleanup";
 import {
@@ -89,6 +92,7 @@ function routeError(cause: unknown, fallback: string) {
 export async function POST(request: Request) {
   try {
     const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "task-attachments:post", RATE_LIMITS.upload);
     const current = await getCurrentWorkspace();
     if (!current || current.access.ownerId !== access.ownerId) {
       return NextResponse.json(
@@ -106,6 +110,7 @@ export async function POST(request: Request) {
     }
 
     requireTaskAttachmentSize(parsed.data.sizeBytes);
+    await enforceStorageQuota(access, parsed.data.sizeBytes);
     const proposedPath = `${current.workspace.id}/${randomUUID()}-${cleanFileName(parsed.data.name)}`;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const { data: reservation, error: sourceError } = await access.client.rpc(
@@ -154,7 +159,7 @@ export async function POST(request: Request) {
       token: data.token,
     });
   } catch (cause) {
-    return routeError(cause, "Could not prepare the attachment upload.");
+    return mapTypedError(cause) ?? routeError(cause, "Could not prepare the attachment upload.");
   }
 }
 
@@ -162,6 +167,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "task-attachments:delete", RATE_LIMITS.mutate);
     const current = await getCurrentWorkspace();
     if (!current || current.access.ownerId !== access.ownerId) {
       return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
@@ -216,7 +222,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ removed: outcomes.length });
   } catch (cause) {
-    return routeError(cause, "Could not discard the attachment upload.");
+    return mapTypedError(cause) ?? routeError(cause, "Could not discard the attachment upload.");
   }
 }
 
@@ -224,6 +230,7 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "task-attachments:patch", RATE_LIMITS.mutate);
     const current = await getCurrentWorkspace();
     if (!current || current.access.ownerId !== access.ownerId) {
       return NextResponse.json({ error: "Workspace not found." }, { status: 404 });
@@ -249,6 +256,6 @@ export async function PATCH(request: Request) {
     for (const target of targets) outcomes.push(await cleanupOwnedTaskAttachment(access, target));
     return NextResponse.json({ dryRun: false, count: targets.length, outcomes });
   } catch (cause) {
-    return routeError(cause, "Could not recover abandoned attachments.");
+    return mapTypedError(cause) ?? routeError(cause, "Could not recover abandoned attachments.");
   }
 }

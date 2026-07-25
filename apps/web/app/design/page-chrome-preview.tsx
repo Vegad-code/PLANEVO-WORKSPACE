@@ -1,5 +1,7 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
+
 function PageChromeBar({
   title,
   icon,
@@ -22,9 +24,7 @@ function PageChromeBar({
         <span className="truncate text-small font-medium text-ink">{title}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-border bg-surface-raised px-2.5 py-1 text-label text-text-secondary">
-          {visibility}
-        </span>
+        <Badge variant="secondary">{visibility}</Badge>
         <span className="hidden text-label text-text-muted sm:inline">{editedLabel}</span>
         <button
           type="button"

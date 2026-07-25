@@ -1,4 +1,7 @@
-import type { CommandIndexEntry } from "@planevo/core/search/command-model";
+import {
+  isCommandIndexKind,
+  type CommandIndexEntry,
+} from "@planevo/core/search/command-model";
 
 const RECENTS_KEY = "planevo.command.recents.v1";
 const MAX_RECENTS = 8;
@@ -16,7 +19,7 @@ export function loadCommandRecents(): CommandIndexEntry[] {
           "kind" in item &&
           "id" in item &&
           "title" in item &&
-          (item.kind === "page" || item.kind === "database" || item.kind === "record") &&
+          isCommandIndexKind(item.kind) &&
           typeof item.id === "string" &&
           typeof item.title === "string",
       )

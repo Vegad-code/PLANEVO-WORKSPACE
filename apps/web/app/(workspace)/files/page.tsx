@@ -1,51 +1,52 @@
-import Link from "next/link";
-import { DatabaseFace } from "@/features/shell/database-face";
-import { RecreateDatabaseButton } from "@/features/shell/recreate-database-button";
-import { Icon } from "@/components/ui/planevo-icon";
-import { getFilesFaceBundle } from "@/lib/queries/face-databases";
-import { recreateFilesDatabase } from "./actions";
+import { FilesProductView } from "@/features/files-product/files-product-view";
+import { loadFilesPageData } from "@/lib/queries/product-files";
+import type { FilesScope } from "@/lib/files/scope-prefs";
 
-export default async function FilesPage() {
-  const { workspaceId, bundle } = await getFilesFaceBundle();
+function requestedScope(value: string | undefined): FilesScope {
+  return value === "workspace" ? "workspace" : "all";
+}
 
-  const uploadAction = (
-    <Link
-      href="/files/new"
-      className="inline-flex h-9 items-center gap-2 rounded-lg bg-ink px-4 text-small font-medium text-paper outline-none hover:opacity-90 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-    >
-      <Icon name="upload" />
-      New file
-    </Link>
-  );
+async function FilesProductPage({ scope }: { scope: FilesScope }) {
+  let data = await loadFilesPageData(scope);
+  if (
+    data.status === "ready" &&
+    data.scope === "workspace" &&
+    data.workspaceId === null
+  ) {
+    data = await loadFilesPageData("all");
+  }
+
+  if (data.status === "unauthenticated") {
+    return (
+      <section className="mx-auto w-full max-w-3xl px-6 py-12">
+        <p className="text-label uppercase text-text-muted">Files</p>
+        <h1 className="mt-2 text-h1">Sign in to see your files</h1>
+        <p className="mt-2 text-body text-text-secondary">
+          Your uploads, documents, and attachments will be ready here after you
+          sign in.
+        </p>
+      </section>
+    );
+  }
 
   return (
-    <DatabaseFace
-      eyebrow="Documents database"
-      title="Files"
-      description="Documents, uploads, and sources available to your workspace."
-      bundle={bundle}
-      workspaceId={workspaceId}
-      unavailable={{
-        icon: "files",
-        title: "Sign in to see your files",
-        description: "Your files database appears here once you're signed in.",
-      }}
-      empty={{
-        icon: "files",
-        title: "Bring in your first file",
-        description:
-          "Create a files database to track documents with type, tags, and relations — then upload or link sources.",
-        recreate: (
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <RecreateDatabaseButton
-              label="Create files database"
-              onRecreate={recreateFilesDatabase}
-            />
-            {uploadAction}
-          </div>
-        ),
-      }}
-      headerAction={uploadAction}
+    <FilesProductView
+      initialFiles={data.files}
+      folders={data.folders}
+      owner={data.owner}
+      initialScope={data.scope}
+      workspaceId={data.workspaceId}
+      usedBytes={data.usedBytes}
+      capBytes={data.capBytes}
     />
   );
+}
+
+export default async function FilesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scope?: string }>;
+}) {
+  const { scope } = await searchParams;
+  return <FilesProductPage scope={requestedScope(scope)} />;
 }

@@ -28,6 +28,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS, isKeyboardEvent } from "@dnd-kit/utilities";
 import type { TaskWithMeta } from "@planevo/core/queries/product-tasks";
+import { Badge } from "@/components/ui/badge";
 import {
   TASK_STATUS_LABELS,
   type TaskStatus,
@@ -156,12 +157,13 @@ function TaskColumn({
           <h2 id={headingId} className="truncate text-product-title text-ink">
             {TASK_STATUS_LABELS[status]}
           </h2>
-          <span
+          <Badge
+            variant="outline"
             aria-label={taskCountLabel}
-            className="shrink-0 rounded-full border border-border bg-paper px-2 py-0.5 text-product-stat tabular-nums text-text-secondary"
+            className="tabular-nums"
           >
             {String(tasks.length).padStart(2, "0")}
-          </span>
+          </Badge>
         </div>
         {onCreateTask ? (
           <button

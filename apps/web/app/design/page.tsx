@@ -3,7 +3,6 @@ import { MinimalModeSwitch, ThemeButtonGroup } from "@/components/ui/theme-contr
 import { NavItem } from "@/features/shell/nav-item";
 import { MobileSidebar } from "@/features/shell/mobile-sidebar";
 import { Sidebar } from "@/features/shell/sidebar";
-import { TopBar } from "@/features/shell/top-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,7 +10,6 @@ import { Select, SelectField } from "@/components/ui/select";
 import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/planevo-icon";
 import { TaskComposer } from "@/features/tasks/task-composer";
-import { CalendarView } from "@/features/calendar/calendar-view";
 import { FileEntry } from "@/features/files/file-entry";
 import { HomeCommandCenter } from "@/features/home/home-command-center";
 import { ActionCard } from "@/features/home/action-card";
@@ -35,13 +33,16 @@ import { OnboardingPreview } from "./onboarding-preview";
 import { PageChromePreview } from "./page-chrome-preview";
 import { RecordPeekPreview } from "./record-peek-preview";
 import { RecordSurfacePreview } from "./record-surface-preview";
+import { CalendarProductPreview } from "./calendar-product-preview";
+import { FilesProductPreview } from "./files-product-preview";
 import { TasksProductPreview } from "./tasks-product-preview";
 import { WorkspacePreview } from "./workspace-preview";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
- * labeled. Hex labels show the canonical (non-minimal) values from globals.css;
- * the swatches themselves respond live to the minimal-mode toggle.
+ * labeled. Light hex labels are Notion-caliber @theme defaults; dark hex labels
+ * are the [data-theme="dark"] overrides in globals.css. Swatches respond live
+ * to the theme / minimal-mode toggles.
  */
 
 const DESIGN_PREVIEW_SHELL: WorkspaceShellData = {
@@ -77,28 +78,54 @@ const DESIGN_RECORDS: DisplayRecord[] = [
 ];
 
 const CORE = [
-  { name: "paper", cls: "bg-paper", hex: "#F5F3ED", role: "App canvas background" },
-  { name: "ink", cls: "bg-ink", hex: "#1A1915", role: "Primary text, primary buttons" },
-  { name: "marigold", cls: "bg-marigold", hex: "#E4A62F", role: "CTA / active — once per view" },
-  { name: "brick", cls: "bg-brick", hex: "#D14B32", role: "Destructive, errors" },
-  { name: "meadow", cls: "bg-meadow", hex: "#5E8A54", role: "Success, done" },
-  { name: "slate", cls: "bg-slate", hex: "#93A9BB", role: "The AI layer only" },
+  { name: "paper", cls: "bg-paper", hex: "#FFFFFF", role: "App canvas background" },
+  { name: "ink", cls: "bg-ink", hex: "#37352F", role: "Primary text, logo" },
+  { name: "marigold", cls: "bg-marigold", hex: "#2383E2", role: "CTA / active — Notion blue" },
+  { name: "brick", cls: "bg-brick", hex: "#E03E3E", role: "Destructive, errors" },
+  { name: "meadow", cls: "bg-meadow", hex: "#0F7B6C", role: "Success, done" },
+  { name: "slate", cls: "bg-slate", hex: "#6940A5", role: "The AI layer only" },
 ];
 
 const DERIVED = [
-  { name: "sidebar", cls: "bg-sidebar", hex: "#EEEBE2", role: "Sidebar surface" },
-  { name: "surface-raised", cls: "bg-surface-raised", hex: "#FBFAF6", role: "Inline cards, tables" },
-  { name: "border", cls: "bg-border", hex: "#E4E0D6", role: "Hairline borders" },
-  { name: "border-strong", cls: "bg-border-strong", hex: "#C3BDAF", role: "Inputs, checkboxes" },
-  { name: "text-secondary", cls: "bg-text-secondary", hex: "#57534A", role: "Body secondary" },
-  { name: "text-muted", cls: "bg-text-muted", hex: "#8A8578", role: "Metadata" },
+  { name: "sidebar", cls: "bg-sidebar", hex: "#F7F6F3", role: "Sidebar surface" },
+  { name: "surface-raised", cls: "bg-surface-raised", hex: "#F1F1EF", role: "Cards, popovers, callouts" },
+  { name: "border", cls: "bg-border", hex: "rgba(55,53,47,0.09)", role: "Hairline dividers" },
+  { name: "border-strong", cls: "bg-border-strong", hex: "rgba(55,53,47,0.16)", role: "Inputs, tables" },
+  { name: "text-secondary", cls: "bg-text-secondary", hex: "#787774", role: "Body secondary" },
+  { name: "text-muted", cls: "bg-text-muted", hex: "#9B9A97", role: "Metadata" },
+];
+
+/** Canonical dark values — Notion-caliber cool neutrals (globals.css). */
+const DARK_CORE = [
+  { name: "paper", cls: "bg-paper", hex: "#191919", role: "Canvas (unified with sidebar)" },
+  { name: "ink", cls: "bg-ink", hex: "rgba(255,255,255,0.9)", role: "Primary text" },
+  { name: "marigold", cls: "bg-marigold", hex: "#2383E2", role: "CTA / active — Notion blue" },
+  { name: "brick", cls: "bg-brick", hex: "#FF7369", role: "Destructive, errors" },
+  { name: "meadow", cls: "bg-meadow", hex: "#4DAB9A", role: "Success, done" },
+  { name: "slate", cls: "bg-slate", hex: "#9A6DD7", role: "The AI layer only" },
+];
+
+const DARK_DERIVED = [
+  { name: "sidebar", cls: "bg-sidebar", hex: "#191919", role: "Sidebar (unified with canvas)" },
+  { name: "surface-raised", cls: "bg-surface-raised", hex: "#252525", role: "Cards, popovers, callouts" },
+  { name: "border", cls: "bg-border", hex: "rgba(255,255,255,0.13)", role: "Hairline dividers" },
+  { name: "border-strong", cls: "bg-border-strong", hex: "#373737", role: "Inputs, tables" },
+  { name: "text-secondary", cls: "bg-text-secondary", hex: "#9B9B9B", role: "Body secondary" },
+  { name: "text-muted", cls: "bg-text-muted", hex: "#6F6F6F", role: "Metadata" },
+];
+
+const DARK_TINTS = [
+  { name: "marigold-tint", cls: "bg-marigold-tint", hex: "#364954" },
+  { name: "meadow-tint", cls: "bg-meadow-tint", hex: "#354C4B" },
+  { name: "brick-tint", cls: "bg-brick-tint", hex: "#594141" },
+  { name: "slate-tint", cls: "bg-slate-tint", hex: "#443F57" },
 ];
 
 const TINTS = [
-  { name: "marigold-tint", cls: "bg-marigold-tint", hex: "#F7E7C9" },
-  { name: "meadow-tint", cls: "bg-meadow-tint", hex: "#DBE8D7" },
-  { name: "brick-tint", cls: "bg-brick-tint", hex: "#F5DAD3" },
-  { name: "slate-tint", cls: "bg-slate-tint", hex: "#DEE6EC" },
+  { name: "marigold-tint", cls: "bg-marigold-tint", hex: "#DDEBF1" },
+  { name: "meadow-tint", cls: "bg-meadow-tint", hex: "#DDEDEA" },
+  { name: "brick-tint", cls: "bg-brick-tint", hex: "#FBE4E4" },
+  { name: "slate-tint", cls: "bg-slate-tint", hex: "#EAE4F2" },
 ];
 
 const TYPE_STYLES = [
@@ -149,6 +176,11 @@ function AppearancePreview({
   theme: "light" | "dark";
   minimal: boolean;
 }) {
+  const blurb =
+    theme === "dark"
+      ? "Notion cool neutrals — canvas #191919, CTA #2383E2."
+      : "Notion light — canvas #FFFFFF, sidebar #F7F6F3, CTA #2383E2.";
+
   return (
     <div
       data-theme={theme}
@@ -156,12 +188,31 @@ function AppearancePreview({
       className="w-48 rounded-xl border border-border bg-paper p-4 text-ink"
     >
       <p className="text-small font-medium">{label}</p>
-      <p className="mt-1 text-small text-text-secondary">Paper, ink, and independent accents.</p>
+      <p className="mt-1 text-small text-text-secondary">{blurb}</p>
       <div className="mt-4 flex gap-2">
         <span className="size-5 rounded-full bg-marigold" aria-label="Marigold" />
         <span className="size-5 rounded-full bg-brick" aria-label="Brick" />
         <span className="size-5 rounded-full bg-meadow" aria-label="Meadow" />
         <span className="size-5 rounded-full bg-slate" aria-label="Slate" />
+      </div>
+    </div>
+  );
+}
+
+function DarkSwatchPanel({
+  title,
+  swatches,
+}: {
+  title: string;
+  swatches: { name: string; cls: string; hex: string; role?: string }[];
+}) {
+  return (
+    <div data-theme="dark" className="rounded-xl border border-border bg-paper p-4 text-ink">
+      <p className="text-small font-medium text-text-secondary">{title}</p>
+      <div className="mt-4 flex flex-wrap gap-6">
+        {swatches.map((s) => (
+          <Swatch key={s.name} {...s} />
+        ))}
       </div>
     </div>
   );
@@ -195,6 +246,11 @@ export default function DesignPage() {
           <AppearancePreview label="Dark" theme="dark" minimal={false} />
           <AppearancePreview label="Minimal light" theme="light" minimal />
           <AppearancePreview label="Minimal dark" theme="dark" minimal />
+        </div>
+        <div className="mt-8 flex flex-col gap-6">
+          <DarkSwatchPanel title="Dark core (Notion-caliber)" swatches={DARK_CORE} />
+          <DarkSwatchPanel title="Dark derived neutrals" swatches={DARK_DERIVED} />
+          <DarkSwatchPanel title="Dark status tints" swatches={DARK_TINTS} />
         </div>
       </Section>
 
@@ -269,20 +325,6 @@ export default function DesignPage() {
         </div>
       </Section>
 
-      <Section title="TopBar — live identity / neutral settings">
-        <div className="space-y-4">
-          <div className="overflow-hidden rounded-xl border border-border">
-            <TopBar
-              userDisplayName={DESIGN_PREVIEW_SHELL.userDisplayName}
-              userInitials={DESIGN_PREVIEW_SHELL.userInitials}
-            />
-          </div>
-          <div className="overflow-hidden rounded-xl border border-border">
-            <TopBar breadcrumb={["Workspace", "Physics 2400", "Lab notes"]} />
-          </div>
-        </div>
-      </Section>
-
       <Section title="Sidebar — minimal IA · expanded / empty tree / peek">
         <div className="flex flex-wrap items-start gap-8">
           <div>
@@ -347,7 +389,7 @@ export default function DesignPage() {
         <RecordSurfacePreview />
       </Section>
 
-      <Section title="Command bar — capture, fuzzy nav, modes">
+      <Section title="Spotlight — account search, capture, modes">
         <CommandBarPreview />
       </Section>
 
@@ -371,11 +413,10 @@ export default function DesignPage() {
           <Button variant="ink">Ink</Button>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Badge>Default</Badge>
-          <Badge variant="high">High</Badge>
-          <Badge variant="medium">Medium</Badge>
-          <Badge variant="low">Low</Badge>
-          <Badge variant="muted">Muted</Badge>
+          <Badge>Badge</Badge>
+          <Badge variant="secondary">Secondary</Badge>
+          <Badge variant="destructive">Destructive</Badge>
+          <Badge variant="outline">Outline</Badge>
         </div>
         <div className="mt-4 max-w-xs">
           <SelectField label="Priority" defaultValue="medium">
@@ -388,6 +429,14 @@ export default function DesignPage() {
 
       <Section title="Tasks product: task card states and board">
         <TasksProductPreview />
+      </Section>
+
+      <Section title="Calendar product: Planning rail + FullCalendar week grid">
+        <CalendarProductPreview />
+      </Section>
+
+      <Section title="Files product: cabinet, table, storage meter">
+        <FilesProductPreview />
       </Section>
 
       <Section title="Workspace — switcher, manage, faces">
@@ -500,19 +549,6 @@ export default function DesignPage() {
           <div className="mt-4">
             <TaskComposer workspaceId={null} buttonLabel="Open task composer" />
           </div>
-        </div>
-      </Section>
-
-      <Section title="Workspace calendar — true empty state">
-        <div className="h-screen overflow-auto rounded-xl border border-border">
-          <CalendarView
-            data={{
-              status: "ready",
-              workspaceId: "design-workspace",
-              hasCalendarDatabase: true,
-              items: [],
-            }}
-          />
         </div>
       </Section>
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Renders `text` with fuzzy-match spans emphasized. */
+/** Renders `text` with fuzzy-match spans emphasized (Spotlight / Notion / Linear style). */
 export function HighlightedText({
   text,
   ranges,
@@ -18,9 +18,9 @@ export function HighlightedText({
       parts.push(text.slice(cursor, start));
     }
     parts.push(
-      <mark key={`${start}-${end}`} className="rounded-sm bg-surface-sunken text-ink">
+      <span key={`${start}-${end}`} className="spotlight-match">
         {text.slice(start, end)}
-      </mark>,
+      </span>,
     );
     cursor = end;
   }

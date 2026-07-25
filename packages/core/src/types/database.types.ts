@@ -415,9 +415,15 @@ export interface Database {
         Relationships: [];
       };
       file_sources: {
-        Row: { id: string; workspace_id: string; page_id: string | null; created_by: string; user_id: string; operation_key: string | null; reservation_expires_at: string | null; storage_path: string; name: string; mime_type: string | null; size_bytes: number | null; ingestion_status: string; metadata_json: Json; created_at: string; updated_at: string };
-        Insert: { id?: string; workspace_id: string; page_id?: string | null; created_by: string; user_id: string; operation_key?: string | null; reservation_expires_at?: string | null; storage_path: string; name: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
-        Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; user_id?: string; operation_key?: string | null; reservation_expires_at?: string | null; storage_path?: string; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Row: { id: string; workspace_id: string; page_id: string | null; created_by: string; user_id: string; folder_id: string | null; operation_key: string | null; reservation_expires_at: string | null; storage_path: string; name: string; mime_type: string | null; size_bytes: number | null; ingestion_status: string; metadata_json: Json; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; page_id?: string | null; created_by: string; user_id: string; folder_id?: string | null; operation_key?: string | null; reservation_expires_at?: string | null; storage_path: string; name: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; user_id?: string; folder_id?: string | null; operation_key?: string | null; reservation_expires_at?: string | null; storage_path?: string; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      file_folders: {
+        Row: { id: string; user_id: string; workspace_id: string | null; parent_id: string | null; name: string; position: number; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; workspace_id?: string | null; parent_id?: string | null; name: string; position?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; user_id?: string; workspace_id?: string | null; parent_id?: string | null; name?: string; position?: number; created_at?: string; updated_at?: string };
         Relationships: [];
       };
       integration_connections: {
@@ -480,6 +486,18 @@ export interface Database {
         Update: { id?: string; file_source_id?: string; operation_key?: string | null; target_type?: string; target_id?: string; created_at?: string };
         Relationships: [];
       };
+      user_billing: {
+        Row: { user_id: string; plan: string; updated_at: string };
+        Insert: { user_id: string; plan?: string; updated_at?: string };
+        Update: { user_id?: string; plan?: string; updated_at?: string };
+        Relationships: [];
+      };
+      api_rate_limits: {
+        Row: { user_id: string; route_key: string; window_start: number; count: number };
+        Insert: { user_id: string; route_key: string; window_start: number; count?: number };
+        Update: { user_id?: string; route_key?: string; window_start?: number; count?: number };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -502,6 +520,10 @@ export interface Database {
       };
       finalize_task_attachment_cleanup: {
         Args: { p_owner_id: string; p_file_source_id: string; p_storage_path: string };
+        Returns: boolean;
+      };
+      check_rate_limit: {
+        Args: { p_owner_id: string; p_route_key: string; p_limit: number; p_window_seconds: number };
         Returns: boolean;
       };
       create_task_ordered: {

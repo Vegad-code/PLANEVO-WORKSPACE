@@ -6,7 +6,6 @@ import {
   buildCommandResults,
   type CommandDef,
   type CommandIndexEntry,
-  type CommandResultItem,
 } from "@planevo/core/search/command-model";
 import { parseQuickCapture } from "@planevo/core/parsing/natural-capture";
 import {
@@ -16,28 +15,21 @@ import {
 } from "@planevo/core/state/app-preferences";
 import { quickCapture, undoQuickCapture } from "@/app/(workspace)/capture-actions";
 import { createPageAndOpen } from "@/app/(workspace)/actions";
-import { Dialog } from "@/components/ui/dialog";
-import { Icon } from "@/components/ui/planevo-icon";
 import { toast } from "@/components/ui/toast";
+import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import { fetchCommandIndex, markCommandIndexStale } from "./command-index-cache";
 import { loadCommandRecents, rememberCommandEntry } from "./command-recents";
-import { HighlightedText } from "./highlighted-text";
-
-function formatDueChip(dueDate: string | null): string | null {
-  if (!dueDate) return null;
-  return new Date(dueDate).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatTimeChip(time: { hour: number; minute: number } | null): string | null {
-  if (!time) return null;
-  const date = new Date();
-  date.setHours(time.hour, time.minute, 0, 0);
-  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-}
+import { SpotlightOverlay } from "./spotlight-overlay";
+import { SpotlightChrome } from "./spotlight-chrome";
+import { SpotlightSearchField } from "./spotlight-search-field";
+import { SpotlightResults } from "./spotlight-results";
+import {
+  filterEntriesByScope,
+  loadSpotlightScope,
+  saveSpotlightScope,
+  setSpotlightScope,
+  type SpotlightScope,
+} from "./spotlight-scope";
 
 function entryHref(entry: CommandIndexEntry): string {
   switch (entry.kind) {
@@ -47,36 +39,12 @@ function entryHref(entry: CommandIndexEntry): string {
       return `/databases/${entry.id}`;
     case "record":
       return `/records/${entry.id}`;
-    default: {
-      const exhaustive: never = entry.kind;
-      return exhaustive;
-    }
-  }
-}
-
-function entryIcon(entry: CommandIndexEntry): "page" | "workspace" | "tasks" {
-  switch (entry.kind) {
-    case "page":
-      return "page";
-    case "database":
-      return "workspace";
-    case "record":
-      return "tasks";
-    default: {
-      const exhaustive: never = entry.kind;
-      return exhaustive;
-    }
-  }
-}
-
-function entryKindLabel(entry: CommandIndexEntry): string {
-  switch (entry.kind) {
-    case "page":
-      return "Page";
-    case "database":
-      return "Database";
-    case "record":
-      return "Record";
+    case "task":
+      return `/tasks?highlight=${entry.id}`;
+    case "file":
+      return `/files?file=${entry.id}`;
+    case "event":
+      return `/calendar?event=${entry.id}`;
     default: {
       const exhaustive: never = entry.kind;
       return exhaustive;
@@ -104,141 +72,83 @@ function applyMinimalPreference(next: AppPreferences): void {
   document.documentElement.toggleAttribute("data-minimal", appearance.minimal);
 }
 
-function CaptureChips({ draft }: { draft: ReturnType<typeof parseQuickCapture> }) {
-  const due = formatDueChip(draft.dueDate);
-  const time = formatTimeChip(draft.time);
-  const chips = [
-    due ? { key: "due", label: due } : null,
-    time ? { key: "time", label: time } : null,
-    draft.databaseToken ? { key: "db", label: `#${draft.databaseToken}` } : null,
-    draft.priorityToken ? { key: "priority", label: draft.priorityToken } : null,
-    draft.personToken ? { key: "person", label: `@${draft.personToken}` } : null,
-  ].filter((chip): chip is { key: string; label: string } => chip !== null);
-
-  if (chips.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2 px-4 pb-3">
-      {chips.map((chip) => (
-        <span
-          key={chip.key}
-          className="rounded-full border border-border bg-surface-sunken px-2.5 py-0.5 text-label text-text-secondary"
-        >
-          {chip.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function ResultRow({
-  item,
-  active,
-  onHover,
-}: {
-  item: CommandResultItem;
-  active: boolean;
-  onHover: () => void;
-}) {
-  if (item.type === "capture") {
-    const { draft } = item;
-    return (
-      <button
-        type="button"
-        onMouseEnter={onHover}
-        className={`flex w-full items-start gap-3 px-4 py-3 text-left outline-none ${
-          active ? "bg-surface-sunken" : "hover:bg-surface-raised"
-        }`}
-      >
-        <Icon name="plus" className="mt-0.5 size-4 shrink-0 text-text-muted" />
-        <div className="min-w-0 flex-1">
-          <p className="text-body font-medium text-ink">
-            Add “{draft.title || "…"}”
-          </p>
-          <p className="mt-0.5 text-small text-text-secondary">Quick capture</p>
-          {draft.recurringUnsupported && (
-            <p className="mt-1 text-small text-text-muted">
-              Recurring isn&apos;t supported yet — created once.
-            </p>
-          )}
-        </div>
-      </button>
-    );
-  }
-
-  if (item.type === "command") {
-    return (
-      <button
-        type="button"
-        onMouseEnter={onHover}
-        className={`flex w-full items-center gap-3 px-4 py-3 text-left outline-none ${
-          active ? "bg-surface-sunken" : "hover:bg-surface-raised"
-        }`}
-      >
-        <Icon name="search" className="size-4 shrink-0 text-text-muted" />
-        <span className="min-w-0 flex-1 text-body font-medium text-ink">
-          <HighlightedText text={item.command.title} ranges={item.ranges} />
-        </span>
-        <span className="text-label uppercase text-text-muted">Command</span>
-      </button>
-    );
-  }
-
-  const { entry } = item;
-  return (
-    <button
-      type="button"
-      onMouseEnter={onHover}
-      className={`flex w-full items-center gap-3 px-4 py-3 text-left outline-none ${
-        active ? "bg-surface-sunken" : "hover:bg-surface-raised"
-      }`}
-    >
-      <Icon name={entryIcon(entry)} className="size-4 shrink-0 text-text-muted" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body font-medium text-ink">
-          <HighlightedText text={entry.title} ranges={item.ranges} />
-        </p>
-        {entry.subtitle && (
-          <p className="truncate text-small text-text-secondary">{entry.subtitle}</p>
-        )}
-      </div>
-      <span className="text-label uppercase text-text-muted">{entryKindLabel(entry)}</span>
-    </button>
-  );
-}
-
 export function CommandBar({
   open,
   onClose,
   onOpenSettings,
+  initialQuery,
 }: {
   open: boolean;
   onClose: () => void;
   onOpenSettings: () => void;
+  initialQuery?: string;
 }) {
   const router = useRouter();
+  const prefersReducedMotion = usePrefersReducedMotion();
   const inputId = useId();
+  const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<CommandIndexEntry[]>([]);
   const [recents, setRecents] = useState<CommandIndexEntry[]>([]);
+  const [activeScope, setActiveScope] = useState<SpotlightScope | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const results = buildCommandResults({ query, entries, recents });
-  const captureDraft =
-    results.find((item): item is Extract<CommandResultItem, { type: "capture" }> =>
-      item.type === "capture",
-    )?.draft ?? (isPlainCaptureQuery(query) ? parseQuickCapture(query) : null);
+  const scopedEntries = filterEntriesByScope(entries, activeScope);
+  const scopedRecents = filterEntriesByScope(recents, activeScope);
+  const results = buildCommandResults({
+    query,
+    entries: scopedEntries,
+    recents: scopedRecents,
+  });
+
+  const trimmedQuery = query.trim();
+  const expanded = trimmedQuery !== "" || loadError !== null;
+
+  const handleClearScope = useCallback(() => {
+    setActiveScope(null);
+    saveSpotlightScope(null);
+    setActiveIndex(0);
+    inputRef.current?.focus();
+  }, []);
+
+  function closeAndClear(): void {
+    setQuery("");
+    setActiveScope(null);
+    saveSpotlightScope(null);
+    onClose();
+  }
+
+  const handleEscape = useCallback((): boolean => {
+    if (activeScope) {
+      handleClearScope();
+      return true;
+    }
+    return false;
+  }, [activeScope, handleClearScope]);
+
+  const handleScopeAction = useCallback(
+    (scope: SpotlightScope) => {
+      setActiveScope((current) => {
+        const next = setSpotlightScope(current, scope);
+        saveSpotlightScope(next);
+        return next;
+      });
+      setActiveIndex(0);
+      inputRef.current?.focus();
+    },
+    [],
+  );
 
   const resetForOpen = useCallback(() => {
-    setQuery("");
+    setQuery(initialQuery?.trim() ? initialQuery : "");
     setActiveIndex(0);
     setRecents(loadCommandRecents());
-  }, []);
+  }, [initialQuery]);
 
   useEffect(() => {
     if (!open) {
@@ -247,6 +157,7 @@ export function CommandBar({
     }
 
     resetForOpen();
+    setActiveScope(loadSpotlightScope());
     setLoading(true);
     setLoadError(null);
 
@@ -265,17 +176,12 @@ export function CommandBar({
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, entries.length]);
+  }, [query, scopedEntries.length, activeScope]);
 
   useEffect(() => {
     const row = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
     row?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, results.length]);
-
-  function closeAndClear(): void {
-    setQuery("");
-    onClose();
-  }
 
   function navigateToEntry(entry: CommandIndexEntry): void {
     rememberCommandEntry(entry);
@@ -304,9 +210,6 @@ export function CommandBar({
         applyMinimalPreference(next);
         break;
       }
-      case "search-page":
-        router.push("/search");
-        break;
       default:
         break;
     }
@@ -341,10 +244,10 @@ export function CommandBar({
     });
   }
 
-  function handleSubmit(): void {
+  function handleSubmitAt(index: number): void {
     if (pending) return;
 
-    const active = results[activeIndex];
+    const active = results[index];
     if (active?.type === "capture") {
       submitCapture(query);
       return;
@@ -358,12 +261,32 @@ export function CommandBar({
       return;
     }
 
-    if (isPlainCaptureQuery(query) && parseQuickCapture(query).title.trim()) {
+    const captureAllowed =
+      activeScope !== "files" &&
+      activeScope !== "calendar" &&
+      activeScope !== "workspace";
+    if (
+      captureAllowed &&
+      isPlainCaptureQuery(query) &&
+      parseQuickCapture(query).title.trim()
+    ) {
       submitCapture(query);
     }
   }
 
+  function handleSubmit(): void {
+    handleSubmitAt(activeIndex);
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === "Escape") {
+      if (activeScope) {
+        event.preventDefault();
+        handleClearScope();
+      }
+      return;
+    }
+
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveIndex((index) => Math.min(index + 1, Math.max(results.length - 1, 0)));
@@ -380,61 +303,50 @@ export function CommandBar({
     }
   }
 
+  function renderResultsPanel() {
+    return (
+      <SpotlightResults
+        results={results}
+        activeIndex={activeIndex}
+        loading={loading}
+        loadError={loadError}
+        query={query}
+        listId={listId}
+        listRef={listRef}
+        onHover={setActiveIndex}
+        onSelect={handleSubmitAt}
+        emptyQuery={false}
+        activeScope={activeScope}
+      />
+    );
+  }
+
   return (
-    <Dialog
+    <SpotlightOverlay
       open={open}
       onClose={closeAndClear}
-      labelledBy={inputId}
-      className="m-auto w-full max-w-xl rounded-card border border-border bg-paper p-0 text-ink backdrop:bg-ink/30"
+      onEscape={handleEscape}
+      prefersReducedMotion={prefersReducedMotion}
     >
-      <div className="border-b border-border px-4 py-3">
-        <label htmlFor={inputId} className="sr-only">
-          Command bar
-        </label>
-        <div className="flex items-center gap-3">
-          <Icon name="search" className="size-5 shrink-0 text-text-muted" />
-          <input
-            ref={inputRef}
-            id={inputId}
+      <SpotlightChrome
+        expanded={expanded}
+        activeScope={activeScope}
+        onScopeAction={handleScopeAction}
+        searchField={
+          <SpotlightSearchField
+            inputId={inputId}
+            listId={listId}
+            inputRef={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            expanded={expanded}
+            activeScope={activeScope}
+            onClearScope={handleClearScope}
+            onChange={setQuery}
             onKeyDown={handleKeyDown}
-            placeholder="Search, capture, or type > for commands"
-            autoComplete="off"
-            spellCheck={false}
-            className="min-w-0 flex-1 bg-transparent text-body outline-none placeholder:text-text-muted"
           />
-        </div>
-      </div>
-
-      {captureDraft && <CaptureChips draft={captureDraft} />}
-
-      <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
-        {loading && (
-          <p className="px-4 py-6 text-center text-small text-text-muted">Loading workspace…</p>
-        )}
-        {!loading && loadError && (
-          <p className="px-4 py-6 text-center text-small text-brick">{loadError}</p>
-        )}
-        {!loading && !loadError && results.length === 0 && (
-          <p className="px-4 py-6 text-center text-small text-text-muted">
-            {query.trim()
-              ? "No matches. Press Enter to capture a task."
-              : "Recents appear as you navigate."}
-          </p>
-        )}
-        {!loading &&
-          !loadError &&
-          results.map((item, index) => (
-            <div key={`${item.type}-${index}`} data-index={index}>
-              <ResultRow
-                item={item}
-                active={index === activeIndex}
-                onHover={() => setActiveIndex(index)}
-              />
-            </div>
-          ))}
-      </div>
-    </Dialog>
+        }
+        results={renderResultsPanel()}
+      />
+    </SpotlightOverlay>
   );
 }

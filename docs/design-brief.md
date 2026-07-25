@@ -36,37 +36,104 @@ ignore its structure.
 ## 1. Color tokens (provisional)
 
 `paper` + `ink` carry ~90% of every screen; accents are meaningful and rare.
+Values live only in `globals.css` — never hardcoded in components.
+
+### Light mode (Notion-caliber)
+
+Default theme (`@theme` in `globals.css`). Canvas is pure white; sidebar is a soft
+elevated tier. **CTA accent is Notion blue `#2383E2`** — the token name stays
+`marigold` for semantic stability; use `text-marigold-foreground` (`#FFFFFF`) on
+primary buttons. One accent per view still applies.
+
+**Borders:** warm brown-black rgba (not cool gray) — hairlines at
+`rgba(55,53,47,0.09)`, structural at `rgba(55,53,47,0.16)`.
 
 | Token | CSS variable | Hex | Role |
 |---|---|---|---|
-| paper | `--color-paper` | `#F5F3ED` | App canvas background |
-| ink | `--color-ink` | `#1A1915` | Primary text, primary buttons, logo |
-| marigold | `--color-marigold` | `#E4A62F` | Primary CTA / active — **once per view max** |
-| brick | `--color-brick` | `#D14B32` | Destructive, errors — sparing |
-| meadow | `--color-meadow` | `#5E8A54` | Success, completed/done |
-| slate | `--color-slate` | `#93A9BB` | **The AI layer only** |
+| paper | `--color-paper` | `#FFFFFF` | App canvas background |
+| ink | `--color-ink` | `#37352F` | Primary text, logo |
+| marigold | `--color-marigold` | `#2383E2` | Primary CTA / active — **once per view max** |
+| marigold-foreground | `--color-marigold-foreground` | `#FFFFFF` | Text on marigold CTAs |
+| brick | `--color-brick` | `#E03E3E` | Destructive, errors — sparing |
+| meadow | `--color-meadow` | `#0F7B6C` | Success, completed/done |
+| ocean | `--color-ocean` | `#0B6E99` | Calendar / link accent |
+| slate | `--color-slate` | `#6940A5` | **The AI layer only** |
 
 Derived neutrals — define these, don't eyeball them:
 
 | CSS variable | Hex | Role |
 |---|---|---|
-| `--color-sidebar` | `#EEEBE2` | Sidebar surface (paper, ~2% darker) |
-| `--color-surface-raised` | `#FBFAF6` | Inline cards, tables |
-| `--color-border` | `#E4E0D6` | Hairline borders (ink @ ~10%) |
-| `--color-border-strong` | `#C3BDAF` | Input borders, checkbox outlines |
-| `--color-text-secondary` | `#57534A` | Body secondary (ink @ ~65%) |
-| `--color-text-muted` | `#8A8578` | Metadata (ink @ ~45%) |
+| `--color-sidebar` | `#F7F6F3` | Sidebar surface (elevated vs canvas) |
+| `--color-surface-raised` | `#F1F1EF` | Cards, popovers, gray callouts |
+| `--color-border` | `rgba(55, 53, 47, 0.09)` | Hairline dividers |
+| `--color-border-strong` | `rgba(55, 53, 47, 0.16)` | Inputs, tables, emphasis |
+| `--color-text-secondary` | `#787774` | Body secondary |
+| `--color-text-muted` | `#9B9A97` | Metadata |
 
-Tint variables for status pills: `--color-marigold-tint` `#F7E7C9`,
-`--color-meadow-tint` `#DBE8D7`, `--color-brick-tint` `#F5DAD3`,
-`--color-slate-tint` `#DEE6EC`.
+Tint variables for status pills: `--color-marigold-tint` `#DDEBF1`,
+`--color-meadow-tint` `#DDEDEA`, `--color-brick-tint` `#FBE4E4`,
+`--color-slate-tint` `#EAE4F2`, `--color-ocean-tint` `#DDEBF1`.
 
 Map every one of these into the Tailwind theme so components write `bg-paper`,
-`text-ink`, `border-border` — never `bg-[#F5F3ED]`.
+`text-ink`, `border-border` — never `bg-[#FFFFFF]`.
 
-**Minimal mode** (a user setting): mutes marigold/brick/meadow toward neutral; slate and
-ink stay. Implement as an alternate set of custom-property values on a `data-minimal`
-root attribute — accent usage must survive muting without breaking hierarchy.
+**Minimal light:** accents desaturate to Notion gray (`#9B9A97` / tint `#F1F1EF`);
+slate and ink stay. Implement as an alternate set of custom-property values on a
+`data-minimal` root attribute — accent usage must survive muting without breaking
+hierarchy.
+
+Light neutrals and block colors are derived from Notion’s public CSS variable
+ecosystem. MIT reference implementations:
+[udus122/notion-renderer](https://github.com/udus122/notion-renderer),
+[shade-solutions/notion-design-system](https://github.com/shade-solutions/notion-design-system)
+(structural Tailwind pattern — prefer `#F7F6F3` sidebar over cooler grays).
+
+### Dark mode (Notion-caliber)
+
+Toggled via `data-theme="dark"` on `<html>`. Values live only in `globals.css` — never
+hardcoded in components. **`--color-marigold` is Notion blue `#2383E2` in both
+themes** so CTAs / active nav match Notion chrome. One accent per view still applies.
+
+Canvas and sidebar are **unified** at `#191919` (no elevated sidebar rail). Elevation
+comes from `--color-surface-raised` (`#252525`) for cards, popovers, and menus.
+
+**Borders:** hairline chrome uses low-opacity white (`rgba(255,255,255,0.13)`);
+structural / input borders use solid `#373737`.
+
+| CSS variable | Dark value | Role |
+|---|---|---|
+| `--color-paper` | `#191919` | App canvas |
+| `--color-sidebar` | `#191919` | Sidebar (unified with canvas) |
+| `--color-surface-raised` | `#252525` | Cards, popovers, menus, gray callouts |
+| `--color-border` | `rgba(255, 255, 255, 0.13)` | Hairline dividers |
+| `--color-border-strong` | `#373737` | Inputs, tables, emphasis |
+| `--color-ink` | `rgba(255, 255, 255, 0.9)` | Primary text |
+| `--color-text-secondary` | `#9B9B9B` | Body secondary |
+| `--color-text-muted` | `#6F6F6F` | Metadata |
+| `--color-marigold` | `#2383E2` | Primary CTA / active (Notion blue) |
+| `--color-marigold-foreground` | `#FFFFFF` | Text on marigold CTAs |
+| `--color-marigold-tint` | `#364954` | Blue callout / status tint |
+| `--color-brick` | `#FF7369` | Destructive text |
+| `--color-brick-tint` | `#594141` | Destructive bg |
+| `--color-meadow` | `#4DAB9A` | Success text |
+| `--color-meadow-tint` | `#354C4B` | Success bg |
+| `--color-ocean` | `#529CCA` | Calendar / link accent |
+| `--color-ocean-tint` | `#364954` | Blue surface tint |
+| `--color-slate` | `#9A6DD7` | AI layer text |
+| `--color-slate-tint` | `#443F57` | AI layer bg |
+
+Files product tokens (`--color-files-*`) override to the same Notion tiers under
+`[data-theme="dark"]`.
+
+**Minimal dark:** accents desaturate to cool gray (`#8A8A8A` / tint `#2F2F2F`) on the
+`#191919` base; ink and slate stay.
+
+Dark neutrals and block colors are derived from Notion’s public CSS variable ecosystem
+(verified against live app extractions). MIT reference implementations:
+[udus122/notion-renderer](https://github.com/udus122/notion-renderer),
+[shade-solutions/notion-design-system](https://github.com/shade-solutions/notion-design-system)
+(structural Tailwind pattern only — prefer `#191919` / `#252525` over its legacy
+`#2F3437` secondary).
 
 ---
 

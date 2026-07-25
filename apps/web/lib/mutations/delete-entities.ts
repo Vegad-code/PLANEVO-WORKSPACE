@@ -22,18 +22,38 @@ export async function clearRecentItems(
 
 const WORKSPACE_FILES_BUCKET = "workspace-files";
 
+// Buckets whose objects are stored with a `bucket:path` prefix in file_sources.
+// Bare paths (product files, task attachments) live in workspace-files.
+const PREFIXED_BUCKETS = new Set(["page-assets"]);
+
 export function isVirtualStoragePath(storagePath: string): boolean {
   return storagePath.startsWith("page:");
+}
+
+/** Resolve which bucket + object key a stored file_sources.storage_path points at. */
+export function parseStorageLocation(
+  storagePath: string,
+): { bucket: string; path: string } | null {
+  if (!storagePath || isVirtualStoragePath(storagePath)) return null;
+  const colon = storagePath.indexOf(":");
+  if (colon > 0) {
+    const prefix = storagePath.slice(0, colon);
+    if (PREFIXED_BUCKETS.has(prefix)) {
+      return { bucket: prefix, path: storagePath.slice(colon + 1) };
+    }
+  }
+  return { bucket: WORKSPACE_FILES_BUCKET, path: storagePath };
 }
 
 export async function removeStorageObject(
   access: DataAccess,
   storagePath: string,
 ): Promise<void> {
-  if (!storagePath || isVirtualStoragePath(storagePath)) return;
+  const location = parseStorageLocation(storagePath);
+  if (!location) return;
   const { error } = await access.client.storage
-    .from(WORKSPACE_FILES_BUCKET)
-    .remove([storagePath]);
+    .from(location.bucket)
+    .remove([location.path]);
   if (error) throw error;
 }
 

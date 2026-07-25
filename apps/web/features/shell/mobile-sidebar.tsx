@@ -15,6 +15,7 @@ export function MobileSidebar({
   shell,
   onDismiss,
   onOpenSettings,
+  onOpenSpotlight,
   triggerRef,
   preview = false,
 }: {
@@ -22,6 +23,7 @@ export function MobileSidebar({
   shell: WorkspaceShellData;
   onDismiss?: (type: DismissalType) => void;
   onOpenSettings?: () => void;
+  onOpenSpotlight?: () => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
   preview?: boolean;
 }) {
@@ -98,6 +100,7 @@ export function MobileSidebar({
           onToggle={() => onDismiss?.("close")}
           onNavigate={() => onDismiss?.("navigate")}
           onOpenSettings={onOpenSettings}
+          onOpenSpotlight={onOpenSpotlight}
         />
       </div>
     </div>

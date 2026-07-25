@@ -212,32 +212,39 @@ Expected: existing 15 tests pass and the new tests fail because the preference/n
 
 Use storage key `planevo.app.preferences.v1`. `parseAppPreferences` must accept only version `1`, the three theme values, and a boolean `minimal`; everything else returns the default. In `layout.tsx`, add a small pre-hydration appearance script that reads that key and `prefers-color-scheme`, then sets `document.documentElement.dataset.theme` and toggles `data-minimal` before paint. Add `suppressHydrationWarning` to `<html>`. The existing `/design` toggle must update the same versioned preference object instead of maintaining disconnected state.
 
-- [ ] **Step 4: Add the warm-ink dark token layer**
+- [ ] **Step 4: Add the Notion-caliber dark token layer**
+
+> **Superseded 2026-07-22:** the earlier warm-ink dark palette (`#1c1b18` /
+> `#22211d`) was replaced by Notion-caliber cool neutrals. Canonical values live
+> in `docs/design-brief.md` §1 Dark mode and `apps/web/app/globals.css`.
 
 Centralize these provisional values in `globals.css`, never in components:
 
 ```css
 [data-theme="dark"] {
-  --color-paper: #1c1b18;
-  --color-ink: #f4f0e7;
-  --color-sidebar: #22211d;
-  --color-surface-raised: #292721;
-  --color-border: #3a372f;
-  --color-border-strong: #575145;
-  --color-text-secondary: #c8c1b3;
-  --color-text-muted: #958d7f;
-  --color-marigold: #d9a64d;
-  --color-brick: #cf6a55;
-  --color-meadow: #7d9f72;
-  --color-slate: #91a9bb;
-  --color-marigold-tint: #463a25;
-  --color-meadow-tint: #293b2a;
-  --color-brick-tint: #452d28;
-  --color-slate-tint: #2b3943;
+  --color-paper: #191919;
+  --color-ink: rgba(255, 255, 255, 0.9);
+  --color-sidebar: #191919;
+  --color-surface-raised: #252525;
+  --color-border: rgba(255, 255, 255, 0.13);
+  --color-border-strong: #373737;
+  --color-text-secondary: #9b9b9b;
+  --color-text-muted: #6f6f6f;
+  --color-marigold: #2383e2;
+  --color-brick: #ff7369;
+  --color-meadow: #4dab9a;
+  --color-ocean: #529cca;
+  --color-slate: #9a6dd7;
+  --color-marigold-tint: #364954;
+  --color-meadow-tint: #354c4b;
+  --color-brick-tint: #594141;
+  --color-slate-tint: #443f57;
+  --color-ocean-tint: #364954;
 }
 ```
 
-Add a `[data-theme="dark"][data-minimal]` override so minimal mode still mutes only marigold/brick/meadow while ink/slate remain intact.
+Add a `[data-theme="dark"][data-minimal]` override so minimal mode desaturates
+accents toward cool gray (`#8a8a8a` / tint `#2f2f2f`) while ink/slate remain intact.
 
 - [ ] **Step 5: Replace handcrafted icons with Iconoir**
 

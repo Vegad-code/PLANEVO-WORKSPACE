@@ -97,7 +97,7 @@ export function HomeCommandCenter({ data }: { data: HomeData }) {
               icon="upload"
               title="Upload first file"
               description="Turn documents into sources."
-              href="/files/new"
+              href="/files"
             />
           )}
           {show("agents") && (

@@ -7,6 +7,12 @@ export type SidebarLayoutContextValue = {
   preference: SidebarPreference
   spacerWidth: number
   isExpanded: boolean
+  /**
+   * True when primary preference is hidden — reserve left safe inset for the
+   * reveal hamburger. Must stay true during peek so product rails (Library)
+   * do not jump and re-trigger the edge hover loop.
+   */
+  showRevealChrome: boolean
 }
 
 const SidebarLayoutContext = createContext<SidebarLayoutContextValue | null>(
@@ -22,7 +28,12 @@ export function SidebarLayoutProvider({
 }) {
   const memoized = useMemo(
     () => value,
-    [value.preference, value.spacerWidth, value.isExpanded],
+    [
+      value.preference,
+      value.spacerWidth,
+      value.isExpanded,
+      value.showRevealChrome,
+    ],
   )
 
   return (

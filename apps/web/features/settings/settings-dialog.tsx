@@ -202,10 +202,12 @@ export function SettingsDialog({
   open,
   shell,
   onOpenChange,
+  initialSection = "account",
 }: {
   open: boolean;
   shell: WorkspaceShellData;
   onOpenChange: (open: boolean) => void;
+  initialSection?: SettingsSection;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -249,8 +251,10 @@ export function SettingsDialog({
       className="m-auto h-dvh max-h-dvh w-screen max-w-none overflow-hidden rounded-none border border-border bg-paper p-0 text-ink backdrop:bg-ink/30 md:h-3/4 md:w-full md:max-w-5xl md:rounded-card"
     >
       <SettingsPanel
+        key={initialSection}
         shell={shell}
         onClose={() => onOpenChange(false)}
+        initialSection={initialSection}
         titleId="settings-dialog-title"
       />
     </dialog>
