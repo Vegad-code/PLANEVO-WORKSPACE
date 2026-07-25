@@ -27,6 +27,7 @@ import {
 } from "@/lib/calendar/rbc-event-adapter"
 import { calendarLocalizer } from "@/lib/calendar/rbc-localizer"
 import { MONTH_GRID_BEHAVIOR } from "@/lib/calendar/month-grid-behavior"
+import { openMonthDayFromCell } from "@/lib/calendar/month-day-open"
 import { toMonthItems } from "@/lib/calendar/month-items"
 import { cn } from "@/lib/utils"
 import { MonthDayAgendaPopover } from "./month-day-agenda-popover"
@@ -168,13 +169,8 @@ export function CalendarGridEngine({
     (_events: CalendarRbcEvent[], date: Date) => {
       const dayKey = format(date, "yyyy-MM-dd")
       const cell = document.querySelector(`[data-calendar-day="${dayKey}"]`)
-      const focusedElement = document.activeElement
       const target =
-        focusedElement instanceof HTMLElement
-          ? focusedElement
-          : cell instanceof HTMLElement
-            ? cell
-            : document.body
+        cell instanceof HTMLElement ? cell : document.body
       openAgenda(date, target)
     },
     [openAgenda],
@@ -212,7 +208,7 @@ export function CalendarGridEngine({
           tabIndex={-1}
           onDoubleClick={() => {
             closeAgenda()
-            onOpenDay(value)
+            openMonthDayFromCell(value, onOpenDay)
           }}
         >
           {children}

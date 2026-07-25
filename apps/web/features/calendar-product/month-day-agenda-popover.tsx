@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { CalendarEventRow } from "@planevo/core/types/calendar"
 import { formatDayHeaderAccessibleLabel } from "@/lib/calendar/day-header-model"
 import {
   monthItemsForCalendarDay,
   type MonthItem,
 } from "@/lib/calendar/month-items"
+import { openMonthDayFromAgenda } from "@/lib/calendar/month-day-open"
+import { getMonthDayAgendaPosition } from "@/lib/calendar/month-day-agenda-position"
 import { cn } from "@/lib/utils"
 import { formatTimeLabel } from "./time-axis"
 
@@ -20,10 +22,6 @@ type MonthDayAgendaPopoverProps = {
   onToggleTask: (taskId: string, done: boolean) => void
 }
 
-const VIEWPORT_MARGIN = 16
-const DESKTOP_PANEL_WIDTH = 288
-const DESKTOP_PANEL_HEIGHT = 320
-
 export function MonthDayAgendaPopover({
   date,
   items,
@@ -35,6 +33,10 @@ export function MonthDayAgendaPopover({
 }: MonthDayAgendaPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [isNarrow, setIsNarrow] = useState(false)
+  const [desktopPosition, setDesktopPosition] = useState<{
+    top: number
+    left: number
+  } | null>(null)
   const dayItems = useMemo(
     () => monthItemsForCalendarDay(items, date),
     [items, date],
@@ -68,24 +70,40 @@ export function MonthDayAgendaPopover({
     panelRef.current?.focus()
   }, [date])
 
-  const desktopPosition = useMemo(() => {
-    if (isNarrow || typeof window === "undefined") return undefined
+  useLayoutEffect(() => {
+    if (isNarrow) {
+      setDesktopPosition(null)
+      return
+    }
 
-    const top = anchorRect
-      ? Math.min(
-          Math.max(anchorRect.bottom + VIEWPORT_MARGIN, VIEWPORT_MARGIN),
-          window.innerHeight - DESKTOP_PANEL_HEIGHT - VIEWPORT_MARGIN,
-        )
-      : VIEWPORT_MARGIN
-    const left = anchorRect
-      ? Math.min(
-          Math.max(anchorRect.left, VIEWPORT_MARGIN),
-          window.innerWidth - DESKTOP_PANEL_WIDTH - VIEWPORT_MARGIN,
-        )
-      : VIEWPORT_MARGIN
+    const updatePosition = () => {
+      const panel = panelRef.current?.getBoundingClientRect()
+      if (!panel) return
+      const nextPosition = getMonthDayAgendaPosition({
+        anchor: anchorRect,
+        panel,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+      })
+      setDesktopPosition((current) =>
+        current?.top === nextPosition.top && current.left === nextPosition.left
+          ? current
+          : nextPosition,
+      )
+    }
 
-    return { top, left }
-  }, [anchorRect, isNarrow])
+    updatePosition()
+    window.addEventListener("resize", updatePosition)
+    const observer = new ResizeObserver(updatePosition)
+    if (panelRef.current) observer.observe(panelRef.current)
+
+    return () => {
+      window.removeEventListener("resize", updatePosition)
+      observer.disconnect()
+    }
+  }, [anchorRect, dayItems.length, isNarrow])
 
   return (
     <div
@@ -95,12 +113,19 @@ export function MonthDayAgendaPopover({
       aria-label={formatDayHeaderAccessibleLabel(date)}
       tabIndex={-1}
       className={cn(
-        "fixed z-40 border border-border bg-paper p-3 shadow-spotlight outline-none",
+        "fixed z-40 max-h-dvh overflow-y-auto border border-border bg-paper p-3 shadow-spotlight outline-none",
         isNarrow
           ? "inset-x-0 bottom-0 max-h-80 rounded-t-lg"
           : "w-72 rounded-lg",
       )}
-      style={desktopPosition}
+      style={
+        isNarrow
+          ? undefined
+          : {
+              ...desktopPosition,
+              maxHeight: "calc(100dvh - var(--radius-calendar-shell))",
+            }
+      }
     >
       <p className="text-product-body font-medium text-ink">
         {formatDayHeaderAccessibleLabel(date)}
@@ -198,7 +223,7 @@ export function MonthDayAgendaPopover({
       <button
         type="button"
         className="mt-3 w-full rounded-[var(--radius-calendar-control)] border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-        onClick={() => onOpenDay(date)}
+        onClick={() => openMonthDayFromAgenda(date, onOpenDay)}
       >
         Open day
       </button>
