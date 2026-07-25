@@ -5,10 +5,7 @@ import { formatDayHeaderWeekday } from "@/lib/calendar/day-header-model"
 
 export function RbcMonthWeekdayHeader({ date }: HeaderProps) {
   return (
-    <div
-      className="flex min-h-0 items-center justify-center py-2"
-      aria-hidden="true"
-    >
+    <div className="calendar-month-weekday-header" aria-hidden="true">
       <span className="calendar-day-weekday">
         {formatDayHeaderWeekday(date)}
       </span>

@@ -143,9 +143,18 @@
   --text-calendar-month-date: 12px;
   --text-calendar-month-date--line-height: 16px;
   --text-calendar-month-date--font-weight: 500;
+  --color-calendar-month-divider: var(--color-border);
+  --color-calendar-month-outside-surface: color-mix(in srgb, var(--color-ink) 2%, var(--color-calendar-grid));
+  --size-calendar-month-weekday-header: 2.5rem;
   --size-calendar-month-row-min: 6rem;
   --size-calendar-month-event-row: 1.25rem;
+  --size-calendar-month-event-dot: 0.375rem;
+  --size-calendar-month-task-checkbox: 1rem;
   --spacing-calendar-month-cell-padding: 0.5rem;
+  --spacing-calendar-month-row-gap: 0.125rem;
+  --size-calendar-month-agenda-width: 18rem;
+  --size-calendar-month-agenda-narrow-max-height: 20rem;
+  --spacing-calendar-month-agenda-inset: 0.75rem;
 
   /* Layout */
   --spacing-sidebar: 210px;
@@ -1022,6 +1031,10 @@ body {
 }
 
 /* react-big-calendar — month view */
+.planevo-calendar-grid-shell {
+  border-radius: var(--radius-calendar-shell) var(--radius-calendar-shell) 0 0;
+}
+
 .planevo-rbc--month .rbc-month-view {
   display: flex;
   flex-direction: column;
@@ -1030,25 +1043,31 @@ body {
 }
 
 .planevo-rbc--month .rbc-month-header .rbc-header {
-  padding: 0.375rem 0;
+  padding: 0;
   min-height: 0;
-  border-bottom: 1px solid var(--color-border);
+  border: 0;
+  border-bottom: 1px solid var(--color-calendar-month-divider);
   font-size: var(--text-calendar-day-weekday);
   line-height: var(--text-calendar-day-weekday--line-height);
   letter-spacing: var(--text-calendar-day-weekday--letter-spacing);
   font-weight: var(--text-calendar-day-weekday--font-weight);
   text-transform: uppercase;
   color: var(--text-secondary, var(--color-text-secondary));
-  background: var(--color-surface-raised);
+  background: var(--color-calendar-grid);
 }
 
 .planevo-rbc--month .rbc-month-header .rbc-header + .rbc-header {
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-calendar-month-divider);
 }
 
 .planevo-rbc--month .rbc-month-row {
   flex: 1 0 0;
   min-height: var(--size-calendar-month-row-min);
+  border: 0;
+}
+
+.planevo-rbc--month .rbc-month-row + .rbc-month-row {
+  border-top: 1px solid var(--color-calendar-month-divider);
 }
 
 .planevo-rbc--month .rbc-row-content {
@@ -1057,27 +1076,28 @@ body {
 
 .planevo-rbc--month .rbc-date-cell {
   padding: 0;
-  text-align: right;
+  text-align: center;
 }
 
 .planevo-rbc--month .rbc-day-bg {
-  border-left: 1px solid var(--color-border);
+  border: 0;
 }
 
-.planevo-rbc--month .rbc-month-row + .rbc-month-row .rbc-day-bg {
-  border-top: 1px solid var(--color-border);
+.planevo-rbc--month .rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid var(--color-calendar-month-divider);
 }
 
 .planevo-rbc--month .rbc-off-range-bg {
-  background: color-mix(in srgb, var(--color-ink) 3%, var(--color-calendar-grid));
+  background: var(--color-calendar-month-outside-surface);
 }
 
-.planevo-rbc--month .rbc-today {
-  background: color-mix(in srgb, var(--color-ink) 4%, var(--color-calendar-grid));
+.planevo-rbc--month .rbc-today,
+.planevo-rbc--month .rbc-day-bg.rbc-today {
+  background: var(--color-calendar-grid);
 }
 
 .planevo-rbc--month .rbc-row-segment {
-  padding: 0 1px;
+  padding: 0 var(--spacing-calendar-month-row-gap);
 }
 
 .planevo-rbc--month .rbc-event {
@@ -1090,25 +1110,66 @@ body {
 .planevo-rbc--month .planevo-rbc-event {
   flex-direction: row;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-calendar-month-row-gap);
   min-height: auto;
   height: var(--size-calendar-month-event-row);
   padding: 0 0.375rem;
 }
 
-/* Month item semantics. Task 3 owns the final tokenized visual treatment. */
+.calendar-month-weekday-header {
+  display: flex;
+  min-height: var(--size-calendar-month-weekday-header);
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-month-date-cell {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-calendar-month-cell-padding) var(--spacing-calendar-month-cell-padding) 0;
+}
+
+/* Month item semantics: transparent timed rows, filled spanning bars, neutral tasks. */
 .planevo-rbc--month .planevo-rbc-event--month-timed {
   border-left-width: 0;
   background: transparent;
 }
 
 .planevo-rbc--month .calendar-month-event-dot {
+  width: var(--size-calendar-month-event-dot);
+  height: var(--size-calendar-month-event-dot);
+  flex: 0 0 var(--size-calendar-month-event-dot);
+  border-radius: var(--radius-calendar-control);
   background: var(--planevo-rbc-event-accent);
 }
 
+.planevo-rbc--month .planevo-rbc-event--month-bar {
+  background: var(--planevo-rbc-event-bg);
+  border-left-color: var(--planevo-rbc-event-accent);
+}
+
 .planevo-rbc--month .planevo-rbc-event--month-task {
-  border-left-color: var(--color-border-strong);
-  background: var(--color-surface-raised);
+  border-left-width: 0;
+  background: transparent;
+}
+
+.planevo-rbc--month .planevo-rbc-event--month-task-completed {
+  opacity: 0.72;
+}
+
+.calendar-month-task-checkbox {
+  display: flex;
+  width: var(--size-calendar-month-task-checkbox);
+  height: var(--size-calendar-month-task-checkbox);
+  flex: 0 0 var(--size-calendar-month-task-checkbox);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-calendar-event);
+}
+
+.calendar-month-task-check-icon {
+  width: calc(var(--size-calendar-month-task-checkbox) * 0.625);
+  height: calc(var(--size-calendar-month-task-checkbox) * 0.625);
 }
 
 .planevo-rbc--month .rbc-event-content {
@@ -1126,8 +1187,8 @@ body {
   font-weight: 500;
   color: var(--color-text-secondary);
   background: transparent;
-  padding: 0 0.25rem;
-  margin-top: 1px;
+  padding: 0 var(--spacing-calendar-month-row-gap);
+  margin-top: var(--spacing-calendar-month-row-gap);
 }
 
 .planevo-rbc--month .rbc-show-more:hover,
@@ -1150,6 +1211,19 @@ body {
   padding: 0.5rem 0.75rem;
   font-weight: 500;
   color: var(--color-ink);
+}
+
+.calendar-month-agenda-panel {
+  width: var(--size-calendar-month-agenda-width);
+  max-height: calc(100dvh - (var(--spacing-calendar-month-agenda-inset) * 2));
+  padding: var(--spacing-calendar-month-agenda-inset);
+}
+
+@media (max-width: 767px) {
+  .calendar-month-agenda-panel {
+    width: auto;
+    max-height: var(--size-calendar-month-agenda-narrow-max-height);
+  }
 }
 
 .planevo-rbc .rbc-time-content {

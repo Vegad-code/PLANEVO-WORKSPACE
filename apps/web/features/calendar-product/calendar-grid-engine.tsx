@@ -327,7 +327,7 @@ export function CalendarGridEngine({
     <>
       <div
         className={cn(
-          "planevo-rbc planevo-calendar-grid min-h-0 h-full w-full overflow-hidden rounded-t-[var(--radius-calendar-shell)] border border-border bg-calendar-grid",
+          "planevo-rbc planevo-calendar-grid planevo-calendar-grid-shell min-h-0 h-full w-full overflow-hidden border border-border bg-calendar-grid",
           isMonthView && "planevo-rbc--month",
           !hasAllDayEvents && !isMonthView && "planevo-rbc--no-allday",
           className,

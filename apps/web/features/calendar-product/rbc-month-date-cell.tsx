@@ -12,14 +12,13 @@ type RbcMonthDateCellProps = DateHeaderProps & {
   now: Date
 }
 
-export function RbcMonthDateCell({ date, label, now }: RbcMonthDateCellProps) {
+export function RbcMonthDateCell({ date, isOffRange, now }: RbcMonthDateCellProps) {
   const isToday = isCalendarToday(date, now)
-  const isOffRange = label !== "current"
 
   return (
     <div
       className={cn(
-        "flex justify-end px-[var(--spacing-calendar-month-cell-padding)] pt-[var(--spacing-calendar-month-cell-padding)]",
+        "calendar-month-date-cell",
         isOffRange && "text-text-muted",
       )}
       aria-label={formatDayHeaderAccessibleLabel(date)}

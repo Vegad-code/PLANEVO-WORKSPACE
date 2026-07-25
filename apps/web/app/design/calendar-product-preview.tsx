@@ -4,6 +4,7 @@ import { DndContext } from "@dnd-kit/core";
 import type {
   CalendarEventRow,
   CalendarRow,
+  TaskDueChip,
 } from "@planevo/core/types/calendar";
 import { useState } from "react";
 import { PanelLeft } from "lucide-react";
@@ -19,6 +20,8 @@ const DESIGN_NOW = new Date(2026, 6, 15, 13, 0);
 const DESIGN_WEEK_START = new Date(2026, 6, 13);
 const DESIGN_MONTH_ANCHOR = new Date(2026, 6, 24);
 const DESIGN_MONTH_NOW = new Date(2026, 6, 24, 10, 0);
+const DESIGN_SIX_WEEK_MONTH_ANCHOR = new Date(2026, 4, 24);
+const DESIGN_SIX_WEEK_MONTH_NOW = new Date(2026, 4, 24, 10, 0);
 
 const DESIGN_TODAY_TASKS: TodayColumnTask[] = [
   {
@@ -242,6 +245,71 @@ const DESIGN_MONTH_EVENTS: CalendarEventRow[] = [
   }),
 ];
 
+const DESIGN_MONTH_TASK_DUES: TaskDueChip[] = [
+  {
+    taskId: "task-month-open",
+    title: "Send the project brief",
+    dueAt: previewTime(24, 10, 30),
+    status: "in_progress",
+  },
+  {
+    taskId: "task-month-complete",
+    title: "Review research notes",
+    dueAt: previewTime(24, 16),
+    status: "done",
+  },
+];
+
+const DESIGN_MONTH_MULTI_DAY_EVENTS = DESIGN_MONTH_EVENTS.filter((event) =>
+  ["ev-month-span", "ev-month-allday", "ev-month-sync"].includes(event.id),
+);
+
+const DESIGN_MONTH_OUTSIDE_EVENTS = DESIGN_MONTH_EVENTS.filter((event) =>
+  event.id === "ev-aug-1",
+);
+
+const DESIGN_SIX_WEEK_DENSE_EVENTS: CalendarEventRow[] = [
+  previewEvent({
+    id: "ev-may-bar",
+    title: "Annual planning",
+    calendar_id: "cal-work",
+    all_day: true,
+    starts_at: new Date(2026, 4, 24, 0, 0).toISOString(),
+    ends_at: new Date(2026, 4, 26, 0, 0).toISOString(),
+  }),
+  ...[9, 10, 11, 13, 14, 15].map((hour, index) =>
+    previewEvent({
+      id: `ev-may-dense-${hour}`,
+      title: [
+        "Team sync",
+        "Research review",
+        "Partner call",
+        "Draft handoff",
+        "Focus block",
+        "Wrap-up",
+      ][index]!,
+      calendar_id: index % 2 === 0 ? "cal-work" : "cal-personal",
+      starts_at: new Date(2026, 4, 24, hour, 0).toISOString(),
+      ends_at: new Date(2026, 4, 24, hour + 1, 0).toISOString(),
+    }),
+  ),
+];
+
+const DESIGN_SIX_WEEK_TASK_DUES: TaskDueChip[] = [
+  {
+    taskId: "task-may-open",
+    title: "Send the planning notes",
+    dueAt: new Date(2026, 4, 24, 8, 30).toISOString(),
+    status: "in_progress",
+  },
+  {
+    taskId: "task-may-complete",
+    title: "Close last week’s review",
+    dueAt: new Date(2026, 4, 24, 17).toISOString(),
+    status: "done",
+  },
+];
+
 function noop() {
   // Design previews render interactions inert.
 }
@@ -333,6 +401,67 @@ function CreateEventDemo() {
   );
 }
 
+type MonthDesignStateProps = {
+  label: string;
+  events: CalendarEventRow[];
+  taskDues?: TaskDueChip[];
+  anchor?: Date;
+  now?: Date;
+};
+
+function MonthDesignState({
+  label,
+  events,
+  taskDues = [],
+  anchor = DESIGN_MONTH_ANCHOR,
+  now = DESIGN_MONTH_NOW,
+}: MonthDesignStateProps) {
+  return (
+    <>
+      <figure className="w-full">
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Month state — {label} · light
+        </figcaption>
+        <div className="calendar-panel-glass h-80 overflow-hidden rounded-xl p-2">
+          <CalendarGridEngine
+            view="month"
+            anchor={anchor}
+            calendars={DESIGN_CALENDARS}
+            events={events}
+            taskDues={taskDues}
+            now={now}
+            onSlotSelect={noop}
+            onEventSelect={noop}
+            onEventTimesChange={noop}
+            onToggleTask={noop}
+            onOpenDay={noop}
+          />
+        </div>
+      </figure>
+      <figure data-theme="dark" className="w-full">
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Month state — {label} · dark
+        </figcaption>
+        <div className="calendar-panel-glass h-80 overflow-hidden rounded-xl p-2">
+          <CalendarGridEngine
+            view="month"
+            anchor={anchor}
+            calendars={DESIGN_CALENDARS}
+            events={events}
+            taskDues={taskDues}
+            now={now}
+            onSlotSelect={noop}
+            onEventSelect={noop}
+            onEventTimesChange={noop}
+            onToggleTask={noop}
+            onOpenDay={noop}
+          />
+        </div>
+      </figure>
+    </>
+  );
+}
+
 export function CalendarProductPreview() {
   return (
     <div className="flex flex-wrap gap-8">
@@ -376,28 +505,31 @@ export function CalendarProductPreview() {
         </div>
       </figure>
 
-      <figure className="w-full">
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Month view — weekday header, today disc, compact bars, overflow
-        </figcaption>
-        <div className="flex h-[36rem] gap-3 overflow-hidden rounded-xl bg-sidebar p-3">
-          <div className="calendar-panel-glass min-w-0 flex-1 overflow-hidden rounded-xl p-2">
-            <CalendarGridEngine
-              view="month"
-              anchor={DESIGN_MONTH_ANCHOR}
-              calendars={DESIGN_CALENDARS}
-              events={DESIGN_MONTH_EVENTS}
-              taskDues={[]}
-              now={DESIGN_MONTH_NOW}
-              onSlotSelect={noop}
-              onEventSelect={noop}
-              onEventTimesChange={noop}
-              onToggleTask={noop}
-              onOpenDay={noop}
-            />
-          </div>
-        </div>
-      </figure>
+      <MonthDesignState label="empty" events={[]} />
+      <MonthDesignState
+        label="normal"
+        events={DESIGN_MONTH_EVENTS.slice(0, 5)}
+      />
+      <MonthDesignState
+        label="dense overflow"
+        anchor={DESIGN_SIX_WEEK_MONTH_ANCHOR}
+        now={DESIGN_SIX_WEEK_MONTH_NOW}
+        events={DESIGN_SIX_WEEK_DENSE_EVENTS}
+        taskDues={DESIGN_SIX_WEEK_TASK_DUES}
+      />
+      <MonthDesignState
+        label="multi-day"
+        events={DESIGN_MONTH_MULTI_DAY_EVENTS}
+      />
+      <MonthDesignState
+        label="outside-month"
+        events={DESIGN_MONTH_OUTSIDE_EVENTS}
+      />
+      <MonthDesignState
+        label="task due"
+        events={DESIGN_MONTH_EVENTS.slice(2, 5)}
+        taskDues={DESIGN_MONTH_TASK_DUES}
+      />
 
       <figure>
         <figcaption className="mb-2 text-label uppercase text-text-muted">

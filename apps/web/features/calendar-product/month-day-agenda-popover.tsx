@@ -71,10 +71,7 @@ export function MonthDayAgendaPopover({
   }, [date])
 
   useLayoutEffect(() => {
-    if (isNarrow) {
-      setDesktopPosition(null)
-      return
-    }
+    if (isNarrow) return
 
     const updatePosition = () => {
       const panel = panelRef.current?.getBoundingClientRect()
@@ -113,17 +110,16 @@ export function MonthDayAgendaPopover({
       aria-label={formatDayHeaderAccessibleLabel(date)}
       tabIndex={-1}
       className={cn(
-        "fixed z-40 max-h-dvh overflow-y-auto border border-border bg-paper p-3 shadow-spotlight outline-none",
+        "calendar-month-agenda-panel fixed z-40 overflow-y-auto border border-border bg-paper shadow-spotlight outline-none",
         isNarrow
-          ? "inset-x-0 bottom-0 max-h-80 rounded-t-lg"
-          : "w-72 rounded-lg",
+          ? "inset-x-0 bottom-0 rounded-t-lg"
+          : "rounded-lg",
       )}
       style={
         isNarrow
           ? undefined
           : {
               ...desktopPosition,
-              maxHeight: "calc(100dvh - var(--radius-calendar-shell))",
             }
       }
     >
@@ -150,7 +146,7 @@ export function MonthDayAgendaPopover({
                         ? `Mark incomplete: ${item.title}`
                         : `Complete task: ${item.title}`
                     }
-                    className={`calendar-month-task-checkbox flex size-4 shrink-0 items-center justify-center rounded-md border outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
+                    className={`calendar-month-task-checkbox border outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
                       item.completed
                         ? "border-ink bg-ink text-paper"
                         : "border-border-strong bg-transparent text-transparent hover:border-ink"
@@ -163,7 +159,7 @@ export function MonthDayAgendaPopover({
                       <svg
                         aria-hidden="true"
                         viewBox="0 0 12 12"
-                        className="size-2.5"
+                        className="calendar-month-task-check-icon"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"

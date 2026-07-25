@@ -26,7 +26,7 @@ export function RbcMonthEventContent({
               ? `Mark incomplete: ${item.title}`
               : `Complete task: ${item.title}`
           }
-          className={`calendar-month-task-checkbox flex size-4 shrink-0 items-center justify-center rounded-md border outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
+          className={`calendar-month-task-checkbox border outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
             item.completed
               ? "border-ink bg-ink text-paper"
               : "border-border-strong bg-transparent text-transparent hover:border-ink"
@@ -41,7 +41,7 @@ export function RbcMonthEventContent({
             <svg
               aria-hidden="true"
               viewBox="0 0 12 12"
-              className="size-2.5"
+              className="calendar-month-task-check-icon"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -71,7 +71,7 @@ export function RbcMonthEventContent({
       {item.displayStyle === "timed" ? (
         <span
           aria-hidden="true"
-          className="calendar-month-event-dot size-1.5 shrink-0 rounded-full"
+          className="calendar-month-event-dot"
         />
       ) : null}
       {timeLabel ? (
