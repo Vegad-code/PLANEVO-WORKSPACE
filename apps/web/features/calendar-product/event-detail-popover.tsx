@@ -28,6 +28,11 @@ type EventDetailPopoverProps = {
   className?: string
   /** Reserved for callers; glass mouse tracking is intentionally frozen. */
   mouseContainerRef?: RefObject<HTMLElement | null>
+  /**
+   * When true, outside-click and Escape do not dismiss — used while a nested
+   * dialog (e.g. cross-link picker) is open as a sibling outside this tree.
+   */
+  suppressDismiss?: boolean
 }
 
 function positionsEqual(
@@ -53,6 +58,7 @@ export function EventDetailPopover({
   onClose,
   children,
   className,
+  suppressDismiss = false,
 }: EventDetailPopoverProps) {
   const prefersReducedMotion = usePrefersReducedMotion()
   const transition = getShellLayoutTransition(prefersReducedMotion)
@@ -112,6 +118,7 @@ export function EventDetailPopover({
   }, [anchorRect, isNarrow])
 
   useEffect(() => {
+    if (suppressDismiss) return
     const handlePointerDown = (event: PointerEvent) => {
       if (panelRef.current?.contains(event.target as Node)) return
       onClose()
@@ -123,7 +130,7 @@ export function EventDetailPopover({
       window.cancelAnimationFrame(frame)
       document.removeEventListener("pointerdown", handlePointerDown)
     }
-  }, [onClose])
+  }, [onClose, suppressDismiss])
 
   return (
     <motion.div
@@ -161,7 +168,7 @@ export function EventDetailPopover({
       className={cn("fixed z-50 outline-none", className)}
       onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
       onKeyDown={(keyEvent) => {
-        if (keyEvent.key !== "Escape") return
+        if (keyEvent.key !== "Escape" || suppressDismiss) return
         keyEvent.preventDefault()
         keyEvent.stopPropagation()
         onClose()

@@ -26,7 +26,7 @@ import {
   updateCalendarVisibility,
   upsertCalendarEventException,
 } from "@planevo/core/mutations/product-calendar";
-import { createTask, updateTask } from "@planevo/core/mutations/product-tasks";
+import { createTask } from "@planevo/core/mutations/product-tasks";
 import {
   completeTaskLinkedEvent,
   linkTaskToEvent,
@@ -54,6 +54,10 @@ import {
   localDateTimeToInstant,
   remapRecurrenceIdentitiesForSplit,
 } from "@/lib/calendar/recurrence";
+import {
+  assertStandaloneEditableEvent,
+  StandaloneEditableEventError,
+} from "@/lib/calendar/standalone-editable-event";
 import {
   VIEW_PRESETS,
   viewConfigSchema,
@@ -86,6 +90,27 @@ export type EventCrossLinkOptions = TaskCrossLinkOptions & {
 export type CalendarActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; error: string; code?: string; correlationId?: string };
+
+function isCalendarConflictCause(cause: unknown): boolean {
+  if (!cause || typeof cause !== "object") return false;
+  const record = cause as {
+    code?: unknown;
+    status?: unknown;
+    message?: unknown;
+  };
+  const code = typeof record.code === "string" ? record.code : "";
+  const status = typeof record.status === "number" ? record.status : null;
+  const message =
+    typeof record.message === "string"
+      ? record.message
+      : cause instanceof Error
+        ? cause.message
+        : "";
+  if (status === 409) return true;
+  // Postgres unique_violation / exclusion_violation
+  if (code === "23505" || code === "23P01" || code === "PGRST116") return true;
+  return /conflict|concurrent|already exists|stale/i.test(message);
+}
 
 function actionError(
   cause: unknown,
@@ -131,6 +156,17 @@ function actionError(
         correlationId,
       };
     }
+  }
+
+  // PostgREST / Postgres conflict signals (unique, exclusion, version races).
+  const conflict = isCalendarConflictCause(cause);
+  if (conflict) {
+    return {
+      ok: false,
+      code: "CALENDAR_CONFLICT",
+      error: "This event changed elsewhere. Refreshing the calendar.",
+      correlationId,
+    };
   }
 
   return {
@@ -217,6 +253,7 @@ const createCalendarEventSchema = z
       .max(10_080)
       .nullable()
       .optional(),
+    allDay: z.boolean().optional(),
   })
   .refine(
     (input) =>
@@ -237,6 +274,7 @@ export async function createCalendarEventAction(input: {
   location?: string | null;
   description?: string;
   reminderOffsetMinutes?: number | null;
+  allDay?: boolean;
 }): Promise<CalendarActionResult<{ eventId: string }>> {
   try {
     const access = await requireMutationDataAccess();
@@ -299,7 +337,19 @@ export async function createCalendarEventAction(input: {
     if (!eventId) {
       throw new Error("Calendar event creation returned no event.");
     }
-    revalidatePath("/calendar");
+    if (parsed.data.allDay) {
+      const { error: allDayError } = await access.client.rpc(
+        "update_calendar_event_with_reminder",
+        {
+          p_owner_id: access.ownerId,
+          p_event_id: eventId,
+          p_patch: { all_day: true },
+          p_reminder_specified: false,
+          p_reminder_offset_minutes: null,
+        },
+      );
+      if (allDayError) throw allDayError;
+    }
     return { ok: true, data: { eventId } };
   } catch (cause) {
     return actionError(cause, "Could not create the event.");
@@ -697,8 +747,6 @@ export async function scheduleTaskFromDragAction(input: {
         taskEstimateMinutes(task.description_json as Record<string, unknown>) ??
         60,
     });
-    revalidatePath("/calendar");
-    revalidatePath("/tasks");
     return { ok: true, data: { eventId: event.id } };
   } catch (cause) {
     return actionError(cause, "Could not schedule the task.");
@@ -726,8 +774,6 @@ export async function setTaskStatusAction(input: {
       taskId: parsed.data.taskId,
       status: parsed.data.status,
     });
-    revalidatePath("/calendar");
-    revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not update the task.");
@@ -785,8 +831,6 @@ export async function quickAddTaskAction(input: {
       title: parsed.data.title,
       due_at: dueAt,
     });
-    revalidatePath("/calendar");
-    revalidatePath("/tasks");
     return { ok: true, data: { taskId: task.id } };
   } catch (cause) {
     return actionError(cause, "Could not add the task.");
@@ -806,11 +850,14 @@ async function requireOwnedEvent(
     | "timezone"
     | "source"
     | "rrule"
+    | "parent_event_id"
   >
 > {
   const { data, error } = await access.client
     .from("calendar_events")
-    .select("id,task_id,starts_at,ends_at,timezone,source,rrule")
+    .select(
+      "id,task_id,starts_at,ends_at,timezone,source,rrule,parent_event_id",
+    )
     .eq("id", eventId)
     .eq("user_id", access.ownerId)
     .is("deleted_at", null)
@@ -831,6 +878,15 @@ async function requireEditableEvent(
   if (event.source !== "planevo") {
     throw new Error("Connected calendar events are read-only.");
   }
+  return event;
+}
+
+async function requireStandaloneEditableEvent(
+  access: DataAccess,
+  eventId: string,
+): ReturnType<typeof requireOwnedEvent> {
+  const event = await requireEditableEvent(access, eventId);
+  assertStandaloneEditableEvent(event);
   return event;
 }
 
@@ -909,6 +965,7 @@ const updateCalendarEventSchema = z
       .max(10_080)
       .nullable()
       .optional(),
+    allDay: z.boolean().optional(),
   })
   .refine(
     (input) => {
@@ -935,6 +992,7 @@ export async function updateCalendarEventAction(input: {
   location?: string | null;
   description?: string;
   reminderOffsetMinutes?: number | null;
+  allDay?: boolean;
 }): Promise<CalendarActionResult> {
   try {
     const access = await requireMutationDataAccess();
@@ -947,7 +1005,10 @@ export async function updateCalendarEventAction(input: {
           "Check the event details and try again.",
       };
     }
-    const ownedEvent = await requireEditableEvent(access, parsed.data.eventId);
+    const ownedEvent = await requireStandaloneEditableEvent(
+      access,
+      parsed.data.eventId,
+    );
     const nextRrule =
       parsed.data.rrule === undefined ? ownedEvent.rrule : parsed.data.rrule;
     if (
@@ -1035,6 +1096,9 @@ export async function updateCalendarEventAction(input: {
       ...(parsed.data.description !== undefined
         ? { description_json: { text: parsed.data.description } }
         : {}),
+      ...(parsed.data.allDay !== undefined
+        ? { all_day: parsed.data.allDay }
+        : {}),
     };
     const { error } = await access.client.rpc(
       "update_calendar_event_with_reminder",
@@ -1051,10 +1115,12 @@ export async function updateCalendarEventAction(input: {
     if (error) {
       throw error;
     }
-    revalidatePath("/calendar");
     if (ownedEvent.task_id) revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
+    if (cause instanceof StandaloneEditableEventError) {
+      return { ok: false, error: cause.message };
+    }
     return actionError(cause, "Could not update the event.");
   }
 }
@@ -1085,6 +1151,7 @@ const recurrenceMutationSchema = z
     rrule: rruleSchema.nullable(),
     location: z.string().trim().max(500).nullable(),
     description: z.string().trim().max(5000),
+    allDay: z.boolean().optional(),
   })
   .refine(
     (input) =>
@@ -1239,6 +1306,7 @@ export async function updateRecurringEventAction(input: {
   rrule: string | null;
   location: string | null;
   description: string;
+  allDay?: boolean;
 }): Promise<CalendarActionResult<{ undo: RecurringCalendarUndo }>> {
   try {
     const access = await requireMutationDataAccess();
@@ -1256,6 +1324,7 @@ export async function updateRecurringEventAction(input: {
     const eventRows = await loadOwnedRecurringFamily(access, master.id);
     let guardEventId = master.id;
     let newMasterEventId: string | null = null;
+    const nextAllDay = parsed.data.allDay ?? master.all_day;
 
     if (parsed.data.scope === "this") {
       const exception = await upsertCalendarEventException(
@@ -1274,7 +1343,7 @@ export async function updateRecurringEventAction(input: {
           endsAtLocal: parsed.data.endsAtLocal,
           timezone: parsed.data.timezone,
           durationMinutes: parsed.data.durationMinutes,
-          allDay: master.all_day,
+          allDay: nextAllDay,
           location: parsed.data.location,
           description: descriptionJson(parsed.data.description),
           color: master.color,
@@ -1353,6 +1422,7 @@ export async function updateRecurringEventAction(input: {
           durationMinutes: parsed.data.durationMinutes,
           rrule: parsed.data.rrule,
           recurrenceEnd: remappedSeries.recurrenceEnd,
+          allDay: nextAllDay,
           location: parsed.data.location,
           description: descriptionJson(parsed.data.description),
         });
@@ -1401,7 +1471,7 @@ export async function updateRecurringEventAction(input: {
             durationMinutes: parsed.data.durationMinutes,
             rrule: parsed.data.rrule,
             recurrenceEnd: remappedSeries.recurrenceEnd,
-            allDay: master.all_day,
+            allDay: nextAllDay,
             location: parsed.data.location,
             description: descriptionJson(parsed.data.description),
             color: master.color,
@@ -1414,7 +1484,6 @@ export async function updateRecurringEventAction(input: {
       }
     }
 
-    revalidatePath("/calendar");
     return {
       ok: true,
       data: {
@@ -1507,7 +1576,6 @@ export async function deleteRecurringEventAction(input: {
       guardEventId = exception.id;
     }
 
-    revalidatePath("/calendar");
     return {
       ok: true,
       data: {
@@ -1541,7 +1609,6 @@ export async function restoreRecurringCalendarMutationAction(
       newMasterEventId: parsed.data.newMasterEventId,
       eventRows: parsed.data.eventRows as unknown as CalendarEventRow[],
     });
-    revalidatePath("/calendar");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not undo the recurring calendar change.");
@@ -1563,8 +1630,6 @@ export async function deleteCalendarEventAction(input: {
         access.ownerId,
         parsed.data.eventId,
       );
-      revalidatePath("/calendar");
-      revalidatePath("/tasks");
       return { ok: true, data: undefined };
     }
     await deleteCalendarEvent(
@@ -1572,7 +1637,6 @@ export async function deleteCalendarEventAction(input: {
       access.ownerId,
       parsed.data.eventId,
     );
-    revalidatePath("/calendar");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not delete the event.");
@@ -1596,8 +1660,6 @@ export async function completeTaskLinkedEventAction(input: {
       access.ownerId,
       parsed.data.eventId,
     );
-    revalidatePath("/calendar");
-    revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not complete the task.");
@@ -1621,8 +1683,6 @@ export async function unscheduleTaskLinkedEventAction(input: {
       access.ownerId,
       parsed.data.eventId,
     );
-    revalidatePath("/calendar");
-    revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not unschedule the task.");
@@ -1643,7 +1703,6 @@ export async function restoreCalendarEventAction(input: {
       access.ownerId,
       parsed.data.eventId,
     );
-    revalidatePath("/calendar");
     if (event.task_id) revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
@@ -1661,7 +1720,10 @@ export async function updateEventTimesAction(input: {
     const access = await requireMutationDataAccess();
     const parsed = updateEventTimesSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Choose a valid time." };
-    const event = await requireEditableEvent(access, parsed.data.eventId);
+    const event = await requireStandaloneEditableEvent(
+      access,
+      parsed.data.eventId,
+    );
     if (event.task_id) {
       await moveTaskLinkedEvent(access.client, access.ownerId, parsed.data);
     } else {
@@ -1694,10 +1756,12 @@ export async function updateEventTimesAction(input: {
         },
       );
     }
-    revalidatePath("/calendar");
     if (event.task_id) revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
+    if (cause instanceof StandaloneEditableEventError) {
+      return { ok: false, error: cause.message };
+    }
     return actionError(cause, "Could not update the event.");
   }
 }
@@ -1716,7 +1780,10 @@ export async function restoreCalendarEventTimesAction(input: {
     const parsed = restoreEventTimesSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Choose a valid time." };
 
-    const event = await requireEditableEvent(access, parsed.data.eventId);
+    const event = await requireStandaloneEditableEvent(
+      access,
+      parsed.data.eventId,
+    );
     if (event.task_id) {
       await moveTaskLinkedEvent(access.client, access.ownerId, parsed.data);
     } else {
@@ -1734,10 +1801,12 @@ export async function restoreCalendarEventTimesAction(input: {
       );
     }
 
-    revalidatePath("/calendar");
     if (event.task_id) revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
+    if (cause instanceof StandaloneEditableEventError) {
+      return { ok: false, error: cause.message };
+    }
     return actionError(cause, "Could not undo the calendar change.");
   }
 }
@@ -1745,21 +1814,34 @@ export async function restoreCalendarEventTimesAction(input: {
 const updateTaskDueDateSchema = z.object({
   taskId: z.string().uuid(),
   dueAt: isoDateTimeSchema,
+  moveLinkedBlock: z.boolean().optional(),
 });
 
 /** Move a task's due date by dragging its chip to another day in Month. */
 export async function updateTaskDueDateAction(input: {
   taskId: string;
   dueAt: string;
+  moveLinkedBlock?: boolean;
 }): Promise<CalendarActionResult> {
   try {
     const access = await requireMutationDataAccess();
     const parsed = updateTaskDueDateSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Choose a valid date." };
-    await updateTask(access.client, access.ownerId, parsed.data.taskId, {
-      due_at: parsed.data.dueAt,
-    });
-    revalidatePath("/calendar");
+
+    const { data, error } = await access.client.rpc(
+      "update_task_due_with_linked_event",
+      {
+        p_owner_id: access.ownerId,
+        p_task_id: parsed.data.taskId,
+        p_due_at: parsed.data.dueAt,
+        p_move_linked_block: parsed.data.moveLinkedBlock ?? true,
+      },
+    );
+    if (error) throw error;
+    if (!data) {
+      throw new Error("Task due update returned no data.");
+    }
+
     revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
@@ -1857,7 +1939,6 @@ export async function attachFileToEventAction(input: {
       eventId: parsed.data.eventId,
       fileSourceId: parsed.data.fileSourceId,
     });
-    revalidatePath("/calendar");
     revalidatePath("/files");
     return { ok: true, data: undefined };
   } catch (cause) {
@@ -1883,7 +1964,6 @@ export async function linkTaskToEventAction(input: {
       eventId: parsed.data.eventId,
       taskId: parsed.data.taskId,
     });
-    revalidatePath("/calendar");
     revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
@@ -1919,7 +1999,6 @@ export async function linkEventToWorkspaceAction(input: {
       resourceType: "calendar_event",
       resourceId: parsed.data.eventId,
     });
-    revalidatePath("/calendar");
     return { ok: true, data: { workspaceName: workspace.name } };
   } catch (cause) {
     return actionError(cause, "Could not add the event to the workspace.");

@@ -42,10 +42,17 @@ import {
   elementToAnchorRect,
   slotInfoToAnchorRect,
 } from "@/lib/calendar/event-popover-anchor"
+import {
+  findRbcEventAnchorElement,
+  readRbcEventPointerDown,
+  resolveRbcEventPointerSelect,
+  type RbcEventPointerDown,
+} from "@/lib/calendar/rbc-event-pointer-select"
+import { useCalendarDay } from "./calendar-now-context"
 import { MonthDayAgendaPopover } from "./month-day-agenda-popover"
 import { MonthGrid } from "./month-grid"
 import { TimelineGrid } from "./timeline-grid"
-import { CalendarNowIndicator } from "./calendar-now-indicator"
+import { CalendarNowIndicatorHost } from "./calendar-now-indicator-host"
 import { RbcDayHeader } from "./rbc-day-header"
 import { RbcNowIndicatorWrapper } from "./rbc-now-indicator-wrapper"
 import { RbcEventContent } from "./rbc-event-content"
@@ -89,7 +96,8 @@ type CalendarGridEngineProps = {
   calendars: CalendarRow[]
   events: CalendarEventRow[]
   taskDues: TaskDueChip[]
-  now: Date
+  /** Optional; when omitted the grid subscribes to CalendarNowProvider itself. */
+  now?: Date
   onSlotSelect: (
     range: { startsAt: Date; endsAt: Date },
     anchorRect: DOMRect,
@@ -107,6 +115,13 @@ type CalendarGridEngineProps = {
   onToggleTask: (taskId: string, done: boolean) => void
   onOpenDay: (date: Date) => void
   onNavigateMonth: (offset: number) => void
+  /**
+   * Parent-held pending times (e.g. month recurring while the scope dialog is
+   * open). Merged with local RBC pendingMoves for time-grid + month paint.
+   */
+  overlayPendingMoves?: ReadonlyMap<string, { startsAt: string; endsAt: string }>
+  /** Increment to wipe local RBC pendingMoves (recurrence dialog cancel). */
+  pendingMovesClearToken?: number
   className?: string
 }
 
@@ -144,7 +159,7 @@ export function CalendarGridEngine({
   calendars,
   events,
   taskDues,
-  now,
+  now: nowProp,
   onSlotSelect,
   onDraftSelecting,
   draftCreateEvent = null,
@@ -154,12 +169,26 @@ export function CalendarGridEngine({
   onToggleTask,
   onOpenDay,
   onNavigateMonth,
+  overlayPendingMoves,
+  pendingMovesClearToken = 0,
   className,
 }: CalendarGridEngineProps) {
+  // Day-resolution only — minute ticks stay on CalendarNowIndicatorHost.
+  const clockDay = useCalendarDay()
+  const now = nowProp ?? clockDay
   const [agenda, setAgenda] = useState<{
     date: Date
     origin: HTMLElement
   } | null>(null)
+  /** Holds drop/resize times until props catch up — kills RBC snap-back. */
+  const [pendingMoves, setPendingMoves] = useState<
+    Map<string, { startsAt: string; endsAt: string }>
+  >(() => new Map())
+
+  useEffect(() => {
+    if (pendingMovesClearToken === 0) return
+    setPendingMoves(new Map())
+  }, [pendingMovesClearToken])
 
   // View goes through the registry rather than branching on the string directly,
   // so a saved view's config picks the renderer by the same path the legacy
@@ -185,10 +214,57 @@ export function CalendarGridEngine({
       ),
     [events],
   )
-  const timeGridEvents = useMemo(
-    () => toRbcEvents(displayEvents, calendars),
-    [displayEvents, calendars],
-  )
+
+  const mergedPendingMoves = useMemo(() => {
+    if (
+      pendingMoves.size === 0 &&
+      (!overlayPendingMoves || overlayPendingMoves.size === 0)
+    ) {
+      return null
+    }
+    const merged = new Map(pendingMoves)
+    if (overlayPendingMoves) {
+      for (const [eventId, pending] of overlayPendingMoves) {
+        merged.set(eventId, pending)
+      }
+    }
+    return merged
+  }, [overlayPendingMoves, pendingMoves])
+
+  const timeGridEvents = useMemo(() => {
+    const base = toRbcEvents(displayEvents, calendars)
+    if (!mergedPendingMoves || mergedPendingMoves.size === 0) return base
+    return base.map((event) => {
+      const pending = mergedPendingMoves.get(getPlanevoEventId(event))
+      if (!pending) return event
+      return {
+        ...event,
+        start: new Date(pending.startsAt),
+        end: new Date(pending.endsAt),
+      }
+    })
+  }, [calendars, displayEvents, mergedPendingMoves])
+
+  useEffect(() => {
+    if (pendingMoves.size === 0) return
+    setPendingMoves((current) => {
+      let changed = false
+      const next = new Map(current)
+      for (const [eventId, pending] of current) {
+        const row = events.find((event) => event.id === eventId)
+        if (
+          row &&
+          row.starts_at === pending.startsAt &&
+          row.ends_at === pending.endsAt
+        ) {
+          next.delete(eventId)
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [events, pendingMoves])
+
   const draftRbcEvent = useMemo(() => {
     if (!draftCreateEvent) return null
     const color =
@@ -200,10 +276,21 @@ export function CalendarGridEngine({
     () => (draftRbcEvent ? [...timeGridEvents, draftRbcEvent] : timeGridEvents),
     [draftRbcEvent, timeGridEvents],
   )
-  const monthItems = useMemo(
-    () => toMonthItems(displayEvents, taskDues, calendars),
-    [displayEvents, taskDues, calendars],
-  )
+  const monthItems = useMemo(() => {
+    const eventsForMonth =
+      !mergedPendingMoves || mergedPendingMoves.size === 0
+        ? displayEvents
+        : displayEvents.map((event) => {
+            const pending = mergedPendingMoves.get(event.id)
+            if (!pending) return event
+            return {
+              ...event,
+              starts_at: pending.startsAt,
+              ends_at: pending.endsAt,
+            }
+          })
+    return toMonthItems(eventsForMonth, taskDues, calendars)
+  }, [calendars, displayEvents, mergedPendingMoves, taskDues])
   const timelineItems = useMemo(
     () => toTimelineItems(displayEvents, taskDues, calendars, anchor),
     [anchor, calendars, displayEvents, taskDues],
@@ -238,10 +325,8 @@ export function CalendarGridEngine({
 
   const showNowIndicator = useMemo(() => {
     if (isMonthView || isTimelineView || !todayInVisibleRange) return false
-
-    const nowHour = now.getHours()
-    return nowHour >= DAY_START_HOUR && nowHour < DAY_START_HOUR + VISIBLE_HOURS
-  }, [isMonthView, isTimelineView, now, todayInVisibleRange])
+    return true
+  }, [isMonthView, isTimelineView, todayInVisibleRange])
 
   const timeGridComponents = useMemo(
     () => ({
@@ -284,16 +369,36 @@ export function CalendarGridEngine({
     [onEventSelect],
   )
 
+  const draftSelectingFrameRef = useRef<number | null>(null)
+  const pendingDraftRangeRef = useRef<{ startsAt: Date; endsAt: Date } | null>(
+    null,
+  )
+
   const handleSelecting = useCallback(
     (range: { start: Date; end: Date }) => {
-      onDraftSelecting?.({
+      pendingDraftRangeRef.current = {
         startsAt: range.start,
         endsAt: range.end,
+      }
+      if (draftSelectingFrameRef.current !== null) return true
+      draftSelectingFrameRef.current = window.requestAnimationFrame(() => {
+        draftSelectingFrameRef.current = null
+        const pending = pendingDraftRangeRef.current
+        if (!pending) return
+        onDraftSelecting?.(pending)
       })
       return true
     },
     [onDraftSelecting],
   )
+
+  useEffect(() => {
+    return () => {
+      if (draftSelectingFrameRef.current !== null) {
+        window.cancelAnimationFrame(draftSelectingFrameRef.current)
+      }
+    }
+  }, [])
 
   const handleSelectSlot = useCallback(
     (slotInfo: SlotInfo) =>
@@ -319,6 +424,72 @@ export function CalendarGridEngine({
     [eventsById, onEventSelect],
   )
 
+  // RBC DnD setStates on mousedown and remounts the event node before mouseup,
+  // so the browser never emits `click` / onSelectEvent. Recover select from a
+  // short pointer press (same 8px threshold as month dnd-kit chips).
+  useEffect(() => {
+    if (isMonthView || isTimelineView) return
+    const root = gridRef.current
+    if (!root) return
+
+    let pending: (RbcEventPointerDown & { anchor: HTMLElement | null }) | null =
+      null
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return
+      const read = readRbcEventPointerDown({
+        target: event.target,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      })
+      if (!read) {
+        pending = null
+        return
+      }
+      const eventRoot =
+        event.target instanceof Element
+          ? event.target.closest(".rbc-event")
+          : null
+      pending = {
+        ...read,
+        anchor: eventRoot instanceof HTMLElement ? eventRoot : null,
+      }
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      const eventId = resolveRbcEventPointerSelect({
+        pointerDown: pending,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      })
+      const anchorHint = pending?.anchor ?? null
+      pending = null
+      if (!eventId) return
+      const row = eventsById.get(eventId)
+      if (!row) return
+      const anchorEl = findRbcEventAnchorElement({
+        root,
+        eventId,
+        fallback: anchorHint,
+      })
+      if (!anchorEl) return
+      onEventSelect(row, elementToAnchorRect(anchorEl))
+    }
+
+    const onPointerCancel = () => {
+      pending = null
+    }
+
+    root.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("pointerup", onPointerUp)
+    document.addEventListener("pointercancel", onPointerCancel)
+    return () => {
+      root.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("pointerup", onPointerUp)
+      document.removeEventListener("pointercancel", onPointerCancel)
+    }
+  }, [eventsById, isMonthView, isTimelineView, onEventSelect])
+
   const handleEventTimes = useCallback(
     (
       { event, start, end }: RbcInteractionInfo,
@@ -327,11 +498,19 @@ export function CalendarGridEngine({
       if (!start || !end) return
       const row = eventsById.get(getPlanevoEventId(event))
       if (!row) return
+      const startsAt = start.toISOString()
+      const endsAt = end.toISOString()
+      const eventId = getPlanevoEventId(event)
+      setPendingMoves((current) => {
+        const next = new Map(current)
+        next.set(eventId, { startsAt, endsAt })
+        return next
+      })
       onEventTimesChange({
         operation,
         event: row,
-        startsAt: start.toISOString(),
-        endsAt: end.toISOString(),
+        startsAt,
+        endsAt,
       })
     },
     [eventsById, onEventTimesChange],
@@ -486,8 +665,7 @@ export function CalendarGridEngine({
               }}
               style={{ height: "100%" }}
             />
-            <CalendarNowIndicator
-              now={now}
+            <CalendarNowIndicatorHost
               visible={showNowIndicator}
               preferSingleDaySlot={view === "day"}
               rbcRootRef={gridRef}

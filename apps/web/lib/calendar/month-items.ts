@@ -8,6 +8,7 @@ import type {
 } from "@planevo/core/types/calendar"
 import { isLinkedTaskComplete } from "./task-linked-events.ts"
 import { calendarEventDisplayRange } from "./calendar-event-display-range.ts"
+import { filterTaskDuesWithoutScheduledBlocks } from "./scheduled-task-dedup.ts"
 
 export type MonthEventItem = {
   kind: "event"
@@ -150,7 +151,9 @@ export function toMonthItems(
     return color ? [eventToMonthItem(event, color)] : []
   })
 
-  return sortMonthItems([...eventItems, ...taskDues.map(taskDueToMonthItem)])
+  const visibleTaskDues = filterTaskDuesWithoutScheduledBlocks(taskDues, events)
+
+  return sortMonthItems([...eventItems, ...visibleTaskDues.map(taskDueToMonthItem)])
 }
 
 function sortGroup(item: MonthItem): number {

@@ -1,6 +1,6 @@
 "use client"
 
-import { AnimatePresence, motion } from "framer-motion"
+import { motion } from "framer-motion"
 import type { CalendarNavMotion } from "@/lib/calendar/calendar-nav-motion"
 import {
   calendarNavTransition,
@@ -20,6 +20,10 @@ type CalendarViewTransitionProps = {
   children: React.ReactNode
 }
 
+/**
+ * Crossfade the active grid without AnimatePresence remounting two full
+ * calendar trees (popLayout/wait both paid a double-mount tax on every step).
+ */
 export function CalendarViewTransition({
   view,
   anchor,
@@ -39,32 +43,18 @@ export function CalendarViewTransition({
       aria-live="polite"
       aria-busy={isFetchingNewRange}
     >
-      <AnimatePresence mode="wait" initial={false} custom={navMotion.direction}>
-        <motion.div
-          key={transitionKey}
-          custom={navMotion.direction}
-          variants={variants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          transition={transition}
-          className="absolute inset-0 flex min-h-0 flex-col"
-        >
-          <motion.div
-            animate={{
-              opacity: isFetchingNewRange ? 0.88 : 1,
-            }}
-            transition={
-              prefersReducedMotion
-                ? { duration: 0 }
-                : { duration: 0.35, ease: [0.22, 1, 0.36, 1] }
-            }
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            {children}
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
+      <motion.div
+        key={transitionKey}
+        custom={navMotion.direction}
+        variants={variants}
+        initial="enter"
+        animate="center"
+        transition={transition}
+        className="absolute inset-0 flex min-h-0 flex-col"
+        style={{ opacity: isFetchingNewRange ? 0.92 : 1 }}
+      >
+        {children}
+      </motion.div>
     </div>
   )
 }

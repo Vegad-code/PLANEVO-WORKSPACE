@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Check, ListTodo, X } from "lucide-react";
 import type {
   CalendarDisplayEvent,
@@ -10,6 +11,7 @@ import type {
 import { defaultCalendarId } from "@/lib/calendar/default-calendar";
 import { calendarEventDisplayRange } from "@/lib/calendar/calendar-event-display-range";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { Select } from "@/components/ui/select";
 import {
   applyCaptureToForm,
@@ -44,6 +46,7 @@ export type EventPanelSavePayload = {
   location: string | null;
   description: string;
   reminderOffsetMinutes: number | null;
+  allDay: boolean;
 };
 
 const UUID_PATTERN =
@@ -67,6 +70,8 @@ type EventDetailPanelProps = {
   ) => Promise<{ ok: boolean; error?: string } | void>;
   onOpenCrossLink?: (panel: EventCrossLinkPanel) => void;
   isPending?: boolean;
+  /** When set, fields are view-only and Save/Delete are blocked. */
+  mutationBlockedMessage?: string | null;
   onDirtyChange?: (dirty: boolean) => void;
   onDraftChange?: (
     payload: Pick<
@@ -120,6 +125,7 @@ export function EventDetailPanel({
   onUnscheduleLinkedTask,
   onOpenCrossLink,
   isPending = false,
+  mutationBlockedMessage = null,
   onDirtyChange,
   onDraftChange,
 }: EventDetailPanelProps) {
@@ -158,6 +164,7 @@ export function EventDetailPanel({
     isCreate ? "quick" : "details",
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [linkedActionPending, setLinkedActionPending] = useState(false);
   const [reminderOffsetMinutes, setReminderOffsetMinutes] = useState<
@@ -261,12 +268,20 @@ export function EventDetailPanel({
     setValidationError(null);
   }
 
+  const mutationBlocked = Boolean(mutationBlockedMessage);
+
   function requestClose() {
     // Create discards straight away (Google Calendar). Edit confirms if dirty.
-    if (!isCreate && isDirty && !window.confirm("Discard unsaved changes?")) {
+    if (!isCreate && isDirty) {
+      setDiscardOpen(true);
       return;
     }
-    onClose({ force: isCreate });
+    onClose({ force: true });
+  }
+
+  function confirmDiscard() {
+    setDiscardOpen(false);
+    onClose({ force: true });
   }
 
   function handleSubmit(submitEvent: React.FormEvent<HTMLFormElement>) {
@@ -300,12 +315,13 @@ export function EventDetailPanel({
       location: form.location.trim() || null,
       description: form.description.trim(),
       reminderOffsetMinutes,
+      allDay: resolvedTimes.allDay,
     });
   }
 
   const canSave =
     !isPending &&
-    reminderLoaded &&
+    !mutationBlocked &&
     Boolean(form.title.trim()) &&
     writableCalendars.length > 0;
 
@@ -429,30 +445,36 @@ export function EventDetailPanel({
         </header>
 
         <div className="event-card-surface overflow-hidden rounded-xl">
-          {isQuick && captureFallback ? (
-            <EventQuickCaptureField
-              value={captureLine}
-              onValueChange={setCaptureLine}
-              onCapture={handleCapture}
-              fallbackStartsAt={captureFallback.startsAt}
-              fallbackEndsAt={captureFallback.endsAt}
-              autoFocus
-            />
-          ) : (
-            <EventDetailFields
-              form={form}
-              onFormChange={handleFormChange}
-              calendars={writableCalendars}
-              durationLabel={durationLabel}
-              reminderOffsetMinutes={reminderOffsetMinutes}
-              onReminderChange={(offset) => void handleReminderChange(offset)}
-              reminderDisabled={Boolean(form.rrule)}
-              showCrossLinks={!isCreate && Boolean(event)}
-              taskLinked={hasLinkedTask}
-              onOpenCrossLink={onOpenCrossLink}
-              titleRef={titleRef}
-            />
-          )}
+          <fieldset
+            disabled={mutationBlocked}
+            className="min-w-0 border-0 p-0 disabled:opacity-80"
+          >
+            {isQuick && captureFallback ? (
+              <EventQuickCaptureField
+                value={captureLine}
+                onValueChange={setCaptureLine}
+                onCapture={handleCapture}
+                fallbackStartsAt={captureFallback.startsAt}
+                fallbackEndsAt={captureFallback.endsAt}
+                autoFocus
+              />
+            ) : (
+              <EventDetailFields
+                form={form}
+                onFormChange={handleFormChange}
+                calendars={writableCalendars}
+                durationLabel={durationLabel}
+                reminderOffsetMinutes={reminderOffsetMinutes}
+                onReminderChange={(offset) => void handleReminderChange(offset)}
+                reminderDisabled={Boolean(form.rrule)}
+                showCrossLinks={!isCreate && Boolean(event) && !mutationBlocked}
+                taskLinked={hasLinkedTask}
+                titleReadOnly={hasLinkedTask}
+                onOpenCrossLink={onOpenCrossLink}
+                titleRef={titleRef}
+              />
+            )}
+          </fieldset>
         </div>
 
         {!isCreate && event && hasLinkedTask ? (
@@ -472,6 +494,14 @@ export function EventDetailPanel({
                 {linkedTaskComplete ? "Completed task" : "Linked task"}
               </span>
             </span>
+            {event.task_id ? (
+              <Link
+                href={`/tasks?highlight=${event.task_id}`}
+                className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-product-meta font-medium text-text-secondary outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                Open in Tasks
+              </Link>
+            ) : null}
             {!linkedTaskComplete && onCompleteLinkedTask ? (
               <button
                 type="button"
@@ -502,6 +532,15 @@ export function EventDetailPanel({
           </section>
         ) : null}
 
+        {mutationBlockedMessage ? (
+          <p
+            role="status"
+            className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-meta text-text-secondary"
+          >
+            {mutationBlockedMessage}
+          </p>
+        ) : null}
+
         {validationError ? (
           <p
             role="alert"
@@ -515,6 +554,7 @@ export function EventDetailPanel({
           <div>
             {!isCreate &&
             event &&
+            !mutationBlocked &&
             (hasLinkedTask ? onUnscheduleLinkedTask : onDelete) ? (
               <button
                 type="button"
@@ -548,6 +588,7 @@ export function EventDetailPanel({
 
       {!isCreate &&
       event &&
+      !mutationBlocked &&
       (hasLinkedTask ? onUnscheduleLinkedTask : onDelete) ? (
         <ConfirmDeleteDialog
           open={deleteOpen}
@@ -574,6 +615,17 @@ export function EventDetailPanel({
           onSuccess={() => onClose({ force: true })}
         />
       ) : null}
+
+      <ConfirmActionDialog
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        title="Discard unsaved changes?"
+        description="Your edits will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={async () => ({ ok: true as const })}
+        onSuccess={confirmDiscard}
+      />
     </>
   );
 }

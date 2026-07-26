@@ -18,6 +18,51 @@ export type LoadProductTasksOptions = {
   workspaceId?: string;
 };
 
+export type TodayColumnTaskRow = {
+  id: string;
+  title: string;
+  status: TaskRow["status"];
+  due_at: string | null;
+};
+
+/**
+ * Lightweight task list for the calendar Today column — no subtasks, files, or
+ * linked-event counts. Keeps calendar refetches cheap.
+ *
+ * Filters to incomplete tasks that are undated, overdue, or due within the
+ * next ~35 days (covers week/month planning buckets).
+ */
+export async function loadTodayColumnTasks(
+  client: SupabaseClient<Database>,
+  userId: string,
+  options: LoadProductTasksOptions = {},
+): Promise<TodayColumnTaskRow[]> {
+  let allowedIds: string[] | null = null;
+  if (options.workspaceId) {
+    allowedIds = await listWorkspaceResourceIds(client, {
+      workspaceId: options.workspaceId,
+      resourceType: "task",
+    });
+    if (allowedIds.length === 0) return [];
+  }
+
+  const horizon = new Date();
+  horizon.setDate(horizon.getDate() + 35);
+  const horizonIso = horizon.toISOString();
+
+  let query = client
+    .from("tasks")
+    .select("id,title,status,due_at")
+    .eq("user_id", userId)
+    .neq("status", "done")
+    .neq("status", "cancelled")
+    .or(`due_at.is.null,due_at.lte.${horizonIso}`);
+  if (allowedIds) query = query.in("id", allowedIds);
+  const { data, error } = await query.order("position", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as TodayColumnTaskRow[];
+}
+
 /**
  * Load a user's tasks (ordered by `position`) with subtask progress and
  * attached-file and live scheduled-block counts. Related rows are batch-loaded

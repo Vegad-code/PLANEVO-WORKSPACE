@@ -31,6 +31,7 @@ type EventDetailFieldsProps = {
   reminderDisabled?: boolean;
   showCrossLinks: boolean;
   taskLinked?: boolean;
+  titleReadOnly?: boolean;
   onOpenCrossLink?: (panel: EventCrossLinkPanel) => void;
   titleRef?: React.RefObject<HTMLInputElement | null>;
 };
@@ -155,23 +156,48 @@ export function EventDetailFields({
   reminderDisabled = false,
   showCrossLinks,
   taskLinked = false,
+  titleReadOnly = false,
   onOpenCrossLink,
   titleRef,
 }: EventDetailFieldsProps) {
   return (
     <div className="flex flex-col">
       <div className="px-3 py-2.5">
-        <input
-          ref={titleRef}
-          value={form.title}
-          onChange={(changeEvent) =>
-            onFormChange({ title: changeEvent.target.value })
-          }
-          placeholder="Add a title"
-          aria-label="Event title"
-          className="w-full border-0 bg-transparent p-0 text-h3 font-medium text-ink outline-none placeholder:font-normal placeholder:text-text-muted focus-visible:outline-none"
-        />
+        {titleReadOnly ? (
+          <div>
+            <p className="w-full text-h3 font-medium text-ink">{form.title}</p>
+            <p className="mt-0.5 text-product-meta text-text-muted">
+              Title is managed in Tasks.
+            </p>
+          </div>
+        ) : (
+          <input
+            ref={titleRef}
+            value={form.title}
+            onChange={(changeEvent) =>
+              onFormChange({ title: changeEvent.target.value })
+            }
+            placeholder="Add a title"
+            aria-label="Event title"
+            className="w-full border-0 bg-transparent p-0 text-h3 font-medium text-ink outline-none placeholder:font-normal placeholder:text-text-muted focus-visible:outline-none"
+          />
+        )}
       </div>
+
+      <label className={ROW_CLASS}>
+        <span className="flex w-14 shrink-0 items-center gap-1.5 text-label uppercase text-text-muted">
+          All day
+        </span>
+        <input
+          type="checkbox"
+          checked={form.allDay}
+          onChange={(changeEvent) =>
+            onFormChange({ allDay: changeEvent.target.checked })
+          }
+          aria-label="All day"
+          className="size-4 rounded border-border-strong text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+        />
+      </label>
 
       <div className={ROW_CLASS}>
         <span className="flex w-14 shrink-0 items-center gap-1.5 text-label uppercase text-text-muted">
@@ -184,12 +210,14 @@ export function EventDetailFields({
           onChange={(startsDate) => onFormChange({ startsDate })}
           className="flex-1"
         />
-        <DateTimePill
-          type="time"
-          label="Start time"
-          value={form.startsTime}
-          onChange={(startsTime) => onFormChange({ startsTime })}
-        />
+        {!form.allDay ? (
+          <DateTimePill
+            type="time"
+            label="Start time"
+            value={form.startsTime}
+            onChange={(startsTime) => onFormChange({ startsTime })}
+          />
+        ) : null}
       </div>
 
       <div className={ROW_CLASS}>
@@ -203,12 +231,14 @@ export function EventDetailFields({
           onChange={(endsDate) => onFormChange({ endsDate })}
           className="flex-1"
         />
-        <DateTimePill
-          type="time"
-          label="End time"
-          value={form.endsTime}
-          onChange={(endsTime) => onFormChange({ endsTime })}
-        />
+        {!form.allDay ? (
+          <DateTimePill
+            type="time"
+            label="End time"
+            value={form.endsTime}
+            onChange={(endsTime) => onFormChange({ endsTime })}
+          />
+        ) : null}
       </div>
 
       {durationLabel ? (

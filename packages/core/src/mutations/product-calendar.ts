@@ -77,6 +77,7 @@ export type UpdateCalendarEventInput = {
   location?: string | null;
   description?: Record<string, unknown>;
   taskId?: string | null;
+  allDay?: boolean;
 };
 
 /** Patch editable event fields. Scoped by id + user_id for RLS defense in depth. */
@@ -114,6 +115,7 @@ export async function updateCalendarEvent(
         ? { description_json: input.description as Json }
         : {}),
       ...(input.taskId !== undefined ? { task_id: input.taskId } : {}),
+      ...(input.allDay !== undefined ? { all_day: input.allDay } : {}),
       updated_at: nowIso(),
     })
     .eq("id", eventId)

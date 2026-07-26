@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { useDroppable } from "@dnd-kit/core"
 import type { MonthItem } from "@/lib/calendar/month-items"
 import type { MonthDropData } from "@/lib/calendar/month-drag"
@@ -44,7 +45,7 @@ export type MonthDayCellProps = {
  * hidden rather than being unmounted, so resolving overflow is a visibility
  * toggle and never triggers a relayout.
  */
-export function MonthDayCell({
+export const MonthDayCell = memo(function MonthDayCell({
   date,
   dateKey,
   singles,
@@ -150,4 +151,4 @@ export function MonthDayCell({
       </div>
     </div>
   )
-}
+})

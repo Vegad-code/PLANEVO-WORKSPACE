@@ -70,3 +70,24 @@ test("fails closed for a malformed synthetic id", () => {
     null,
   )
 })
+
+test("fails closed when recurrence_id is set without a parent event", () => {
+  assert.equal(
+    resolveEventMutationTarget(
+      event({ recurrence_id: "2026-07-14T09:00:00.000Z" }),
+    ),
+    null,
+  )
+})
+
+test("fails closed when a synthetic id disagrees with recurrence_id", () => {
+  assert.equal(
+    resolveEventMutationTarget(
+      event({
+        id: "master-1::2026-07-14T09:00:00.000Z",
+        recurrence_id: "2026-07-15T09:00:00.000Z",
+      }),
+    ),
+    null,
+  )
+})

@@ -1,9 +1,10 @@
 import {
   listCalendarViews,
+  loadCalendars,
   loadCalendarWeek,
   type CalendarWeekData,
 } from "@planevo/core/queries/product-calendar"
-import { loadProductTasks } from "@planevo/core/queries/product-tasks"
+import { loadTodayColumnTasks } from "@planevo/core/queries/product-tasks"
 import type { DataAccess } from "@planevo/core/types/data-access"
 import type {
   CalendarDisplayEvent,
@@ -40,17 +41,50 @@ export type CalendarReadyData = {
   taskDues: CalendarWeekData["taskDues"]
 }
 
-/** Serializable payload for TanStack Query cache and API responses. */
-export type CalendarQueryPayload = {
+/** Range-scoped payload: events and due chips for the active view window. */
+export type CalendarRangeQueryPayload = {
   scope: CalendarScope
   anchorDate: string
   view: CalendarToolbarView
   workspaceId: string | null
-  calendars: CalendarWeekData["calendars"]
-  views: CalendarViewRow[]
   events: CalendarDisplayEvent[]
   taskDues: CalendarWeekData["taskDues"]
+}
+
+/** Infrequently changing calendar chrome: sources list and saved views. */
+export type CalendarMetaQueryPayload = {
+  scope: CalendarScope
+  workspaceId: string | null
+  calendars: CalendarWeekData["calendars"]
+  views: CalendarViewRow[]
+}
+
+/** Planning-rail task list — lightweight rows only. */
+export type CalendarTodayQueryPayload = {
+  scope: CalendarScope
   todayTasks: TodayColumnTask[]
+}
+
+/** Serializable merged payload for optimistic patchers and legacy callers. */
+export type CalendarQueryPayload = CalendarRangeQueryPayload &
+  CalendarMetaQueryPayload &
+  CalendarTodayQueryPayload
+
+export function mergeCalendarQueryData({
+  range,
+  meta,
+  today,
+}: {
+  range: CalendarRangeQueryPayload
+  meta: CalendarMetaQueryPayload
+  today: CalendarTodayQueryPayload
+}): CalendarQueryPayload {
+  return {
+    ...range,
+    calendars: meta.calendars,
+    views: meta.views,
+    todayTasks: today.todayTasks,
+  }
 }
 
 export function serializeCalendarQueryData(
@@ -69,34 +103,31 @@ export function serializeCalendarQueryData(
   }
 }
 
-export async function fetchCalendarPageData(
+function workspaceFilterForScope(
+  scope: CalendarScope,
+  workspaceId: string | null,
+) {
+  return scope === "workspace" && workspaceId ? { workspaceId } : {}
+}
+
+export async function fetchCalendarRangeData(
   access: DataAccess,
   workspaceId: string | null,
   scope: CalendarScope,
   request: CalendarPageRequest = {},
-): Promise<CalendarReadyData> {
+): Promise<CalendarRangeQueryPayload> {
   const { date: anchorDate, view } = parseCalendarSearchParams(request)
   const { start, end } = calendarRange(view, anchorDate)
-  const workspaceFilter =
-    scope === "workspace" && workspaceId ? { workspaceId } : {}
+  const workspaceFilter = workspaceFilterForScope(scope, workspaceId)
 
-  const [week, tasks, views] = await Promise.all([
-    loadCalendarWeek(access.client, access.ownerId, {
-      start,
-      end,
-      eventRange: view === "month" ? "overlaps" : "starts-in",
-      ...workspaceFilter,
-    }),
-    loadProductTasks(access.client, access.ownerId, workspaceFilter),
-    listCalendarViews(access.client, access.ownerId),
-  ])
+  const week = await loadCalendarWeek(access.client, access.ownerId, {
+    start,
+    end,
+    eventRange: view === "month" ? "overlaps" : "starts-in",
+    includeCalendars: false,
+    ...workspaceFilter,
+  })
 
-  const todayTasks: TodayColumnTask[] = tasks.map((task) => ({
-    id: task.id,
-    title: task.title,
-    status: task.status,
-    due_at: task.due_at,
-  }))
   const events = decorateTaskLinkedEvents({
     events: materializeCalendarEvents({
       standalone: week.events,
@@ -111,13 +142,77 @@ export async function fetchCalendarPageData(
 
   return {
     scope,
-    anchorDate,
+    anchorDate: dateParam(anchorDate),
     view,
-    todayTasks,
     workspaceId,
-    calendars: week.calendars,
-    views,
     events,
     taskDues: week.taskDues,
+  }
+}
+
+export async function fetchCalendarMetaData(
+  access: DataAccess,
+  workspaceId: string | null,
+  scope: CalendarScope,
+): Promise<CalendarMetaQueryPayload> {
+  const [calendars, views] = await Promise.all([
+    loadCalendars(access.client, access.ownerId),
+    listCalendarViews(access.client, access.ownerId),
+  ])
+
+  return {
+    scope,
+    workspaceId,
+    calendars,
+    views,
+  }
+}
+
+export async function fetchCalendarTodayData(
+  access: DataAccess,
+  workspaceId: string | null,
+  scope: CalendarScope,
+): Promise<CalendarTodayQueryPayload> {
+  const workspaceFilter = workspaceFilterForScope(scope, workspaceId)
+  const tasks = await loadTodayColumnTasks(
+    access.client,
+    access.ownerId,
+    workspaceFilter,
+  )
+
+  return {
+    scope,
+    todayTasks: tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      due_at: task.due_at,
+    })),
+  }
+}
+
+export async function fetchCalendarPageData(
+  access: DataAccess,
+  workspaceId: string | null,
+  scope: CalendarScope,
+  request: CalendarPageRequest = {},
+): Promise<CalendarReadyData> {
+  const { date: anchorDate, view } = parseCalendarSearchParams(request)
+  const [range, meta, today] = await Promise.all([
+    fetchCalendarRangeData(access, workspaceId, scope, request),
+    fetchCalendarMetaData(access, workspaceId, scope),
+    fetchCalendarTodayData(access, workspaceId, scope),
+  ])
+
+  return {
+    scope,
+    anchorDate,
+    view,
+    workspaceId,
+    calendars: meta.calendars,
+    views: meta.views,
+    events: range.events,
+    taskDues: range.taskDues,
+    todayTasks: today.todayTasks,
   }
 }

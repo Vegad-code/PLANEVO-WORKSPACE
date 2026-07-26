@@ -38,30 +38,20 @@ import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
 import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 import {
-  completeTaskLinkedEventAction,
   createCalendarAction,
-  createCalendarEventAction,
   createCalendarViewAction,
   deleteCalendarViewAction,
-  deleteCalendarEventAction,
   deleteRecurringEventAction,
-  quickAddTaskAction,
   restoreCalendarEventAction,
-  restoreCalendarEventTimesAction,
   restoreRecurringCalendarMutationAction,
   type RecurrenceMutationScope,
-  scheduleTaskFromDragAction,
   setDefaultCalendarAction,
   setDefaultCalendarViewAction,
-  setTaskStatusAction,
   subscribeIcsCalendarAction,
   syncCalendarConnectionAction,
   toggleCalendarVisibilityAction,
-  unscheduleTaskLinkedEventAction,
   updateCalendarDetailsAction,
-  updateCalendarEventAction,
   updateCalendarViewAction,
-  updateEventTimesAction,
   updateRecurringEventAction,
 } from "@/app/(workspace)/calendar/actions";
 import {
@@ -86,6 +76,7 @@ import { resolveViewConfig } from "@/lib/calendar/view-config";
 import { EventDetailPopover } from "./event-detail-popover";
 import { CalendarDndContext } from "./calendar-dnd-context";
 import { useMonthMutations } from "./use-month-mutations";
+import { useCalendarMutations } from "./use-calendar-mutations";
 import { CalendarGridEngine } from "./calendar-grid-engine";
 import { CalendarPlanningSidebar } from "./calendar-planning-sidebar";
 import type { IcsCalendarSubscriptionInput } from "./calendar-sources-section";
@@ -103,12 +94,16 @@ import {
 } from "./event-cross-links";
 import {
   useCalendarData,
+  useInvalidateActiveCalendarRange,
   useInvalidateCalendarData,
+  useInvalidateCalendarMeta,
+  useInvalidateIntersectingRanges,
 } from "./use-calendar-data";
 import { useCalendarHotkeys } from "./use-calendar-hotkeys";
 import { useCalendarNavigation } from "./use-calendar-navigation";
 import { YearView } from "./year-view";
 import { CalendarViewTransition } from "./calendar-view-transition";
+import { CalendarNowProvider } from "./calendar-now-context";
 import { EventRecurrenceScopeDialog } from "./event-recurrence-scope-dialog";
 
 type CalendarProductViewProps = {
@@ -135,7 +130,7 @@ type EventPanelState =
       mode: "edit";
       eventId: string;
       event: CalendarEventRow;
-      mutationTarget: EventMutationTarget;
+      mutationTarget: EventMutationTarget | null;
       anchorRect: DOMRect;
     }
   | null;
@@ -197,6 +192,7 @@ function recurrencePayload(
     location: pending.event.location,
     description: eventDescription(pending.event),
     reminderOffsetMinutes: null,
+    allDay: pending.event.all_day,
   };
 }
 
@@ -208,7 +204,9 @@ const PLANNING_TOGGLE_TRANSITION = {
 export function CalendarProductView(props: CalendarProductViewProps) {
   return (
     <HotkeysProvider initiallyActiveScopes={[CALENDAR_HOTKEY_SCOPE]}>
-      <CalendarProductViewInner {...props} />
+      <CalendarNowProvider>
+        <CalendarProductViewInner {...props} />
+      </CalendarNowProvider>
     </HotkeysProvider>
   );
 }
@@ -221,8 +219,12 @@ function CalendarProductViewInner({
   const prefersReducedMotion = usePrefersReducedMotion();
   const planningLayoutTransition =
     getShellLayoutTransition(prefersReducedMotion);
-  const [isPending, startTransition] = useTransition();
+  const [recurrencePending, startRecurrenceTransition] = useTransition();
+  const [metaPending, startMetaTransition] = useTransition();
   const invalidateCalendar = useInvalidateCalendarData();
+  const invalidateMeta = useInvalidateCalendarMeta();
+  const invalidateActiveRange = useInvalidateActiveCalendarRange();
+  const invalidateIntersecting = useInvalidateIntersectingRanges();
   const {
     anchorDate,
     view,
@@ -236,11 +238,20 @@ function CalendarProductViewInner({
     handleSelectDay,
   } = useCalendarNavigation(initialScope);
   const calendarQuery = useCalendarData(scope, view, anchorDate);
-  const [now, setNow] = useState(() => new Date());
+  const calendarMutations = useCalendarMutations({
+    scope,
+    view,
+    anchor: anchorDate,
+  });
   const [eventPanel, setEventPanel] = useState<EventPanelState>(null);
   const [eventPanelDirty, setEventPanelDirty] = useState(false);
+  const [panelSavePending, setPanelSavePending] = useState(false);
   const [pendingRecurrence, setPendingRecurrence] =
     useState<PendingRecurrenceMutation | null>(null);
+  const [pendingMovesClearToken, setPendingMovesClearToken] = useState(0);
+  const [overlayPendingMoves, setOverlayPendingMoves] = useState(
+    () => new Map<string, { startsAt: string; endsAt: string }>(),
+  );
   const [draftCreateEvent, setDraftCreateEvent] =
     useState<DraftCreateEventState | null>(null);
   const [crossLinkPanel, setCrossLinkPanel] =
@@ -291,18 +302,12 @@ function CalendarProductViewInner({
     taskDues,
     view: activeSavedView,
   });
-  const isFetchingNewRange =
-    calendarQuery.isFetching && !calendarQuery.isPlaceholderData;
+  const isFetchingNewRange = calendarQuery.isRangeFetching;
 
   useEffect(() => {
     if (!activeSavedToolbarView || activeSavedToolbarView === view) return;
     handleViewChange(activeSavedToolbarView);
   }, [activeSavedToolbarView, handleViewChange, view]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   // Restore before paint, then mount the rail at the saved width. Mounting only
   // after restore avoids Framer springing open→closed on every refresh.
@@ -363,25 +368,26 @@ function CalendarProductViewInner({
   }
 
   function handleToggleVisibility(calendarId: string, isVisible: boolean) {
-    startTransition(async () => {
+    startMetaTransition(async () => {
       const result = await toggleCalendarVisibilityAction({
         calendarId,
         isVisible,
       });
       if (!result.ok) toast(result.error, { tone: "error" });
-      invalidateCalendar(scope);
+      invalidateMeta(scope);
+      invalidateActiveRange({ scope, view, anchor: anchorDate });
     });
   }
 
   function handleCreateCalendar(name: string, color: CalendarColor) {
-    startTransition(async () => {
+    startMetaTransition(async () => {
       const result = await createCalendarAction({ name, color });
       if (!result.ok) {
         toast(result.error, { tone: "error" });
         return;
       }
       toast("Calendar created");
-      invalidateCalendar(scope);
+      invalidateMeta(scope);
     });
   }
 
@@ -389,7 +395,7 @@ function CalendarProductViewInner({
     calendarId: string,
     input: { name: string; color: CalendarColor },
   ) {
-    startTransition(async () => {
+    startMetaTransition(async () => {
       const result = await updateCalendarDetailsAction({
         calendarId,
         ...input,
@@ -399,19 +405,19 @@ function CalendarProductViewInner({
         return;
       }
       toast("Calendar updated");
-      invalidateCalendar(scope);
+      invalidateMeta(scope);
     });
   }
 
   function handleSetDefaultCalendar(calendarId: string) {
-    startTransition(async () => {
+    startMetaTransition(async () => {
       const result = await setDefaultCalendarAction({ calendarId });
       if (!result.ok) {
         toast(result.error, { tone: "error" });
         return;
       }
       toast("Default calendar updated");
-      invalidateCalendar(scope);
+      invalidateMeta(scope);
     });
   }
 
@@ -468,7 +474,7 @@ function CalendarProductViewInner({
     }
     setSelectedSavedViewId(result.data.viewId);
     toast("View created");
-    invalidateCalendar(scope);
+    invalidateMeta(scope);
   }
 
   async function handleSavedViewUpdate(
@@ -481,7 +487,7 @@ function CalendarProductViewInner({
       throw new Error(result.error);
     }
     toast("View updated");
-    invalidateCalendar(scope);
+    invalidateMeta(scope);
   }
 
   async function handleSavedViewDelete(viewId: string) {
@@ -494,7 +500,7 @@ function CalendarProductViewInner({
       setSelectedSavedViewId(nextCalendarViewIdAfterDelete(savedViews, viewId));
     }
     toast("View deleted");
-    invalidateCalendar(scope);
+    invalidateMeta(scope);
   }
 
   async function handleSavedViewSetDefault(viewId: string) {
@@ -505,7 +511,7 @@ function CalendarProductViewInner({
     }
     setSelectedSavedViewId(viewId);
     toast("Default view updated");
-    invalidateCalendar(scope);
+    invalidateMeta(scope);
   }
 
   async function executeUndo(id: string) {
@@ -517,24 +523,27 @@ function CalendarProductViewInner({
     }
 
     const payload = popped.entry.payload;
+
+    // Optimistic inverse for time restores — no full invalidate.
+    if (payload.kind === "restore-times") {
+      calendarMutations.moveEventTimes({
+        eventId: payload.eventId,
+        startsAt: payload.startsAt,
+        endsAt: payload.endsAt,
+      });
+      toast("Change undone");
+      return;
+    }
+
     const result =
       payload.kind === "restore-event"
         ? await restoreCalendarEventAction({ eventId: payload.eventId })
-        : payload.kind === "restore-times"
-          ? await restoreCalendarEventTimesAction({
-              eventId: payload.eventId,
-              startsAt: payload.startsAt,
-              endsAt: payload.endsAt,
-              startsAtLocal: payload.startsAtLocal,
-              endsAtLocal: payload.endsAtLocal,
-              durationMinutes: payload.durationMinutes,
-            })
-          : await restoreRecurringCalendarMutationAction({
-              masterEventId: payload.masterEventId,
-              guardEventId: payload.guardEventId,
-              newMasterEventId: payload.newMasterEventId,
-              eventRows: payload.eventRows,
-            });
+        : await restoreRecurringCalendarMutationAction({
+            masterEventId: payload.masterEventId,
+            guardEventId: payload.guardEventId,
+            newMasterEventId: payload.newMasterEventId,
+            eventRows: payload.eventRows,
+          });
 
     if (!result.ok) {
       toast(result.error, { tone: "error" });
@@ -542,7 +551,17 @@ function CalendarProductViewInner({
     }
 
     toast("Change undone");
-    invalidateCalendar(scope);
+    if (payload.kind === "restore-event") {
+      invalidateActiveRange({ scope, view, anchor: anchorDate });
+    } else {
+      const starts = payload.eventRows.map((row) => row.starts_at).sort();
+      const ends = payload.eventRows.map((row) => row.ends_at).sort();
+      invalidateIntersecting({
+        scope,
+        start: (starts[0] ?? new Date().toISOString()).slice(0, 10),
+        end: (ends.at(-1) ?? new Date().toISOString()).slice(0, 10),
+      });
+    }
   }
 
   function offerUndo(message: string, payload: CalendarUndoPayload) {
@@ -580,6 +599,14 @@ function CalendarProductViewInner({
           }
         : null,
     };
+  }
+
+  function beginPendingRecurrence(pending: PendingRecurrenceMutation) {
+    setEventPanel(null);
+    setEventPanelDirty(false);
+    setCrossLinkPanel(null);
+    setDraftCreateEvent(null);
+    setPendingRecurrence(pending);
   }
 
   const closeEventPanel = useCallback(
@@ -721,10 +748,11 @@ function CalendarProductViewInner({
     if (eventPanelDirty && !window.confirm("Discard unsaved changes?")) return;
     const mutationTarget = resolveEventMutationTarget(event);
     if (!mutationTarget) {
-      toast("This event has an invalid recurrence identity.", {
-        tone: "error",
+      console.warn("[calendar] invalid recurrence identity for event", {
+        eventId: event.id,
+        parentEventId: event.parent_event_id,
+        recurrenceId: event.recurrence_id,
       });
-      return;
     }
     setCrossLinkPanel(null);
     setDraftCreateEvent(null);
@@ -746,8 +774,9 @@ function CalendarProductViewInner({
     if (!eventPanel) return;
 
     if (eventPanel.mode === "edit") {
+      if (!eventPanel.mutationTarget) return;
       if (eventPanel.mutationTarget.kind !== "standalone") {
-        setPendingRecurrence({
+        beginPendingRecurrence({
           kind: "save",
           event: eventPanel.event,
           payload,
@@ -756,47 +785,57 @@ function CalendarProductViewInner({
       }
     }
 
-    startTransition(async () => {
-      if (eventPanel.mode === "create") {
-        const result = await createCalendarEventAction(payload);
-        if (!result.ok) {
-          toast(result.error, { tone: "error" });
-          return;
-        }
-        toast("Event created");
-      } else {
-        if (eventPanel.mutationTarget.kind !== "standalone") {
-          toast("Choose which recurring events to update.", { tone: "error" });
-          return;
-        }
-        const result = await updateCalendarEventAction({
-          eventId: eventPanel.mutationTarget.eventId,
-          ...payload,
-        });
-        if (!result.ok) {
-          toast(result.error, { tone: "error" });
-          return;
-        }
-        toast("Event saved");
-      }
+    setPanelSavePending(true);
+    const closeOnSuccess = () => {
+      setPanelSavePending(false);
       setEventPanel(null);
       setEventPanelDirty(false);
       setDraftCreateEvent(null);
-      invalidateCalendar(scope);
-    });
+    };
+    const onError = () => {
+      setPanelSavePending(false);
+    };
+
+    if (eventPanel.mode === "create") {
+      calendarMutations.createEvent(payload, {
+        onCommitted: () => {
+          toast("Event created");
+          closeOnSuccess();
+        },
+        onError,
+      });
+    } else if (eventPanel.mutationTarget?.kind === "standalone") {
+      calendarMutations.updateEvent(
+        eventPanel.mutationTarget.eventId,
+        payload,
+        {
+          onCommitted: () => {
+            toast("Event saved");
+            closeOnSuccess();
+          },
+          onError,
+        },
+      );
+    }
   }
 
   async function handleEventPanelDelete(event: CalendarEventRow) {
+    if (eventPanel?.mode === "edit" && !eventPanel.mutationTarget) {
+      return {
+        ok: false as const,
+        error: "This event has an invalid recurrence identity and can't be deleted.",
+      };
+    }
     const target = resolveEventMutationTarget(event);
     if (target && target.kind !== "standalone") {
-      setPendingRecurrence({ kind: "delete", event });
+      beginPendingRecurrence({ kind: "delete", event });
       return;
     }
 
-    const result = await deleteCalendarEventAction({ eventId: event.id });
-    if (!result.ok) {
-      return { ok: false as const, error: result.error };
-    }
+    calendarMutations.deleteEvent(event.id, {
+      startsAt: event.starts_at,
+      endsAt: event.ends_at,
+    });
     offerUndo(
       event.task_id ? "Task returned to the backlog" : "Event deleted",
       event.task_id
@@ -817,17 +856,11 @@ function CalendarProductViewInner({
             deletedAt: event.deleted_at,
           },
     );
-    invalidateCalendar(scope);
     return { ok: true as const };
   }
 
   async function handleCompleteLinkedTask(event: CalendarEventRow) {
-    const result = await completeTaskLinkedEventAction({ eventId: event.id });
-    if (!result.ok) {
-      return { ok: false as const, error: result.error };
-    }
-    toast("Task completed");
-    invalidateCalendar(scope);
+    calendarMutations.completeLinkedTask(event);
     return { ok: true as const };
   }
 
@@ -839,10 +872,7 @@ function CalendarProductViewInner({
         error: "This event is not linked to a task.",
       };
     }
-    const result = await unscheduleTaskLinkedEventAction({ eventId: event.id });
-    if (!result.ok) {
-      return { ok: false as const, error: result.error };
-    }
+    calendarMutations.unscheduleLinkedTask(event);
     offerUndo("Task returned to the backlog", {
       kind: "restore-event",
       operation: "unschedule",
@@ -853,72 +883,58 @@ function CalendarProductViewInner({
         dueAt: event.starts_at,
       },
     });
-    invalidateCalendar(scope);
     return { ok: true as const };
   }
 
   function handleToggleTask(taskId: string, done: boolean) {
-    startTransition(async () => {
-      const result = await setTaskStatusAction({
-        taskId,
-        status: done ? "done" : "not_started",
-      });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        return;
-      }
-      invalidateCalendar(scope);
-    });
+    calendarMutations.toggleTaskStatus(taskId, done);
   }
 
   function handleQuickAddTask(
     title: string,
     bucket: "week" | "month" | "none",
   ) {
-    startTransition(async () => {
-      const result = await quickAddTaskAction({ title, bucket });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        return;
-      }
-      invalidateCalendar(scope);
-    });
+    calendarMutations.quickAddTask({ title, bucket });
   }
 
   function handleScheduleTask(taskId: string, startsAt: string) {
-    startTransition(async () => {
-      const result = await scheduleTaskFromDragAction({
-        taskId,
-        operationKey: crypto.randomUUID(),
-        startsAt,
-      });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        return;
-      }
-      toast("Task scheduled");
-      invalidateCalendar(scope);
+    const task = todayTasks.find((entry) => entry.id === taskId);
+    calendarMutations.scheduleTask({
+      taskId,
+      title: task?.title ?? "Task",
+      startsAt,
+      operationKey: crypto.randomUUID(),
+      onCommitted: () => toast("Task scheduled"),
     });
   }
 
   const { applyMonthMove } = useMonthMutations({
     scope,
+    view,
     anchor: anchorDate,
-    onSettled: () => invalidateCalendar(scope),
-    onRecurringEventMove: (move) =>
+    onRecurringEventMove: (move) => {
+      setOverlayPendingMoves(
+        new Map([[move.event.id, { startsAt: move.startsAt, endsAt: move.endsAt }]]),
+      );
       setPendingRecurrence({
         kind: "move",
         operation: move.operation,
         event: move.event,
         startsAt: move.startsAt,
         endsAt: move.endsAt,
-      }),
+      });
+    },
     onEventMoveCommitted: (move) =>
       offerUndo(
         move.operation === "resize" ? "Event resized" : "Event moved",
         priorTimesUndo(move.event, move.operation),
       ),
   });
+
+  function clearRecurrenceHold() {
+    setPendingMovesClearToken((token) => token + 1);
+    setOverlayPendingMoves(new Map());
+  }
 
   function handleEventTimesChange(input: {
     operation: "move" | "resize";
@@ -934,33 +950,31 @@ function CalendarProductViewInner({
       return;
     }
     if (target.kind !== "standalone") {
-      setPendingRecurrence({ kind: "move", ...input });
+      setOverlayPendingMoves(
+        new Map([
+          [input.event.id, { startsAt: input.startsAt, endsAt: input.endsAt }],
+        ]),
+      );
+      beginPendingRecurrence({ kind: "move", ...input });
       return;
     }
 
-    startTransition(async () => {
-      const result = await updateEventTimesAction({
-        eventId: target.eventId,
-        startsAt: input.startsAt,
-        endsAt: input.endsAt,
-      });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        invalidateCalendar(scope);
-        return;
-      }
-      offerUndo(
-        input.operation === "resize" ? "Event resized" : "Event moved",
-        priorTimesUndo(input.event, input.operation),
-      );
-      invalidateCalendar(scope);
+    calendarMutations.moveEventTimes({
+      eventId: target.eventId,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
     });
+    offerUndo(
+      input.operation === "resize" ? "Event resized" : "Event moved",
+      priorTimesUndo(input.event, input.operation),
+    );
   }
 
   function executePendingRecurrence(scopeChoice: RecurrenceMutationScope) {
     if (!pendingRecurrence) return;
     const target = resolveEventMutationTarget(pendingRecurrence.event);
     if (!target || target.kind === "standalone") {
+      clearRecurrenceHold();
       setPendingRecurrence(null);
       return;
     }
@@ -971,7 +985,72 @@ function CalendarProductViewInner({
         ? pendingRecurrence.event.starts_at
         : target.recurrenceId;
 
-    startTransition(async () => {
+    // This-occurrence panel save: optimistic patch + no intersecting invalidate.
+    if (pendingRecurrence.kind === "save" && scopeChoice === "this") {
+      const held = pendingRecurrence;
+      const payload = held.payload;
+      const operationKey = crypto.randomUUID();
+      setPendingRecurrence(null);
+      calendarMutations.commitRecurringThisSave({
+        eventId: held.event.id,
+        payload,
+        action: () =>
+          updateRecurringEventAction({
+            masterId,
+            recurrenceId,
+            operationKey,
+            scope: "this",
+            ...payload,
+          }),
+        onSuccess: () => {
+          clearRecurrenceHold();
+          toast("Recurring event saved");
+        },
+        onError: () => {
+          clearRecurrenceHold();
+        },
+      });
+      return;
+    }
+
+    // This-occurrence move/resize: optimistic patch + no intersecting invalidate.
+    if (pendingRecurrence.kind === "move" && scopeChoice === "this") {
+      const held = pendingRecurrence;
+      const payload = recurrencePayload(held);
+      const operationKey = crypto.randomUUID();
+      setPendingRecurrence(null);
+      calendarMutations.commitRecurringThisMove({
+        eventId: held.event.id,
+        startsAt: held.startsAt,
+        endsAt: held.endsAt,
+        action: () =>
+          updateRecurringEventAction({
+            masterId,
+            recurrenceId,
+            operationKey,
+            scope: "this",
+            ...payload,
+          }),
+        onSuccess: (data) => {
+          clearRecurrenceHold();
+          const isResize = held.operation === "resize";
+          offerUndo(
+            isResize ? "Recurring event resized" : "Recurring event moved",
+            {
+              kind: "restore-series",
+              operation: isResize ? "recurrence-resize" : "recurrence-move",
+              ...data.undo,
+            },
+          );
+        },
+        onError: () => {
+          clearRecurrenceHold();
+        },
+      });
+      return;
+    }
+
+    startRecurrenceTransition(async () => {
       const operationKey = crypto.randomUUID();
       const result =
         pendingRecurrence.kind === "delete"
@@ -991,6 +1070,7 @@ function CalendarProductViewInner({
 
       if (!result.ok) {
         toast(result.error, { tone: "error" });
+        clearRecurrenceHold();
         return;
       }
 
@@ -1013,12 +1093,25 @@ function CalendarProductViewInner({
       } else {
         toast("Recurring event saved");
       }
+
+      const windowStart = pendingRecurrence.event.starts_at.slice(0, 10);
+      const windowEnd = pendingRecurrence.event.ends_at.slice(0, 10);
+      const movedWindow =
+        pendingRecurrence.kind === "move"
+          ? {
+              start: pendingRecurrence.startsAt.slice(0, 10),
+              end: pendingRecurrence.endsAt.slice(0, 10),
+            }
+          : null;
+
       setPendingRecurrence(null);
-      if (pendingRecurrence.kind === "save") {
-        setEventPanel(null);
-        setEventPanelDirty(false);
-      }
-      invalidateCalendar(scope);
+      clearRecurrenceHold();
+      // following/all (and non-this saves/deletes) still need surgical refetch.
+      invalidateIntersecting({
+        scope,
+        start: movedWindow?.start ?? windowStart,
+        end: movedWindow?.end ?? windowEnd,
+      });
     });
   }
 
@@ -1060,16 +1153,16 @@ function CalendarProductViewInner({
     const handleKeyDown = (keyEvent: KeyboardEvent) => {
       if (keyEvent.key !== "Escape") return;
       if (keyEvent.defaultPrevented) return;
+      if (crossLinkPanel) return;
       keyEvent.preventDefault();
       keyEvent.stopPropagation();
       closeEventPanel();
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [closeEventPanel, eventPanel]);
+  }, [closeEventPanel, crossLinkPanel, eventPanel]);
 
   useCalendarHotkeys({
-    now,
     cheatSheetOpen,
     enabled: !eventPanel,
     onCheatSheetOpenChange: setCheatSheetOpen,
@@ -1086,7 +1179,6 @@ function CalendarProductViewInner({
       calendars={calendars}
       events={visibleContent.events}
       todayTasks={todayTasks}
-      now={now}
       weekStart={visibleWeekStart}
       onSelectDay={handleStandardSelectDay}
       onToggleVisibility={handleToggleVisibility}
@@ -1105,7 +1197,7 @@ function CalendarProductViewInner({
   return (
     <section
       aria-labelledby="calendar-product-title"
-      aria-busy={isPending || isFetchingNewRange}
+      aria-busy={isFetchingNewRange || metaPending}
       className="flex h-full w-full flex-col bg-calendar-chrome"
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -1224,7 +1316,7 @@ function CalendarProductViewInner({
                   onScopeChange={changeScope}
                   onNavigatePrevious={handleNavigatePrevious}
                   onNavigateNext={handleNavigateNext}
-                  onNavigateToday={() => handleNavigateToday(now)}
+                  onNavigateToday={() => handleNavigateToday(new Date())}
                 />
               </div>
             </div>
@@ -1244,7 +1336,6 @@ function CalendarProductViewInner({
                 {view === "year" ? (
                   <YearView
                     year={anchorDate.getFullYear()}
-                    today={now}
                     onSelectDay={handleStandardSelectDay}
                   />
                 ) : (
@@ -1256,8 +1347,9 @@ function CalendarProductViewInner({
                     events={visibleContent.events}
                     taskDues={visibleContent.taskDues}
                     viewConfig={activeSavedViewConfig}
-                    now={now}
                     draftCreateEvent={draftCreateEvent}
+                    overlayPendingMoves={overlayPendingMoves}
+                    pendingMovesClearToken={pendingMovesClearToken}
                     onDraftSelecting={handleDraftSelecting}
                     onSlotSelect={openCreateEventPanel}
                     onEventSelect={openEditEventPanel}
@@ -1304,7 +1396,6 @@ function CalendarProductViewInner({
                     calendars={calendars}
                     events={visibleContent.events}
                     todayTasks={todayTasks}
-                    now={now}
                     weekStart={visibleWeekStart}
                     onSelectDay={(day) => {
                       handleStandardSelectDay(day);
@@ -1342,9 +1433,12 @@ function CalendarProductViewInner({
               ? "move"
               : "edit"
         }
-        isPending={isPending}
+        isPending={recurrencePending}
         onClose={() => {
-          if (!isPending) setPendingRecurrence(null);
+          if (!recurrencePending) {
+            clearRecurrenceHold();
+            setPendingRecurrence(null);
+          }
         }}
         onChoose={executePendingRecurrence}
       />
@@ -1366,6 +1460,7 @@ function CalendarProductViewInner({
             key={eventPanel.mode === "create" ? "create" : eventPanel.eventId}
             anchorRect={eventPanel.anchorRect}
             mouseContainerRef={gridContainerRef}
+            suppressDismiss={crossLinkPanel !== null}
             onClose={() => closeEventPanel()}
           >
             <EventDetailPanel
@@ -1401,13 +1496,20 @@ function CalendarProductViewInner({
                   : undefined
               }
               onOpenCrossLink={
-                eventPanel.mode === "edit" ? setCrossLinkPanel : undefined
+                eventPanel.mode === "edit" && eventPanel.mutationTarget
+                  ? setCrossLinkPanel
+                  : undefined
               }
               onDirtyChange={setEventPanelDirty}
               onDraftChange={
                 eventPanel.mode === "create" ? handleDraftChange : undefined
               }
-              isPending={isPending}
+              isPending={panelSavePending}
+              mutationBlockedMessage={
+                eventPanel.mode === "edit" && !eventPanel.mutationTarget
+                  ? "This event has an invalid recurrence identity and can't be edited."
+                  : null
+              }
             />
           </EventDetailPopover>
         ) : null}
@@ -1418,7 +1520,9 @@ function CalendarProductViewInner({
           eventId={crossLinkEventId}
           panel={crossLinkPanel}
           onClose={() => setCrossLinkPanel(null)}
-          onMutationSuccess={() => invalidateCalendar(scope)}
+          onMutationSuccess={() =>
+            invalidateActiveRange({ scope, view, anchor: anchorDate })
+          }
         />
       ) : null}
     </section>

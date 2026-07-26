@@ -1,10 +1,17 @@
-import type { CalendarEventRow } from "@planevo/core/types/calendar"
+import type {
+  CalendarDisplayEvent,
+  CalendarEventRow,
+} from "@planevo/core/types/calendar"
 import type { EventCapture } from "./parse-event-capture.ts"
 import {
   fromDateAndTimeInputValues,
   toDateInputValue,
   toTimeInputValue,
 } from "./datetime-local.ts"
+import {
+  instantToLocalDateTime,
+  localDateTimeToInstant,
+} from "./recurrence.ts"
 
 /**
  * The event card's form, held as the four values the native date/time inputs
@@ -19,6 +26,7 @@ export type EventFormState = {
   endsDate: string
   endsTime: string
   timezone: string
+  allDay: boolean
   rrule: string | null
   location: string
   description: string
@@ -33,6 +41,7 @@ export type EventFormTimes =
       endsAtLocal: string
       timezone: string
       durationMinutes: number
+      allDay: boolean
     }
   | { ok: false; error: string }
 
@@ -44,21 +53,76 @@ function eventDescriptionText(event: CalendarEventRow): string {
   return typeof text === "string" ? text : ""
 }
 
+function eventDisplayTitle(
+  event: CalendarEventRow | CalendarDisplayEvent,
+): string {
+  if (event.task_id && "linked_task" in event && event.linked_task?.title) {
+    return event.linked_task.title
+  }
+  return event.title
+}
+
+function localDateTimeParts(value: string): { date: string; time: string } | null {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(value)
+  if (!match) return null
+  return { date: match[1]!, time: match[2]! }
+}
+
+function eventFormDateTime(
+  event: CalendarEventRow,
+): Pick<EventFormState, "startsDate" | "startsTime" | "endsDate" | "endsTime"> {
+  const timezone = event.timezone ?? localTimezone()
+
+  if (event.starts_at_local && event.ends_at_local) {
+    const starts = localDateTimeParts(event.starts_at_local)
+    const ends = localDateTimeParts(event.ends_at_local)
+    if (starts && ends) {
+      return {
+        startsDate: starts.date,
+        startsTime: starts.time,
+        endsDate: ends.date,
+        endsTime: ends.time,
+      }
+    }
+  }
+
+  const startsLocal = instantToLocalDateTime(event.starts_at, timezone)
+  const endsLocal = instantToLocalDateTime(event.ends_at, timezone)
+  if (startsLocal && endsLocal) {
+    const starts = localDateTimeParts(startsLocal)
+    const ends = localDateTimeParts(endsLocal)
+    if (starts && ends) {
+      return {
+        startsDate: starts.date,
+        startsTime: starts.time,
+        endsDate: ends.date,
+        endsTime: ends.time,
+      }
+    }
+  }
+
+  return {
+    startsDate: toDateInputValue(event.starts_at),
+    startsTime: toTimeInputValue(event.starts_at),
+    endsDate: toDateInputValue(event.ends_at),
+    endsTime: toTimeInputValue(event.ends_at),
+  }
+}
+
 export function buildEventFormState(input: {
   mode: "create" | "edit"
-  event?: CalendarEventRow | null
+  event?: CalendarEventRow | CalendarDisplayEvent | null
   initialRange?: { startsAt: string; endsAt: string }
   defaultCalendarId: string
 }): EventFormState {
   if (input.mode === "edit" && input.event) {
+    const dateTime = eventFormDateTime(input.event)
     return {
-      title: input.event.title,
+      title: eventDisplayTitle(input.event),
       calendarId: input.event.calendar_id,
-      startsDate: toDateInputValue(input.event.starts_at),
-      startsTime: toTimeInputValue(input.event.starts_at),
-      endsDate: toDateInputValue(input.event.ends_at),
-      endsTime: toTimeInputValue(input.event.ends_at),
+      ...dateTime,
       timezone: input.event.timezone ?? localTimezone(),
+      allDay: input.event.all_day,
       rrule: input.event.rrule,
       location: input.event.location ?? "",
       description: eventDescriptionText(input.event),
@@ -78,6 +142,7 @@ export function buildEventFormState(input: {
     endsDate: toDateInputValue(endsAt),
     endsTime: toTimeInputValue(endsAt),
     timezone: localTimezone(),
+    allDay: false,
     rrule: null,
     location: "",
     description: "",
@@ -96,6 +161,7 @@ export function eventFormStatesEqual(
     a.endsDate === b.endsDate &&
     a.endsTime === b.endsTime &&
     a.timezone === b.timezone &&
+    a.allDay === b.allDay &&
     a.rrule === b.rrule &&
     a.location === b.location &&
     a.description === b.description
@@ -108,6 +174,36 @@ export function eventFormStatesEqual(
  * is decided — the panel does not re-check anything.
  */
 export function resolveEventFormTimes(form: EventFormState): EventFormTimes {
+  if (form.allDay) {
+    if (!form.startsDate.trim() || !form.endsDate.trim()) {
+      return { ok: false, error: "Add a start and end date before saving." }
+    }
+
+    const startsAtLocal = `${form.startsDate}T00:00:00`
+    const endsAtLocal = `${form.endsDate}T00:00:00`
+    const startsAt = localDateTimeToInstant(startsAtLocal, form.timezone)
+    const endsAt = localDateTimeToInstant(endsAtLocal, form.timezone)
+    if (!startsAt || !endsAt) {
+      return { ok: false, error: "Add a valid date range before saving." }
+    }
+    if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+      return { ok: false, error: "The event must end after it starts." }
+    }
+
+    const durationMs =
+      new Date(endsAt).getTime() - new Date(startsAt).getTime()
+    return {
+      ok: true,
+      startsAt,
+      endsAt,
+      startsAtLocal,
+      endsAtLocal,
+      timezone: form.timezone,
+      durationMinutes: Math.round(durationMs / 60_000),
+      allDay: true,
+    }
+  }
+
   const startsAt = fromDateAndTimeInputValues(form.startsDate, form.startsTime)
   const endsAt = fromDateAndTimeInputValues(form.endsDate, form.endsTime)
 
@@ -128,6 +224,7 @@ export function resolveEventFormTimes(form: EventFormState): EventFormTimes {
     endsAtLocal: `${form.endsDate}T${form.endsTime}:00`,
     timezone: form.timezone,
     durationMinutes: Math.round(durationMs / 60_000),
+    allDay: false,
   }
 }
 
@@ -137,6 +234,18 @@ function localTimezone(): string {
 
 /** Human duration for the card ("1h 30m"). Null while the times are unusable. */
 export function formatEventFormDuration(form: EventFormState): string | null {
+  if (form.allDay) {
+    if (!form.startsDate.trim() || !form.endsDate.trim()) return null
+    const start = new Date(`${form.startsDate}T12:00:00`)
+    const end = new Date(`${form.endsDate}T12:00:00`)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
+    const dayCount = Math.max(
+      1,
+      Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1,
+    )
+    return dayCount === 1 ? "All day" : `${dayCount} days`
+  }
+
   const times = resolveEventFormTimes(form)
   if (!times.ok) return null
 
@@ -164,6 +273,7 @@ export function applyCaptureToForm(
     endsDate: toDateInputValue(capture.endsAt),
     endsTime: toTimeInputValue(capture.endsAt),
     rrule: capture.rrule,
+    allDay: false,
   }
 }
 
@@ -176,6 +286,20 @@ export function applyFormPatch(
   patch: Partial<EventFormState>,
 ): EventFormState {
   let next = { ...form, ...patch }
+
+  if (patch.allDay === true && !form.allDay) {
+    next = {
+      ...next,
+      startsTime: "00:00",
+      endsTime: "00:00",
+    }
+    const endDate = new Date(`${next.startsDate}T12:00:00`)
+    if (!Number.isNaN(endDate.getTime())) {
+      endDate.setDate(endDate.getDate() + 1)
+      next.endsDate = toDateInputValue(endDate.toISOString())
+    }
+  }
+
   if (patch.startsDate === undefined || patch.startsDate === form.startsDate) {
     return next
   }

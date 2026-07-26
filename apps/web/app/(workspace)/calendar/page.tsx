@@ -1,8 +1,12 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
 import { CalendarProductView } from "@/features/calendar-product/calendar-product-view"
-import { calendarQueryKey } from "@/lib/calendar/calendar-query-keys"
+import {
+  calendarMetaQueryKey,
+  calendarRangeQueryKey,
+  calendarTodayQueryKey,
+} from "@/lib/calendar/calendar-query-keys"
+import { dateParam } from "@/lib/calendar/calendar-range"
 import { getQueryClient } from "@/lib/calendar/get-query-client"
-import { serializeCalendarQueryData } from "@/lib/calendar/fetch-calendar-page-data"
 import { loadCalendarPageData } from "@/lib/queries/product-calendar"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 
@@ -44,22 +48,28 @@ async function CalendarProductPage({
   }
 
   const queryClient = getQueryClient()
-  const serialized = serializeCalendarQueryData({
+
+  queryClient.setQueryData(
+    calendarRangeQueryKey(data.scope, data.initialView, data.anchorDate),
+    {
+      scope: data.scope,
+      anchorDate: dateParam(data.anchorDate),
+      view: data.initialView,
+      workspaceId: data.workspaceId,
+      events: data.events,
+      taskDues: data.taskDues,
+    },
+  )
+  queryClient.setQueryData(calendarMetaQueryKey(data.scope), {
     scope: data.scope,
-    anchorDate: data.anchorDate,
-    view: data.initialView,
     workspaceId: data.workspaceId,
     calendars: data.calendars,
     views: data.views,
-    events: data.events,
-    taskDues: data.taskDues,
+  })
+  queryClient.setQueryData(calendarTodayQueryKey(data.scope), {
+    scope: data.scope,
     todayTasks: data.todayTasks,
   })
-
-  queryClient.setQueryData(
-    calendarQueryKey(data.scope, data.initialView, data.anchorDate),
-    serialized,
-  )
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

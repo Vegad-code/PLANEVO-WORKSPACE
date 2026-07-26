@@ -26,12 +26,13 @@ import {
   countOpenPlanningTasks,
 } from "./calendar-tasks-section";
 import type { TodayColumnTask } from "./today-task-row";
+import { useCalendarDay } from "./calendar-now-context";
 
 export type CalendarPlanningSidebarProps = {
   calendars: CalendarRow[];
   events: CalendarEventRow[];
   todayTasks: TodayColumnTask[];
-  now: Date;
+  now?: Date;
   weekStart: Date;
   onSelectDay: (day: Date) => void;
   onToggleVisibility: (calendarId: string, isVisible: boolean) => void;
@@ -77,6 +78,8 @@ export function CalendarPlanningSidebar({
   clearRevealChrome = false,
   hideCollapseControl = false,
 }: CalendarPlanningSidebarProps) {
+  const clockDay = useCalendarDay();
+  const resolvedNow = now ?? clockDay;
   const [collapsedSections, setCollapsedSections] = useState<
     Set<PlanningSectionId>
   >(() => new Set());
@@ -98,7 +101,7 @@ export function CalendarPlanningSidebar({
     );
   }
 
-  const openTaskCount = countOpenPlanningTasks(todayTasks, now);
+  const openTaskCount = countOpenPlanningTasks(todayTasks, resolvedNow);
 
   return (
     <div className="flex h-full w-full flex-col gap-3 px-4 pt-4 pb-4 pr-3">
@@ -135,7 +138,7 @@ export function CalendarPlanningSidebar({
           onToggle={() => handleToggleSection("date")}
         >
           <CalendarDateSection
-            now={now}
+            now={resolvedNow}
             weekStart={weekStart}
             onSelectDay={onSelectDay}
           />
@@ -152,7 +155,7 @@ export function CalendarPlanningSidebar({
             tasks={todayTasks}
             events={events}
             calendars={calendars}
-            now={now}
+            now={resolvedNow}
             onToggleTask={onToggleTask}
             onQuickAddTask={onQuickAddTask}
           />

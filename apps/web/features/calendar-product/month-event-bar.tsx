@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { useDraggable } from "@dnd-kit/core"
 import { ListTodo } from "lucide-react"
 import type { BarSegment } from "@/lib/calendar/month-lane-layout"
@@ -68,7 +69,7 @@ function BarResizeHandle({
  * While dragging, the source stays put and fades. A DragOverlay clone follows
  * the pointer — transforming this node would clip it inside overflow:hidden.
  */
-export function MonthEventBar({
+export const MonthEventBar = memo(function MonthEventBar({
   segment,
   originDate,
   onSelect,
@@ -168,4 +169,4 @@ export function MonthEventBar({
       ) : null}
     </div>
   )
-}
+})

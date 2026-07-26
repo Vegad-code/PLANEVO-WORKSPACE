@@ -126,6 +126,45 @@ test("task blocks use the task's current title", () => {
   assert.equal(item.title, "Current task title")
 })
 
+test("toMonthItems suppresses due chips when a scheduled block exists", () => {
+  const scheduled = event({
+    id: "block-1",
+    task_id: "task-1",
+    title: "Scheduled block",
+    starts_at: "2026-07-14T10:00:00.000Z",
+    ends_at: "2026-07-14T11:00:00.000Z",
+    linked_task: {
+      id: "task-1",
+      title: "Scheduled block",
+      status: "not_started",
+      estimateMinutes: null,
+    },
+  })
+  const items = toMonthItems(
+    [scheduled],
+    [
+      {
+        taskId: "task-1",
+        title: "Scheduled block",
+        dueAt: "2026-07-14T16:00:00.000Z",
+        status: "not_started",
+      },
+      {
+        taskId: "task-2",
+        title: "Due only",
+        dueAt: "2026-07-14T16:00:00.000Z",
+        status: "not_started",
+      },
+    ],
+    calendars,
+  )
+
+  assert.equal(items.length, 2)
+  assert.ok(items.some((item) => item.kind === "event"))
+  assert.ok(items.some((item) => item.kind === "task" && item.taskId === "task-2"))
+  assert.ok(!items.some((item) => item.kind === "task" && item.taskId === "task-1"))
+})
+
 test("sorts bars, open task dues, timed events, then completed task dues", () => {
   const items = [
     taskDueToMonthItem({ taskId: "done", title: "Done", dueAt: "2026-07-14T08:00:00.000Z", status: "done" }),

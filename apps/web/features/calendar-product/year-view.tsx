@@ -1,5 +1,7 @@
 "use client";
 
+import { useCalendarDay } from "./calendar-now-context";
+
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
 /** Day numbers for a month, padded with nulls for the leading weekday offset. */
@@ -14,13 +16,15 @@ function monthCells(year: number, month: number): (number | null)[] {
 /** Google-style year view: 12 mini-months. Clicking a day drills into day view. */
 export function YearView({
   year,
-  today,
+  today: todayProp,
   onSelectDay,
 }: {
   year: number;
-  today: Date;
+  today?: Date;
   onSelectDay: (date: Date) => void;
 }) {
+  const clockDay = useCalendarDay();
+  const today = todayProp ?? clockDay;
   const isThisYear = today.getFullYear() === year;
 
   return (

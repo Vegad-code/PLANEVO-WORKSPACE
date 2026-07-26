@@ -758,6 +758,15 @@ export interface Database {
         };
         Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
       };
+      update_task_due_with_linked_event: {
+        Args: {
+          p_owner_id: string;
+          p_task_id: string;
+          p_due_at: string;
+          p_move_linked_block?: boolean;
+        };
+        Returns: Json;
+      };
       set_task_status_with_linked_events: {
         Args: { p_owner_id: string; p_task_id: string; p_status: string };
         Returns: Json;

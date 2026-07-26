@@ -38,6 +38,11 @@ export type LoadCalendarWeekOptions = {
   workspaceId?: string;
   /** Default `starts-in`. Use `overlaps` for month grid (multi-day bars). */
   eventRange?: "starts-in" | "overlaps";
+  /**
+   * When false, skip calendars+connections — range fetches that already load
+   * meta separately should pass false to avoid duplicate RTTs.
+   */
+  includeCalendars?: boolean;
 };
 
 /** All of a user's calendars ordered by position (hidden ones included —
@@ -169,24 +174,35 @@ export async function loadCalendarWeek(
   userId: string,
   options: LoadCalendarWeekOptions,
 ): Promise<CalendarWeekData> {
-  const calendars = await loadCalendars(client, userId);
-
-  let allowedEventIds: string[] | null = null;
-  let allowedTaskIds: string[] | null = null;
-  if (options.workspaceId) {
-    allowedEventIds = await listWorkspaceResourceIds(client, {
-      workspaceId: options.workspaceId,
-      resourceType: "calendar_event",
-    });
-    allowedTaskIds = await listWorkspaceResourceIds(client, {
-      workspaceId: options.workspaceId,
-      resourceType: "task",
-    });
-  }
-
+  const includeCalendars = options.includeCalendars !== false;
   const startIso = options.start.toISOString();
   const endIso = options.end.toISOString();
   const eventRange = options.eventRange ?? "starts-in";
+
+  const [calendars, workspaceIds] = await Promise.all([
+    includeCalendars
+      ? loadCalendars(client, userId)
+      : Promise.resolve([] as CalendarRow[]),
+    options.workspaceId
+      ? Promise.all([
+          listWorkspaceResourceIds(client, {
+            workspaceId: options.workspaceId,
+            resourceType: "calendar_event",
+          }),
+          listWorkspaceResourceIds(client, {
+            workspaceId: options.workspaceId,
+            resourceType: "task",
+          }),
+        ]).then(([allowedEventIds, allowedTaskIds]) => ({
+          allowedEventIds,
+          allowedTaskIds,
+        }))
+      : Promise.resolve({
+          allowedEventIds: null as string[] | null,
+          allowedTaskIds: null as string[] | null,
+        }),
+  ]);
+  const { allowedEventIds, allowedTaskIds } = workspaceIds;
 
   let events: CalendarEventRow[] = [];
   let recurringMasters: CalendarEventRow[] = [];
@@ -210,24 +226,21 @@ export async function loadCalendarWeek(
     }
 
     if (allowedEventIds) eventQuery = eventQuery.in("id", allowedEventIds);
-    const { data, error } = await eventQuery.order("starts_at", {
-      ascending: true,
-    });
-    if (error) throw error;
-    events = (data ?? []) as unknown as CalendarEventRow[];
-
-    const { data: masterData, error: masterError } = await client.rpc(
-      "list_calendar_recurrence_masters",
-      {
+    const [eventsResult, mastersResult] = await Promise.all([
+      eventQuery.order("starts_at", { ascending: true }),
+      client.rpc("list_calendar_recurrence_masters", {
         p_owner_id: userId,
         p_window_start: startIso,
         p_window_end: endIso,
         p_overlaps: eventRange === "overlaps",
         p_workspace_event_ids: allowedEventIds,
-      },
-    );
-    if (masterError) throw masterError;
-    recurringMasters = (masterData ?? []) as unknown as CalendarEventRow[];
+      }),
+    ]);
+    if (eventsResult.error) throw eventsResult.error;
+    if (mastersResult.error) throw mastersResult.error;
+    events = (eventsResult.data ?? []) as unknown as CalendarEventRow[];
+    recurringMasters = (mastersResult.data ??
+      []) as unknown as CalendarEventRow[];
 
     if (recurringMasters.length > 0) {
       const masterIds = recurringMasters.map(({ id }) => id);
@@ -268,7 +281,6 @@ export async function loadCalendarWeek(
     }
   }
 
-  let taskDues: TaskDueChip[] = [];
   const taskIds = [
     ...new Set(
       [...events, ...recurringMasters, ...recurrenceExceptions]
@@ -276,37 +288,52 @@ export async function loadCalendarWeek(
         .filter((taskId): taskId is string => taskId !== null),
     ),
   ];
-  let linkedTasks: CalendarWeekData["linkedTasks"] = [];
-  if (taskIds.length > 0) {
-    const { data, error } = await client
-      .from("tasks")
-      .select("id,title,status,description_json")
-      .eq("user_id", userId)
-      .in("id", taskIds);
-    if (error) throw error;
-    linkedTasks = (data ?? []) as unknown as CalendarWeekData["linkedTasks"];
-  }
+  const [linkedTasks, taskDues] = await Promise.all([
+    taskIds.length > 0
+      ? client
+          .from("tasks")
+          .select("id,title,status,description_json")
+          .eq("user_id", userId)
+          .in("id", taskIds)
+          .then(({ data, error }) => {
+            if (error) throw error;
+            return (data ??
+              []) as unknown as CalendarWeekData["linkedTasks"];
+          })
+      : Promise.resolve([] as CalendarWeekData["linkedTasks"]),
+    allowedTaskIds === null || allowedTaskIds.length > 0
+      ? (() => {
+          let taskQuery = client
+            .from("tasks")
+            .select("id, title, due_at, status")
+            .eq("user_id", userId)
+            .gte("due_at", startIso)
+            .lt("due_at", endIso);
+          if (allowedTaskIds) taskQuery = taskQuery.in("id", allowedTaskIds);
+          return taskQuery.order("due_at", { ascending: true }).then(
+            ({ data, error }) => {
+              if (error) throw error;
+              return (data ?? []).map((row) => ({
+                taskId: row.id,
+                title: row.title,
+                dueAt: row.due_at as string,
+                status: row.status as TaskStatus,
+              }));
+            },
+          );
+        })()
+      : Promise.resolve([] as TaskDueChip[]),
+  ]);
 
-  if (allowedTaskIds === null || allowedTaskIds.length > 0) {
-    let taskQuery = client
-      .from("tasks")
-      .select("id, title, due_at, status")
-      .eq("user_id", userId)
-      .gte("due_at", startIso)
-      .lt("due_at", endIso);
-    if (allowedTaskIds) taskQuery = taskQuery.in("id", allowedTaskIds);
-    const { data, error } = await taskQuery.order("due_at", {
-      ascending: true,
-    });
-    if (error) throw error;
-    taskDues = (data ?? []).map((row) => ({
-      taskId: row.id,
-      title: row.title,
-      dueAt: row.due_at as string,
-      // DB CHECK constrains this text column to TASK_STATUSES.
-      status: row.status as TaskStatus,
-    }));
-  }
+  const scheduledTaskIds = new Set(
+    [...events, ...recurringMasters, ...recurrenceExceptions]
+      .map((event) => event.task_id)
+      .filter((taskId): taskId is string => taskId !== null),
+  );
+  const visibleTaskDues =
+    scheduledTaskIds.size === 0
+      ? taskDues
+      : taskDues.filter((task) => !scheduledTaskIds.has(task.taskId));
 
   return {
     calendars,
@@ -314,7 +341,7 @@ export async function loadCalendarWeek(
     recurringMasters,
     recurrenceExceptions,
     linkedTasks,
-    taskDues,
+    taskDues: visibleTaskDues,
   };
 }
 

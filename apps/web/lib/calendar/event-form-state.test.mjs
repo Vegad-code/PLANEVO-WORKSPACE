@@ -21,6 +21,7 @@ function form(overrides = {}) {
     endsDate: "2026-07-23",
     endsTime: "16:00",
     timezone: "America/New_York",
+    allDay: false,
     rrule: null,
     location: "",
     description: "",
@@ -182,8 +183,50 @@ test("applyFormPatch leaves the end date alone for any other field", () => {
   assert.equal(next.endsDate, "2026-07-23")
 })
 
-test("eventFormStatesEqual compares every field", () => {
-  assert.equal(eventFormStatesEqual(form(), form()), true)
-  assert.equal(eventFormStatesEqual(form(), form({ title: "Other" })), false)
-  assert.equal(eventFormStatesEqual(form(), form({ endsTime: "18:00" })), false)
+test("buildEventFormState prefers linked task title for task-backed events", () => {
+  const state = buildEventFormState({
+    mode: "edit",
+    event: {
+      id: "event-1",
+      calendar_id: "cal-9",
+      title: "Stale calendar title",
+      task_id: "task-1",
+      linked_task: {
+        id: "task-1",
+        title: "Canonical task title",
+        status: "not_started",
+        estimateMinutes: null,
+      },
+      starts_at: "2026-07-23T13:30:00.000Z",
+      ends_at: "2026-07-23T14:30:00.000Z",
+      starts_at_local: "2026-07-23T09:30:00",
+      ends_at_local: "2026-07-23T10:30:00",
+      timezone: "America/New_York",
+      all_day: false,
+      rrule: null,
+      location: null,
+      description_json: {},
+    },
+    defaultCalendarId: "cal-1",
+  })
+
+  assert.equal(state.title, "Canonical task title")
+  assert.equal(state.startsTime, "09:30")
+})
+
+test("resolveEventFormTimes resolves all-day spans from local dates", () => {
+  const times = resolveEventFormTimes(
+    form({
+      allDay: true,
+      startsDate: "2026-07-23",
+      endsDate: "2026-07-24",
+      startsTime: "00:00",
+      endsTime: "00:00",
+    }),
+  )
+
+  assert.equal(times.ok, true)
+  assert.equal(times.allDay, true)
+  assert.equal(times.startsAtLocal, "2026-07-23T00:00:00")
+  assert.equal(times.endsAtLocal, "2026-07-24T00:00:00")
 })

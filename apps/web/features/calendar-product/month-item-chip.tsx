@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { useDraggable } from "@dnd-kit/core"
 import { ListTodo } from "lucide-react"
 import type { MonthItem } from "@/lib/calendar/month-items"
@@ -25,7 +26,7 @@ type MonthItemChipProps = {
  * While dragging, the source stays put and fades. A DragOverlay clone follows
  * the pointer — transforming this node would clip it inside overflow:hidden.
  */
-export function MonthItemChip({
+export const MonthItemChip = memo(function MonthItemChip({
   item,
   dateKey,
   onSelect,
@@ -162,4 +163,4 @@ export function MonthItemChip({
       ) : null}
     </button>
   )
-}
+})

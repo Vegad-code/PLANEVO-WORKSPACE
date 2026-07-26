@@ -13,7 +13,6 @@ import {
 import type { CalendarView } from "./calendar-toolbar"
 
 type UseCalendarHotkeysOptions = {
-  now: Date
   cheatSheetOpen: boolean
   enabled?: boolean
   onCheatSheetOpenChange: (open: boolean) => void
@@ -23,10 +22,7 @@ type UseCalendarHotkeysOptions = {
   onDismiss: () => boolean
 }
 
-type HotkeyHandlers = Omit<UseCalendarHotkeysOptions, "now" | "cheatSheetOpen"> & {
-  now: Date
-  cheatSheetOpen: boolean
-}
+type HotkeyHandlers = UseCalendarHotkeysOptions
 
 function dispatchShortcutAction(
   action: CalendarShortcutAction,
@@ -40,18 +36,20 @@ function dispatchShortcutAction(
     return false
   }
 
+  const now = new Date()
+
   switch (action.type) {
     case "open-cheat-sheet":
       handlers.onCheatSheetOpenChange(true)
       return true
     case "create-event": {
-      const startsAt = createEventSlotFromNow(handlers.now)
+      const startsAt = createEventSlotFromNow(now)
       const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000)
       handlers.onCreateEvent({ startsAt, endsAt })
       return true
     }
     case "go-today":
-      handlers.onNavigateToday(handlers.now)
+      handlers.onNavigateToday(now)
       return true
     case "switch-view":
       handlers.onViewChange(action.view)
