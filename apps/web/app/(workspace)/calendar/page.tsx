@@ -50,6 +50,7 @@ async function CalendarProductPage({
     view: data.initialView,
     workspaceId: data.workspaceId,
     calendars: data.calendars,
+    views: data.views,
     events: data.events,
     taskDues: data.taskDues,
     todayTasks: data.todayTasks,
@@ -73,7 +74,12 @@ async function CalendarProductPage({
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scope?: string; date?: string; view?: string; week?: string }>
+  searchParams: Promise<{
+    scope?: string
+    date?: string
+    view?: string
+    week?: string
+  }>
 }) {
   const { scope, date, view, week } = await searchParams
   return (

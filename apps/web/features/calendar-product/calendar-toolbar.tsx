@@ -7,8 +7,13 @@ import { formatToolbarTitle } from "@/lib/calendar/calendar-navigation"
 import type { CalendarNavMotion } from "@/lib/calendar/calendar-nav-motion"
 import { calendarTitleTransition } from "@/lib/calendar/calendar-nav-motion"
 import { Icon } from "@/components/ui/planevo-icon"
+import type { CalendarRow, CalendarViewRow } from "@planevo/core/types/calendar"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import { CalendarViewMenu } from "./calendar-view-menu"
+import {
+  CalendarSavedViewMenu,
+  type CalendarSavedViewInput,
+} from "./calendar-saved-view-menu"
 
 export const CALENDAR_VIEWS = ["day", "week", "month", "year"] as const
 export type CalendarView = (typeof CALENDAR_VIEWS)[number]
@@ -31,7 +36,19 @@ type CalendarToolbarProps = {
   scope: CalendarScope
   navMotion: CalendarNavMotion
   prefersReducedMotion: boolean
+  calendars: CalendarRow[]
+  savedViews: CalendarViewRow[]
+  activeSavedViewId: string | null
+  defaultSavedViewId: string | null
   onViewChange: (view: CalendarView) => void
+  onSavedViewSelect: (viewId: string | null) => void
+  onSavedViewCreate: (input: CalendarSavedViewInput) => void | Promise<void>
+  onSavedViewUpdate: (
+    viewId: string,
+    input: CalendarSavedViewInput,
+  ) => void | Promise<void>
+  onSavedViewDelete: (viewId: string) => void | Promise<void>
+  onSavedViewSetDefault: (viewId: string) => void | Promise<void>
   onScopeChange: (scope: CalendarScope) => void
   onNavigatePrevious: () => void
   onNavigateNext: () => void
@@ -44,7 +61,16 @@ export function CalendarToolbar({
   scope,
   navMotion,
   prefersReducedMotion,
+  calendars,
+  savedViews,
+  activeSavedViewId,
+  defaultSavedViewId,
   onViewChange,
+  onSavedViewSelect,
+  onSavedViewCreate,
+  onSavedViewUpdate,
+  onSavedViewDelete,
+  onSavedViewSetDefault,
   onScopeChange,
   onNavigatePrevious,
   onNavigateNext,
@@ -155,6 +181,17 @@ export function CalendarToolbar({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <CalendarSavedViewMenu
+          views={savedViews}
+          calendars={calendars}
+          activeViewId={activeSavedViewId}
+          defaultViewId={defaultSavedViewId}
+          onSelect={onSavedViewSelect}
+          onCreate={onSavedViewCreate}
+          onUpdate={onSavedViewUpdate}
+          onDelete={onSavedViewDelete}
+          onSetDefault={onSavedViewSetDefault}
+        />
         <CalendarViewMenu view={view} onViewChange={onViewChange} />
 
         <div className="relative">

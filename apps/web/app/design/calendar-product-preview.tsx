@@ -303,8 +303,8 @@ const DESIGN_MONTH_WEEK_CROSS_EVENTS: CalendarEventRow[] = [
   }),
 ];
 
-const DESIGN_MONTH_OUTSIDE_EVENTS = DESIGN_MONTH_EVENTS.filter((event) =>
-  event.id === "ev-aug-1",
+const DESIGN_MONTH_OUTSIDE_EVENTS = DESIGN_MONTH_EVENTS.filter(
+  (event) => event.id === "ev-aug-1",
 );
 
 const DESIGN_SIX_WEEK_DENSE_EVENTS: CalendarEventRow[] = [
@@ -372,6 +372,8 @@ function PlanningSidebarFrame({
           onSelectDay={noop}
           onToggleVisibility={noop}
           onCreateCalendar={noop}
+          onUpdateCalendar={noop}
+          onSetDefaultCalendar={noop}
           onToggleTask={noop}
           onQuickAddTask={noop}
           onCollapse={noop}
@@ -631,6 +633,8 @@ export function CalendarProductPreview() {
                 onSelectDay={noop}
                 onToggleVisibility={noop}
                 onCreateCalendar={noop}
+                onUpdateCalendar={noop}
+                onSetDefaultCalendar={noop}
                 onToggleTask={noop}
                 onQuickAddTask={noop}
                 onCollapse={noop}
@@ -663,7 +667,8 @@ export function CalendarProductPreview() {
           data-theme={theme === "dark" ? "dark" : undefined}
         >
           <figcaption className="mb-2 text-label uppercase text-text-muted">
-            Day view — GCal craft (header, gutter, all-day band, now line) · {theme}
+            Day view — GCal craft (header, gutter, all-day band, now line) ·{" "}
+            {theme}
           </figcaption>
           <div className="h-[36rem] overflow-hidden rounded-xl bg-calendar-chrome p-2">
             <CalendarGridEngine
@@ -777,7 +782,9 @@ export function CalendarProductPreview() {
           <div className="calendar-rail-glass absolute inset-y-0 right-0 flex w-full flex-col">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <p className="text-product-body font-medium text-ink">Agenda</p>
-              <span className="text-product-meta text-text-secondary">Close</span>
+              <span className="text-product-meta text-text-secondary">
+                Close
+              </span>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <DndContext>
@@ -790,6 +797,8 @@ export function CalendarProductPreview() {
                   onSelectDay={noop}
                   onToggleVisibility={noop}
                   onCreateCalendar={noop}
+                  onUpdateCalendar={noop}
+                  onSetDefaultCalendar={noop}
                   onToggleTask={noop}
                   onQuickAddTask={noop}
                   onCollapse={noop}

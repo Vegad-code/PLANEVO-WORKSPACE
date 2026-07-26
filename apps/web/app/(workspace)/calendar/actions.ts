@@ -12,12 +12,18 @@ import {
 import {
   createCalendar,
   createCalendarEvent,
+  createCalendarView,
+  deleteCalendarView,
   deleteCalendarEvent,
   scheduleTaskFromDrag,
+  setDefaultCalendar,
+  setDefaultCalendarView,
   softDeleteCalendarEvent,
   splitCalendarEventSeries,
   truncateCalendarEventSeries,
+  updateCalendarDetails,
   updateCalendarEvent,
+  updateCalendarView,
   updateCalendarVisibility,
   upsertCalendarEventException,
 } from "@planevo/core/mutations/product-calendar";
@@ -31,7 +37,10 @@ import {
 } from "@planevo/core/mutations/task-calendar-roundtrip";
 import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
 import { CALENDAR_COLORS } from "@planevo/core/types/calendar";
-import type { CalendarEventRow } from "@planevo/core/types/calendar";
+import type {
+  CalendarEventRow,
+  CalendarViewConfigOverrides,
+} from "@planevo/core/types/calendar";
 import type { DataAccess } from "@/lib/data/access";
 import { requireMutationDataAccess } from "@/lib/data/access";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
@@ -46,6 +55,11 @@ import {
   localDateTimeToInstant,
   remapRecurrenceIdentitiesForSplit,
 } from "@/lib/calendar/recurrence";
+import {
+  VIEW_PRESETS,
+  viewConfigSchema,
+  type ViewConfig,
+} from "@/lib/calendar/view-config";
 import { createCalendarDatabaseWithViews, createWorkspace } from "../actions";
 
 const { RRule } =
@@ -281,6 +295,179 @@ export async function toggleCalendarVisibilityAction(input: {
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not update the calendar.");
+  }
+}
+
+const updateCalendarDetailsSchema = z.object({
+  calendarId: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  color: z.enum(CALENDAR_COLORS),
+});
+
+export async function updateCalendarDetailsAction(input: {
+  calendarId: string;
+  name: string;
+  color: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = updateCalendarDetailsSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Give the calendar a name and a color." };
+    }
+    await updateCalendarDetails(
+      access.client,
+      access.ownerId,
+      parsed.data.calendarId,
+      {
+        name: parsed.data.name,
+        color: parsed.data.color,
+      },
+    );
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the calendar.");
+  }
+}
+
+const setDefaultCalendarSchema = z.object({
+  calendarId: z.string().uuid(),
+});
+
+export async function setDefaultCalendarAction(input: {
+  calendarId: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = setDefaultCalendarSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid calendar." };
+    }
+    await setDefaultCalendar(
+      access.client,
+      access.ownerId,
+      parsed.data.calendarId,
+    );
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not set the default calendar.");
+  }
+}
+
+const calendarViewOverridesSchema = viewConfigSchema.partial();
+const calendarViewFieldsSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  preset: z.enum(VIEW_PRESETS),
+  config: calendarViewOverridesSchema,
+  sourceCalendarIds: z.array(z.string().uuid()).max(100),
+  includeTaskDues: z.boolean(),
+});
+const updateCalendarViewFieldsSchema = calendarViewFieldsSchema.partial();
+
+function toCalendarViewOverrides(
+  config: Partial<ViewConfig>,
+): CalendarViewConfigOverrides {
+  return structuredClone(config) as CalendarViewConfigOverrides;
+}
+
+export async function createCalendarViewAction(input: {
+  name: string;
+  preset: string;
+  config: Partial<ViewConfig>;
+  sourceCalendarIds: string[];
+  includeTaskDues: boolean;
+}): Promise<CalendarActionResult<{ viewId: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = calendarViewFieldsSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Check the saved view settings." };
+    }
+    const savedView = await createCalendarView(access.client, access.ownerId, {
+      ...parsed.data,
+      config: toCalendarViewOverrides(parsed.data.config),
+    });
+    revalidatePath("/calendar");
+    return { ok: true, data: { viewId: savedView.id } };
+  } catch (cause) {
+    return actionError(cause, "Could not create the saved view.");
+  }
+}
+
+export async function updateCalendarViewAction(input: {
+  viewId: string;
+  name?: string;
+  preset?: string;
+  config?: Partial<ViewConfig>;
+  sourceCalendarIds?: string[];
+  includeTaskDues?: boolean;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = z
+      .object({
+        viewId: z.string().uuid(),
+        ...updateCalendarViewFieldsSchema.shape,
+      })
+      .safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Check the saved view settings." };
+    }
+    const { viewId, config, ...fields } = parsed.data;
+    await updateCalendarView(access.client, access.ownerId, viewId, {
+      ...fields,
+      ...(config === undefined
+        ? {}
+        : { config: toCalendarViewOverrides(config) }),
+    });
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the saved view.");
+  }
+}
+
+const calendarViewIdSchema = z.object({
+  viewId: z.string().uuid(),
+});
+
+export async function deleteCalendarViewAction(input: {
+  viewId: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = calendarViewIdSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid saved view." };
+    }
+    await deleteCalendarView(access.client, access.ownerId, parsed.data.viewId);
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not delete the saved view.");
+  }
+}
+
+export async function setDefaultCalendarViewAction(input: {
+  viewId: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = calendarViewIdSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid saved view." };
+    }
+    await setDefaultCalendarView(
+      access.client,
+      access.ownerId,
+      parsed.data.viewId,
+    );
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not set the default saved view.");
   }
 }
 

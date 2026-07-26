@@ -3,6 +3,7 @@ import type { Database } from "../types/database.types";
 import type {
   CalendarEventRow,
   CalendarRow,
+  CalendarViewRow,
   TaskDueChip,
 } from "../types/calendar";
 import type { TaskStatus } from "../types/tasks";
@@ -54,6 +55,37 @@ export async function loadCalendars(
   // ponytail: DB CHECK constrains color to CALENDAR_COLORS, so narrowing the
   // generated Row is safe (same convention as loadProductTasks).
   return (data ?? []) as unknown as CalendarRow[];
+}
+
+/**
+ * Saved lenses ordered for the switcher. Calendar ids are intentionally not
+ * foreign keys, so stale ids are discarded at the read boundary after a source
+ * calendar is deleted.
+ */
+export async function listCalendarViews(
+  client: SupabaseClient<Database>,
+  userId: string,
+): Promise<CalendarViewRow[]> {
+  const [viewsResult, calendarsResult] = await Promise.all([
+    client
+      .from("calendar_views")
+      .select("*")
+      .eq("user_id", userId)
+      .order("position", { ascending: true }),
+    client.from("calendars").select("id").eq("user_id", userId),
+  ]);
+  if (viewsResult.error) throw viewsResult.error;
+  if (calendarsResult.error) throw calendarsResult.error;
+
+  const ownedCalendarIds = new Set(
+    (calendarsResult.data ?? []).map(({ id }) => id),
+  );
+  return (viewsResult.data ?? []).map((row) => ({
+    ...(row as unknown as CalendarViewRow),
+    source_calendar_ids: row.source_calendar_ids.filter((calendarId) =>
+      ownedCalendarIds.has(calendarId),
+    ),
+  }));
 }
 
 /**
@@ -156,14 +188,12 @@ export async function loadCalendarWeek(
           return (data ?? []) as unknown as CalendarEventRow[];
         }),
       );
-      recurrenceExceptions = exceptionResults
-        .flat()
-        .sort((left, right) => {
-          const timeDifference =
-            new Date(left.starts_at).getTime() -
-            new Date(right.starts_at).getTime();
-          return timeDifference || left.id.localeCompare(right.id);
-        });
+      recurrenceExceptions = exceptionResults.flat().sort((left, right) => {
+        const timeDifference =
+          new Date(left.starts_at).getTime() -
+          new Date(right.starts_at).getTime();
+        return timeDifference || left.id.localeCompare(right.id);
+      });
     }
   }
 
@@ -232,9 +262,7 @@ function recurrenceExceptionStart(
       ? duration
       : longest;
   }, 0);
-  return new Date(
-    windowStart.getTime() - longestDurationMinutes * 60_000,
-  );
+  return new Date(windowStart.getTime() - longestDurationMinutes * 60_000);
 }
 
 function chunkIds(ids: string[], chunkSize: number): string[][] {

@@ -7,6 +7,7 @@ import type {
   CalendarEventRow,
   CalendarRow,
 } from "@planevo/core/types/calendar";
+import { defaultCalendarId } from "@/lib/calendar/default-calendar";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { Select } from "@/components/ui/select";
 import {
@@ -85,7 +86,7 @@ export function EventDetailPanel({
   onDraftChange,
 }: EventDetailPanelProps) {
   const isCreate = mode === "create";
-  const defaultCalendarId = calendars[0]?.id ?? "";
+  const createCalendarId = defaultCalendarId(calendars);
 
   /**
    * What the card opened with, frozen for its lifetime. The panel echoes its
@@ -95,7 +96,12 @@ export function EventDetailPanel({
    * session or a different event remounts this component with a fresh baseline.
    */
   const [baseline] = useState<EventFormState>(() =>
-    buildEventFormState({ mode, event, initialRange, defaultCalendarId }),
+    buildEventFormState({
+      mode,
+      event,
+      initialRange,
+      defaultCalendarId: createCalendarId,
+    }),
   );
 
   const [form, setForm] = useState<EventFormState>(baseline);
@@ -117,7 +123,7 @@ export function EventDetailPanel({
   // Calendars arrive async, so the form may have been seeded before there was a
   // default to seed with. Derived rather than back-filled by an effect: an empty
   // `form.calendarId` just means "the user has not picked one".
-  const selectedCalendarId = form.calendarId || defaultCalendarId;
+  const selectedCalendarId = form.calendarId || createCalendarId;
   const selectedCalendar = calendars.find(
     (calendar) => calendar.id === selectedCalendarId,
   );

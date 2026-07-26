@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../types/database.types";
-import type { CalendarColor, CalendarEventRow, CalendarRow } from "../types/calendar";
+import type {
+  CalendarColor,
+  CalendarEventRow,
+  CalendarRow,
+  CalendarViewConfigOverrides,
+  CalendarViewRow,
+} from "../types/calendar";
 import { scheduleTask } from "./task-cross-links.ts";
 
 const DEFAULT_TASK_BLOCK_DURATION_MINUTES = 60;
@@ -100,7 +106,9 @@ export async function updateCalendarEvent(
       ...(input.recurrenceEnd !== undefined
         ? { recurrence_end: input.recurrenceEnd }
         : {}),
-      ...(input.calendarId !== undefined ? { calendar_id: input.calendarId } : {}),
+      ...(input.calendarId !== undefined
+        ? { calendar_id: input.calendarId }
+        : {}),
       ...(input.location !== undefined ? { location: input.location } : {}),
       ...(input.description !== undefined
         ? { description_json: input.description as Json }
@@ -142,29 +150,26 @@ export async function upsertCalendarEventException(
   userId: string,
   input: RecurrenceOccurrenceWrite,
 ): Promise<CalendarEventRow> {
-  const { data, error } = await client.rpc(
-    "upsert_calendar_event_exception",
-    {
-      p_owner_id: userId,
-      p_master_event_id: input.masterEventId,
-      p_calendar_id: input.calendarId,
-      p_recurrence_id: input.recurrenceId,
-      p_operation_key: input.operationKey,
-      p_is_cancelled: input.isCancelled,
-      p_title: input.title,
-      p_starts_at: input.startsAt,
-      p_ends_at: input.endsAt,
-      p_starts_at_local: input.startsAtLocal,
-      p_ends_at_local: input.endsAtLocal,
-      p_timezone: input.timezone,
-      p_duration_minutes: input.durationMinutes,
-      p_all_day: input.allDay,
-      p_location: input.location,
-      p_description_json: input.description as Json,
-      p_color: input.color,
-      p_conference_url: input.conferenceUrl,
-    },
-  );
+  const { data, error } = await client.rpc("upsert_calendar_event_exception", {
+    p_owner_id: userId,
+    p_master_event_id: input.masterEventId,
+    p_calendar_id: input.calendarId,
+    p_recurrence_id: input.recurrenceId,
+    p_operation_key: input.operationKey,
+    p_is_cancelled: input.isCancelled,
+    p_title: input.title,
+    p_starts_at: input.startsAt,
+    p_ends_at: input.endsAt,
+    p_starts_at_local: input.startsAtLocal,
+    p_ends_at_local: input.endsAtLocal,
+    p_timezone: input.timezone,
+    p_duration_minutes: input.durationMinutes,
+    p_all_day: input.allDay,
+    p_location: input.location,
+    p_description_json: input.description as Json,
+    p_color: input.color,
+    p_conference_url: input.conferenceUrl,
+  });
   if (error) throw error;
   return data as unknown as CalendarEventRow;
 }
@@ -174,14 +179,11 @@ export async function truncateCalendarEventSeries(
   userId: string,
   input: { masterEventId: string; recurrenceId: string },
 ): Promise<CalendarEventRow> {
-  const { data, error } = await client.rpc(
-    "truncate_calendar_event_series",
-    {
-      p_owner_id: userId,
-      p_master_event_id: input.masterEventId,
-      p_recurrence_id: input.recurrenceId,
-    },
-  );
+  const { data, error } = await client.rpc("truncate_calendar_event_series", {
+    p_owner_id: userId,
+    p_master_event_id: input.masterEventId,
+    p_recurrence_id: input.recurrenceId,
+  });
   if (error) throw error;
   return data as unknown as CalendarEventRow;
 }
@@ -293,6 +295,33 @@ export async function createCalendar(
   return data as unknown as CalendarRow;
 }
 
+export type UpdateCalendarDetailsInput = {
+  name?: string;
+  color?: CalendarColor;
+};
+
+/** Rename or recolor an owned calendar without changing visibility/defaults. */
+export async function updateCalendarDetails(
+  client: SupabaseClient<Database>,
+  userId: string,
+  calendarId: string,
+  input: UpdateCalendarDetailsInput,
+): Promise<CalendarRow> {
+  const { data, error } = await client
+    .from("calendars")
+    .update({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.color !== undefined ? { color: input.color } : {}),
+    })
+    .eq("id", calendarId)
+    .eq("user_id", userId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Calendar not found.");
+  return data as unknown as CalendarRow;
+}
+
 export async function updateCalendarVisibility(
   client: SupabaseClient<Database>,
   userId: string,
@@ -305,6 +334,128 @@ export async function updateCalendarVisibility(
     .eq("id", calendarId)
     .eq("user_id", userId);
   if (error) throw error;
+}
+
+export type CreateCalendarViewInput = {
+  name: string;
+  preset: string;
+  config: CalendarViewConfigOverrides;
+  sourceCalendarIds: string[];
+  includeTaskDues: boolean;
+  position?: number;
+};
+
+export type UpdateCalendarViewInput = {
+  name?: string;
+  preset?: string;
+  config?: CalendarViewConfigOverrides;
+  sourceCalendarIds?: string[];
+  includeTaskDues?: boolean;
+  position?: number;
+};
+
+/**
+ * Persist only the caller's overrides. Preset resolution belongs at the render
+ * boundary so preset improvements flow through existing saved views.
+ */
+export async function createCalendarView(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: CreateCalendarViewInput,
+): Promise<CalendarViewRow> {
+  const { data, error } = await client
+    .from("calendar_views")
+    .insert({
+      user_id: userId,
+      name: input.name,
+      preset: input.preset,
+      config: cloneCalendarViewConfig(input.config) as Json,
+      source_calendar_ids: [...input.sourceCalendarIds],
+      include_task_dues: input.includeTaskDues,
+      ...(input.position !== undefined ? { position: input.position } : {}),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as unknown as CalendarViewRow;
+}
+
+export async function updateCalendarView(
+  client: SupabaseClient<Database>,
+  userId: string,
+  viewId: string,
+  input: UpdateCalendarViewInput,
+): Promise<CalendarViewRow> {
+  const { data, error } = await client
+    .from("calendar_views")
+    .update({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.preset !== undefined ? { preset: input.preset } : {}),
+      ...(input.config !== undefined
+        ? { config: cloneCalendarViewConfig(input.config) as Json }
+        : {}),
+      ...(input.sourceCalendarIds !== undefined
+        ? { source_calendar_ids: [...input.sourceCalendarIds] }
+        : {}),
+      ...(input.includeTaskDues !== undefined
+        ? { include_task_dues: input.includeTaskDues }
+        : {}),
+      ...(input.position !== undefined ? { position: input.position } : {}),
+      updated_at: nowIso(),
+    })
+    .eq("id", viewId)
+    .eq("user_id", userId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Calendar view not found.");
+  return data as unknown as CalendarViewRow;
+}
+
+export async function deleteCalendarView(
+  client: SupabaseClient<Database>,
+  userId: string,
+  viewId: string,
+): Promise<void> {
+  const { data, error } = await client
+    .from("calendar_views")
+    .delete()
+    .eq("id", viewId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Calendar view not found.");
+}
+
+export async function setDefaultCalendarView(
+  client: SupabaseClient<Database>,
+  userId: string,
+  viewId: string,
+): Promise<void> {
+  const { error } = await client.rpc("set_default_calendar_view", {
+    p_owner_id: userId,
+    p_view_id: viewId,
+  });
+  if (error) throw error;
+}
+
+export async function setDefaultCalendar(
+  client: SupabaseClient<Database>,
+  userId: string,
+  calendarId: string,
+): Promise<void> {
+  const { error } = await client.rpc("set_default_calendar", {
+    p_owner_id: userId,
+    p_calendar_id: calendarId,
+  });
+  if (error) throw error;
+}
+
+function cloneCalendarViewConfig(
+  config: CalendarViewConfigOverrides,
+): CalendarViewConfigOverrides {
+  return structuredClone(config);
 }
 
 export type ScheduleTaskFromDragInput = {
@@ -339,9 +490,7 @@ export async function scheduleTaskFromDrag(
   if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
     throw new Error(`Invalid task duration: ${durationMinutes}`);
   }
-  const endsAt = new Date(
-    startsAtMs + durationMinutes * 60_000,
-  ).toISOString();
+  const endsAt = new Date(startsAtMs + durationMinutes * 60_000).toISOString();
   const event = await scheduleTask(client, userId, {
     operationKey: input.operationKey,
     taskId: input.taskId,

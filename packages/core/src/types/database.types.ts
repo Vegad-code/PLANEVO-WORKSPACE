@@ -510,6 +510,12 @@ export interface Database {
         Update: { id?: string; user_id?: string; name?: string; color?: string; is_visible?: boolean; is_default?: boolean; position?: number; created_at?: string };
         Relationships: [];
       };
+      calendar_views: {
+        Row: { id: string; user_id: string; name: string; preset: string; config: Json; source_calendar_ids: string[]; include_task_dues: boolean; is_default: boolean; position: number; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; name: string; preset?: string; config?: Json; source_calendar_ids?: string[]; include_task_dues?: boolean; is_default?: boolean; position?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; user_id?: string; name?: string; preset?: string; config?: Json; source_calendar_ids?: string[]; include_task_dues?: boolean; is_default?: boolean; position?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
       calendar_events: {
         Row: { id: string; calendar_id: string; user_id: string; operation_key: string | null; title: string; starts_at: string; ends_at: string; starts_at_local: string | null; ends_at_local: string | null; timezone: string | null; duration_minutes: number | null; rrule: string | null; recurrence_end: string | null; parent_event_id: string | null; recurrence_id: string | null; is_exception: boolean; is_cancelled: boolean; deleted_at: string | null; color: string | null; conference_url: string | null; all_day: boolean; location: string | null; description_json: Json; task_id: string | null; google_event_id: string | null; source: string; created_at: string; updated_at: string };
         Insert: { id?: string; calendar_id: string; user_id: string; operation_key?: string | null; title: string; starts_at: string; ends_at: string; starts_at_local?: string | null; ends_at_local?: string | null; timezone?: string | null; duration_minutes?: number | null; rrule?: string | null; recurrence_end?: string | null; parent_event_id?: string | null; recurrence_id?: string | null; is_exception?: boolean; is_cancelled?: boolean; deleted_at?: string | null; color?: string | null; conference_url?: string | null; all_day?: boolean; location?: string | null; description_json?: Json; task_id?: string | null; google_event_id?: string | null; source?: string; created_at?: string; updated_at?: string };
@@ -552,6 +558,20 @@ export interface Database {
           p_workspace_event_ids?: string[] | null;
         };
         Returns: Database["public"]["Tables"]["calendar_events"]["Row"][];
+      };
+      set_default_calendar_view: {
+        Args: {
+          p_owner_id: string;
+          p_view_id: string;
+        };
+        Returns: undefined;
+      };
+      set_default_calendar: {
+        Args: {
+          p_owner_id: string;
+          p_calendar_id: string;
+        };
+        Returns: undefined;
       };
       upsert_calendar_event_exception: {
         Args: {

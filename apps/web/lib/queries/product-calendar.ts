@@ -41,12 +41,7 @@ export async function loadCalendarPageData(
   }
 
   const workspaceId = currentWorkspace?.workspace.id ?? null
-  const ready = await fetchCalendarPageData(
-    access,
-    workspaceId,
-    scope,
-    request,
-  )
+  const ready = await fetchCalendarPageData(access, workspaceId, scope, request)
 
   return {
     status: "ready",
@@ -56,6 +51,7 @@ export async function loadCalendarPageData(
     todayTasks: ready.todayTasks,
     workspaceId: ready.workspaceId,
     calendars: ready.calendars,
+    views: ready.views,
     events: ready.events,
     taskDues: ready.taskDues,
   }

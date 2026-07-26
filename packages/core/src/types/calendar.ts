@@ -10,6 +10,23 @@ export const CALENDAR_COLORS = [
 
 export type CalendarColor = (typeof CALENDAR_COLORS)[number];
 
+export type CalendarViewConfigValue =
+  | string
+  | number
+  | boolean
+  | null
+  | CalendarViewConfigValue[]
+  | { [key: string]: CalendarViewConfigValue };
+
+/**
+ * Persisted saved-view configuration contains only axes that differ from the
+ * selected preset. Resolving those overrides into a complete renderer config is
+ * deliberately a read concern.
+ */
+export type CalendarViewConfigOverrides = {
+  [key: string]: CalendarViewConfigValue;
+};
+
 export type CalendarRow = {
   id: string;
   user_id: string;
@@ -34,7 +51,7 @@ export type CalendarViewRow = {
   user_id: string;
   name: string;
   preset: string;
-  config: Record<string, unknown>;
+  config: CalendarViewConfigOverrides;
   source_calendar_ids: string[];
   include_task_dues: boolean;
   is_default: boolean;

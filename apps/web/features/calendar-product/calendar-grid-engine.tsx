@@ -35,6 +35,7 @@ import {
   configForLegacyView,
   resolveRenderer,
 } from "@/lib/calendar/view-registry"
+import type { ViewConfig } from "@/lib/calendar/view-config"
 import { cn } from "@/lib/utils"
 import {
   elementToAnchorRect,
@@ -48,11 +49,7 @@ import { RbcNowIndicatorWrapper } from "./rbc-now-indicator-wrapper"
 import { RbcEventContent } from "./rbc-event-content"
 import { RbcPlanevoEventWrapper } from "./rbc-planevo-event-wrapper"
 import { RbcTimeGutterHeader } from "./rbc-time-gutter-header"
-import {
-  DAY_START_HOUR,
-  formatHourLabel,
-  VISIBLE_HOURS,
-} from "./time-axis"
+import { DAY_START_HOUR, formatHourLabel, VISIBLE_HOURS } from "./time-axis"
 import "react-big-calendar/lib/css/react-big-calendar.css"
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
 
@@ -85,6 +82,7 @@ const DragAndDropCalendar = withDragAndDrop(
 
 type CalendarGridEngineProps = {
   view: "day" | "week" | "month"
+  viewConfig?: ViewConfig | null
   anchor: Date
   calendars: CalendarRow[]
   events: CalendarEventRow[]
@@ -139,6 +137,7 @@ function calendarSlotDataAttributes(date: Date) {
  */
 export function CalendarGridEngine({
   view,
+  viewConfig = null,
   anchor,
   calendars,
   events,
@@ -164,8 +163,8 @@ export function CalendarGridEngine({
   // so a saved view's config picks the renderer by the same path the legacy
   // toolbar does.
   const renderer = useMemo(
-    () => resolveRenderer(configForLegacyView(view)),
-    [view],
+    () => resolveRenderer(viewConfig ?? configForLegacyView(view)),
+    [view, viewConfig],
   )
   const isMonthView = renderer.id === "month-grid"
   const rbcView: View = renderer.navigationUnit === "day" ? "day" : "week"
@@ -191,8 +190,7 @@ export function CalendarGridEngine({
     return toDraftRbcEvent({ ...draftCreateEvent, color })
   }, [calendars, draftCreateEvent])
   const rbcEvents = useMemo(
-    () =>
-      draftRbcEvent ? [...timeGridEvents, draftRbcEvent] : timeGridEvents,
+    () => (draftRbcEvent ? [...timeGridEvents, draftRbcEvent] : timeGridEvents),
     [draftRbcEvent, timeGridEvents],
   )
   const monthItems = useMemo(
@@ -231,11 +229,8 @@ export function CalendarGridEngine({
     if (isMonthView || !todayInVisibleRange) return false
 
     const nowHour = now.getHours()
-    return (
-      nowHour >= DAY_START_HOUR &&
-      nowHour < DAY_START_HOUR + VISIBLE_HOURS
-    )
-  }, [isMonthView, now, todayInVisibleRange, view])
+    return nowHour >= DAY_START_HOUR && nowHour < DAY_START_HOUR + VISIBLE_HOURS
+  }, [isMonthView, now, todayInVisibleRange])
 
   const timeGridComponents = useMemo(
     () => ({
@@ -304,7 +299,9 @@ export function CalendarGridEngine({
       const row = eventsById.get(getPlanevoEventId(rbcEvent))
       if (!row) return
       const anchorEl =
-        e.currentTarget instanceof HTMLElement ? e.currentTarget : gridRef.current
+        e.currentTarget instanceof HTMLElement
+          ? e.currentTarget
+          : gridRef.current
       if (!anchorEl) return
       onEventSelect(row, elementToAnchorRect(anchorEl))
     },

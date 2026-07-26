@@ -16,7 +16,10 @@ import {
 import { cn } from "@/lib/utils";
 import { CalendarDateSection } from "./calendar-date-section";
 import { CalendarPlanningSection } from "./calendar-planning-section";
-import { CalendarSourcesSection } from "./calendar-sources-section";
+import {
+  CalendarSourcesSection,
+  type CalendarSourceUpdateInput,
+} from "./calendar-sources-section";
 import {
   CalendarTasksSection,
   countOpenPlanningTasks,
@@ -32,11 +35,13 @@ export type CalendarPlanningSidebarProps = {
   onSelectDay: (day: Date) => void;
   onToggleVisibility: (calendarId: string, isVisible: boolean) => void;
   onCreateCalendar: (name: string, color: CalendarColor) => void;
-  onToggleTask: (taskId: string, done: boolean) => void;
-  onQuickAddTask: (
-    title: string,
-    bucket: "week" | "month" | "none",
+  onUpdateCalendar: (
+    calendarId: string,
+    input: CalendarSourceUpdateInput,
   ) => void;
+  onSetDefaultCalendar: (calendarId: string) => void;
+  onToggleTask: (taskId: string, done: boolean) => void;
+  onQuickAddTask: (title: string, bucket: "week" | "month" | "none") => void;
   onCollapse: () => void;
   /** Extra left inset on the title row when the app nav hamburger is visible. */
   clearRevealChrome?: boolean;
@@ -57,6 +62,8 @@ export function CalendarPlanningSidebar({
   onSelectDay,
   onToggleVisibility,
   onCreateCalendar,
+  onUpdateCalendar,
+  onSetDefaultCalendar,
   onToggleTask,
   onQuickAddTask,
   onCollapse,
@@ -79,7 +86,9 @@ export function CalendarPlanningSidebar({
   }, [collapsedSections, collapseRestored]);
 
   function handleToggleSection(sectionId: PlanningSectionId) {
-    setCollapsedSections((current) => togglePlanningSection(current, sectionId));
+    setCollapsedSections((current) =>
+      togglePlanningSection(current, sectionId),
+    );
   }
 
   const openTaskCount = countOpenPlanningTasks(todayTasks, now);
@@ -153,6 +162,8 @@ export function CalendarPlanningSidebar({
             calendars={calendars}
             onToggleVisibility={onToggleVisibility}
             onCreateCalendar={onCreateCalendar}
+            onUpdateCalendar={onUpdateCalendar}
+            onSetDefaultCalendar={onSetDefaultCalendar}
           />
         </CalendarPlanningSection>
       </nav>

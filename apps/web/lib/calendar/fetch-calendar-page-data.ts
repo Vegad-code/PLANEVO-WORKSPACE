@@ -1,10 +1,14 @@
 import {
+  listCalendarViews,
   loadCalendarWeek,
   type CalendarWeekData,
 } from "@planevo/core/queries/product-calendar"
 import { loadProductTasks } from "@planevo/core/queries/product-tasks"
 import type { DataAccess } from "@planevo/core/types/data-access"
-import type { CalendarDisplayEvent } from "@planevo/core/types/calendar"
+import type {
+  CalendarDisplayEvent,
+  CalendarViewRow,
+} from "@planevo/core/types/calendar"
 import {
   parseCalendarSearchParams,
   type CalendarToolbarView,
@@ -31,6 +35,7 @@ export type CalendarReadyData = {
   todayTasks: TodayColumnTask[]
   workspaceId: string | null
   calendars: CalendarWeekData["calendars"]
+  views: CalendarViewRow[]
   events: CalendarDisplayEvent[]
   taskDues: CalendarWeekData["taskDues"]
 }
@@ -42,6 +47,7 @@ export type CalendarQueryPayload = {
   view: CalendarToolbarView
   workspaceId: string | null
   calendars: CalendarWeekData["calendars"]
+  views: CalendarViewRow[]
   events: CalendarDisplayEvent[]
   taskDues: CalendarWeekData["taskDues"]
   todayTasks: TodayColumnTask[]
@@ -56,6 +62,7 @@ export function serializeCalendarQueryData(
     view: data.view,
     workspaceId: data.workspaceId,
     calendars: data.calendars,
+    views: data.views,
     events: data.events,
     taskDues: data.taskDues,
     todayTasks: data.todayTasks,
@@ -73,7 +80,7 @@ export async function fetchCalendarPageData(
   const workspaceFilter =
     scope === "workspace" && workspaceId ? { workspaceId } : {}
 
-  const [week, tasks] = await Promise.all([
+  const [week, tasks, views] = await Promise.all([
     loadCalendarWeek(access.client, access.ownerId, {
       start,
       end,
@@ -81,6 +88,7 @@ export async function fetchCalendarPageData(
       ...workspaceFilter,
     }),
     loadProductTasks(access.client, access.ownerId, workspaceFilter),
+    listCalendarViews(access.client, access.ownerId),
   ])
 
   const todayTasks: TodayColumnTask[] = tasks.map((task) => ({
@@ -108,6 +116,7 @@ export async function fetchCalendarPageData(
     todayTasks,
     workspaceId,
     calendars: week.calendars,
+    views,
     events,
     taskDues: week.taskDues,
   }

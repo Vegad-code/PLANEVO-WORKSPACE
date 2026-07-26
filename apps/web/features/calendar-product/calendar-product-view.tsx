@@ -19,6 +19,7 @@ import { toast } from "@/components/ui/toast";
 import { useSidebarLayout } from "@/features/shell/sidebar-layout-context";
 import { centeredAnchorRectFromElement } from "@/lib/calendar/event-popover-position";
 import { draftCreateCardAnchorRect } from "@/lib/calendar/event-popover-anchor";
+import { defaultCalendarId } from "@/lib/calendar/default-calendar";
 import type { DraftCreateEventState } from "@/lib/calendar/rbc-event-adapter";
 import { CALENDAR_HOTKEY_SCOPE } from "@/lib/calendar/calendar-shortcut-map";
 import { startOfWeekSunday } from "@/lib/calendar/calendar-navigation";
@@ -40,6 +41,8 @@ import {
   completeTaskLinkedEventAction,
   createCalendarAction,
   createCalendarEventAction,
+  createCalendarViewAction,
+  deleteCalendarViewAction,
   deleteCalendarEventAction,
   deleteRecurringEventAction,
   quickAddTaskAction,
@@ -48,10 +51,14 @@ import {
   restoreRecurringCalendarMutationAction,
   type RecurrenceMutationScope,
   scheduleTaskFromDragAction,
+  setDefaultCalendarAction,
+  setDefaultCalendarViewAction,
   setTaskStatusAction,
   toggleCalendarVisibilityAction,
   unscheduleTaskLinkedEventAction,
+  updateCalendarDetailsAction,
   updateCalendarEventAction,
+  updateCalendarViewAction,
   updateEventTimesAction,
   updateRecurringEventAction,
 } from "@/app/(workspace)/calendar/actions";
@@ -67,6 +74,13 @@ import {
   type CalendarUndoPayload,
   type RestoreEventTimesUndoPayload,
 } from "@/lib/calendar/undo-stack";
+import {
+  filterCalendarViewContent,
+  initialCalendarViewId,
+  nextCalendarViewIdAfterDelete,
+  toolbarViewForSavedConfig,
+} from "@/lib/calendar/view-crud";
+import { resolveViewConfig } from "@/lib/calendar/view-config";
 import { EventDetailPopover } from "./event-detail-popover";
 import { CalendarDndContext } from "./calendar-dnd-context";
 import { useMonthMutations } from "./use-month-mutations";
@@ -75,6 +89,7 @@ import { CalendarPlanningSidebar } from "./calendar-planning-sidebar";
 import { CalendarResizeHandle } from "./calendar-resize-handle";
 import { CalendarShortcutsCheatSheet } from "./calendar-shortcuts-cheat-sheet";
 import { CalendarToolbar } from "./calendar-toolbar";
+import type { CalendarSavedViewInput } from "./calendar-saved-view-menu";
 import {
   EventDetailPanel,
   type EventPanelSavePayload,
@@ -227,6 +242,9 @@ function CalendarProductViewInner({
   const [crossLinkPanel, setCrossLinkPanel] =
     useState<EventCrossLinkPanel | null>(null);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
+  const [selectedSavedViewId, setSelectedSavedViewId] = useState<
+    string | null | undefined
+  >(undefined);
   const [planningDrawerOpen, setPlanningDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [planningWidth, setPlanningWidthState] = useState(
@@ -244,9 +262,38 @@ function CalendarProductViewInner({
   const calendars = calendarQuery.data?.calendars ?? [];
   const events = calendarQuery.data?.events ?? [];
   const taskDues = calendarQuery.data?.taskDues ?? [];
+  const savedViews = calendarQuery.data?.views ?? [];
   const todayTasks = calendarQuery.data?.todayTasks ?? [];
+  const defaultSavedViewId =
+    savedViews.find(({ is_default }) => is_default)?.id ?? null;
+  const activeSavedViewId =
+    selectedSavedViewId === undefined
+      ? initialCalendarViewId(savedViews)
+      : selectedSavedViewId === null ||
+          savedViews.some(({ id }) => id === selectedSavedViewId)
+        ? selectedSavedViewId
+        : initialCalendarViewId(savedViews);
+  const activeSavedView =
+    savedViews.find(({ id }) => id === activeSavedViewId) ?? null;
+  const activeSavedViewConfig = activeSavedView
+    ? resolveViewConfig(activeSavedView.preset, activeSavedView.config)
+    : null;
+  const activeSavedToolbarView = activeSavedViewConfig
+    ? toolbarViewForSavedConfig(activeSavedViewConfig)
+    : null;
+  const createCalendarId = defaultCalendarId(calendars);
+  const visibleContent = filterCalendarViewContent({
+    events,
+    taskDues,
+    view: activeSavedView,
+  });
   const isFetchingNewRange =
     calendarQuery.isFetching && !calendarQuery.isPlaceholderData;
+
+  useEffect(() => {
+    if (!activeSavedToolbarView || activeSavedToolbarView === view) return;
+    handleViewChange(activeSavedToolbarView);
+  }, [activeSavedToolbarView, handleViewChange, view]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60 * 1000);
@@ -317,6 +364,100 @@ function CalendarProductViewInner({
       toast("Calendar created");
       invalidateCalendar(scope);
     });
+  }
+
+  function handleUpdateCalendar(
+    calendarId: string,
+    input: { name: string; color: CalendarColor },
+  ) {
+    startTransition(async () => {
+      const result = await updateCalendarDetailsAction({
+        calendarId,
+        ...input,
+      });
+      if (!result.ok) {
+        toast(result.error, { tone: "error" });
+        return;
+      }
+      toast("Calendar updated");
+      invalidateCalendar(scope);
+    });
+  }
+
+  function handleSetDefaultCalendar(calendarId: string) {
+    startTransition(async () => {
+      const result = await setDefaultCalendarAction({ calendarId });
+      if (!result.ok) {
+        toast(result.error, { tone: "error" });
+        return;
+      }
+      toast("Default calendar updated");
+      invalidateCalendar(scope);
+    });
+  }
+
+  function handleStandardViewChange(
+    nextView: "day" | "week" | "month" | "year",
+  ) {
+    setSelectedSavedViewId(null);
+    handleViewChange(nextView);
+  }
+
+  function handleStandardSelectDay(day: Date) {
+    setSelectedSavedViewId(null);
+    handleSelectDay(day);
+  }
+
+  function handleSavedViewSelect(viewId: string | null) {
+    setSelectedSavedViewId(viewId);
+  }
+
+  async function handleSavedViewCreate(input: CalendarSavedViewInput) {
+    const result = await createCalendarViewAction(input);
+    if (!result.ok) {
+      toast(result.error, { tone: "error" });
+      throw new Error(result.error);
+    }
+    setSelectedSavedViewId(result.data.viewId);
+    toast("View created");
+    invalidateCalendar(scope);
+  }
+
+  async function handleSavedViewUpdate(
+    viewId: string,
+    input: CalendarSavedViewInput,
+  ) {
+    const result = await updateCalendarViewAction({ viewId, ...input });
+    if (!result.ok) {
+      toast(result.error, { tone: "error" });
+      throw new Error(result.error);
+    }
+    toast("View updated");
+    invalidateCalendar(scope);
+  }
+
+  async function handleSavedViewDelete(viewId: string) {
+    const result = await deleteCalendarViewAction({ viewId });
+    if (!result.ok) {
+      toast(result.error, { tone: "error" });
+      throw new Error(result.error);
+    }
+    if (activeSavedViewId === viewId) {
+      setSelectedSavedViewId(nextCalendarViewIdAfterDelete(savedViews, viewId));
+    }
+    toast("View deleted");
+    invalidateCalendar(scope);
+  }
+
+  async function handleSavedViewSetDefault(viewId: string) {
+    const result = await setDefaultCalendarViewAction({ viewId });
+    if (!result.ok) {
+      toast(result.error, { tone: "error" });
+      throw new Error(result.error);
+    }
+    setSelectedSavedViewId(viewId);
+    toast("Default view updated");
+    invalidateCalendar(scope);
   }
 
   async function executeUndo(id: string) {
@@ -432,10 +573,10 @@ function CalendarProductViewInner({
         startsAt: range.startsAt.toISOString(),
         endsAt: range.endsAt.toISOString(),
         title: current?.title ?? "",
-        calendarId: current?.calendarId ?? calendars[0]?.id ?? "",
+        calendarId: current?.calendarId ?? createCalendarId,
       }));
     },
-    [calendars],
+    [createCalendarId],
   );
 
   function openCreateEventPanel(
@@ -450,7 +591,7 @@ function CalendarProductViewInner({
       startsAt,
       endsAt,
       title: current?.title ?? "",
-      calendarId: current?.calendarId ?? calendars[0]?.id ?? "",
+      calendarId: current?.calendarId ?? createCalendarId,
     }));
     setEventPanel({
       mode: "create",
@@ -884,7 +1025,7 @@ function CalendarProductViewInner({
     cheatSheetOpen,
     enabled: !eventPanel,
     onCheatSheetOpenChange: setCheatSheetOpen,
-    onViewChange: handleViewChange,
+    onViewChange: handleStandardViewChange,
     onNavigateToday: handleNavigateToday,
     onCreateEvent: handleHotkeyCreateEvent,
     onDismiss: handleDismissOverlay,
@@ -895,13 +1036,15 @@ function CalendarProductViewInner({
   const planningSidebar = (
     <CalendarPlanningSidebar
       calendars={calendars}
-      events={events}
+      events={visibleContent.events}
       todayTasks={todayTasks}
       now={now}
       weekStart={visibleWeekStart}
-      onSelectDay={handleSelectDay}
+      onSelectDay={handleStandardSelectDay}
       onToggleVisibility={handleToggleVisibility}
       onCreateCalendar={handleCreateCalendar}
+      onUpdateCalendar={handleUpdateCalendar}
+      onSetDefaultCalendar={handleSetDefaultCalendar}
       onToggleTask={handleToggleTask}
       onQuickAddTask={handleQuickAddTask}
       onCollapse={() => setSidebarCollapsed(true)}
@@ -1018,7 +1161,16 @@ function CalendarProductViewInner({
                   scope={scope}
                   navMotion={navMotion}
                   prefersReducedMotion={prefersReducedMotion}
-                  onViewChange={handleViewChange}
+                  calendars={calendars}
+                  savedViews={savedViews}
+                  activeSavedViewId={activeSavedViewId}
+                  defaultSavedViewId={defaultSavedViewId}
+                  onViewChange={handleStandardViewChange}
+                  onSavedViewSelect={handleSavedViewSelect}
+                  onSavedViewCreate={handleSavedViewCreate}
+                  onSavedViewUpdate={handleSavedViewUpdate}
+                  onSavedViewDelete={handleSavedViewDelete}
+                  onSavedViewSetDefault={handleSavedViewSetDefault}
                   onScopeChange={changeScope}
                   onNavigatePrevious={handleNavigatePrevious}
                   onNavigateNext={handleNavigateNext}
@@ -1043,7 +1195,7 @@ function CalendarProductViewInner({
                   <YearView
                     year={anchorDate.getFullYear()}
                     today={now}
-                    onSelectDay={handleSelectDay}
+                    onSelectDay={handleStandardSelectDay}
                   />
                 ) : (
                   <CalendarGridEngine
@@ -1051,8 +1203,9 @@ function CalendarProductViewInner({
                     view={view}
                     anchor={anchorDate}
                     calendars={calendars}
-                    events={events}
-                    taskDues={taskDues}
+                    events={visibleContent.events}
+                    taskDues={visibleContent.taskDues}
+                    viewConfig={activeSavedViewConfig}
                     now={now}
                     draftCreateEvent={draftCreateEvent}
                     onDraftSelecting={handleDraftSelecting}
@@ -1063,7 +1216,7 @@ function CalendarProductViewInner({
                       void handleUnscheduleLinkedTask(event);
                     }}
                     onToggleTask={handleToggleTask}
-                    onOpenDay={handleSelectDay}
+                    onOpenDay={handleStandardSelectDay}
                     onNavigateMonth={(offset) =>
                       offset > 0
                         ? handleNavigateNext()
@@ -1099,16 +1252,18 @@ function CalendarProductViewInner({
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <CalendarPlanningSidebar
                     calendars={calendars}
-                    events={events}
+                    events={visibleContent.events}
                     todayTasks={todayTasks}
                     now={now}
                     weekStart={visibleWeekStart}
                     onSelectDay={(day) => {
-                      handleSelectDay(day);
+                      handleStandardSelectDay(day);
                       setPlanningDrawerOpen(false);
                     }}
                     onToggleVisibility={handleToggleVisibility}
                     onCreateCalendar={handleCreateCalendar}
+                    onUpdateCalendar={handleUpdateCalendar}
+                    onSetDefaultCalendar={handleSetDefaultCalendar}
                     onToggleTask={handleToggleTask}
                     onQuickAddTask={handleQuickAddTask}
                     onCollapse={() => setPlanningDrawerOpen(false)}
