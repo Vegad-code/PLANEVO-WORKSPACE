@@ -48,6 +48,24 @@ export type CalendarEventRow = {
   title: string;
   starts_at: string;
   ends_at: string;
+  /** Authored wall-clock start; null means this is a legacy event. */
+  starts_at_local: string | null;
+  /** Authored wall-clock end; null means this is a legacy event. */
+  ends_at_local: string | null;
+  timezone: string | null;
+  /** Intended elapsed duration, which remains stable through DST changes. */
+  duration_minutes: number | null;
+  /** RFC 5545 recurrence rule, populated only for a series master. */
+  rrule: string | null;
+  recurrence_end: string | null;
+  parent_event_id: string | null;
+  recurrence_id: string | null;
+  is_exception: boolean;
+  is_cancelled: boolean;
+  deleted_at: string | null;
+  /** Per-event color override; null inherits the calendar color. */
+  color: string | null;
+  conference_url: string | null;
   all_day: boolean;
   location: string | null;
   description_json: Record<string, unknown>;
