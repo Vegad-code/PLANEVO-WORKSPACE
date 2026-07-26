@@ -1,7 +1,10 @@
-import rrule from "rrule"
+import * as RRulePackage from "rrule"
 import type { CalendarEventRow } from "@planevo/core/types/calendar"
 
-const { RRule } = rrule
+const { RRule } =
+  "RRule" in RRulePackage
+    ? RRulePackage
+    : (RRulePackage as unknown as { default: typeof import("rrule") }).default
 
 /**
  * Expands wall-clock recurrence rules only within a supplied window. RRule is

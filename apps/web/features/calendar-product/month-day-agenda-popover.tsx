@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { ListTodo } from "lucide-react"
 import type { CalendarEventRow } from "@planevo/core/types/calendar"
 import { formatDayHeaderAccessibleLabel } from "@/lib/calendar/day-header-model"
 import {
@@ -201,7 +202,29 @@ export function MonthDayAgendaPopover({
                   <span className="w-12 shrink-0 text-product-meta text-text-secondary">
                     {timeLabel}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-product-body text-ink">
+                  {item.linkedTask ? (
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 text-text-secondary"
+                    >
+                      <ListTodo aria-hidden="true" className="size-4" />
+                    </span>
+                  ) : null}
+                  {item.linkedTask ? (
+                    <span className="sr-only">
+                      {item.isTaskComplete
+                        ? "Completed task block: "
+                        : "Scheduled task block: "}
+                    </span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 truncate text-product-body",
+                      item.isTaskComplete
+                        ? "text-text-muted line-through"
+                        : "text-ink",
+                    )}
+                  >
                     {item.title}
                   </span>
                   {item.isSyncedSource ? (

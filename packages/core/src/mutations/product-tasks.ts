@@ -190,10 +190,12 @@ export async function deleteTask(
   client: SupabaseClient<Database>,
   userId: string,
   taskId: string,
+  linkedEventAction: "delete_linked_block" | "keep_linked_block",
 ): Promise<void> {
   const { data, error } = await client.rpc("delete_task_cascade", {
     p_owner_id: userId,
     p_task_id: taskId,
+    p_linked_event_action: linkedEventAction,
   });
   if (error) throw error;
   if (!data) throw new Error("Task not found.");

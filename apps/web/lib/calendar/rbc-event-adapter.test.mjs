@@ -78,3 +78,24 @@ test("getPlanevoEventId and getEventColor read adapter fields", () => {
   assert.equal(getPlanevoEventId(event), "evt-1")
   assert.equal(getEventColor(event), "ocean")
 })
+
+test("task blocks use the task's current title and completion state", () => {
+  const [event] = toRbcEvents(
+    [
+      {
+        ...events[0],
+        task_id: "task-1",
+        linked_task: {
+          id: "task-1",
+          title: "Current task title",
+          status: "done",
+          estimateMinutes: 30,
+        },
+      },
+    ],
+    calendars,
+  )
+
+  assert.equal(event.title, "Current task title")
+  assert.equal(event.isTaskComplete, true)
+})

@@ -1,9 +1,12 @@
 import type {
   CalendarColor,
+  CalendarDisplayEvent,
   CalendarEventRow,
+  CalendarLinkedTask,
   CalendarRow,
   TaskDueChip,
 } from "@planevo/core/types/calendar"
+import { isLinkedTaskComplete } from "./task-linked-events.ts"
 
 export type MonthEventItem = {
   kind: "event"
@@ -18,7 +21,9 @@ export type MonthEventItem = {
   source: CalendarEventRow["source"]
   isSyncedSource: boolean
   allDay: boolean
-  event: CalendarEventRow
+  linkedTask: CalendarLinkedTask | null
+  isTaskComplete: boolean
+  event: CalendarDisplayEvent
 }
 
 export type MonthTaskItem = {
@@ -79,7 +84,7 @@ export function getMonthEventDisplayStyle(
 }
 
 export function eventToMonthItem(
-  event: CalendarEventRow,
+  event: CalendarDisplayEvent,
   calendarColor: CalendarColor,
 ): MonthEventItem {
   const start = new Date(event.starts_at)
@@ -89,7 +94,7 @@ export function eventToMonthItem(
     kind: "event",
     displayStyle: getMonthEventDisplayStyle(event),
     id: `event:${event.id}`,
-    title: event.title,
+    title: event.linked_task?.title ?? event.title,
     start,
     end,
     eventId: event.id,
@@ -98,6 +103,8 @@ export function eventToMonthItem(
     source: event.source,
     isSyncedSource: event.source === "google",
     allDay: event.all_day,
+    linkedTask: event.linked_task,
+    isTaskComplete: isLinkedTaskComplete(event.linked_task),
     event,
   }
 }
@@ -126,7 +133,7 @@ export function taskDueToMonthItem(task: TaskDueChip): MonthTaskItem {
 
 /** Build the visible event and task-due rows used only by Month. */
 export function toMonthItems(
-  events: CalendarEventRow[],
+  events: CalendarDisplayEvent[],
   taskDues: TaskDueChip[],
   calendars: CalendarRow[],
 ): MonthItem[] {

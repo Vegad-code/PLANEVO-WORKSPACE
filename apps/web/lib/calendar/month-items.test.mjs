@@ -110,6 +110,23 @@ test("filters hidden calendars and preserves color plus synced-source metadata",
   assert.equal(items[0].source, "google")
 })
 
+test("task blocks use the task's current title", () => {
+  const item = eventToMonthItem(
+    event({
+      task_id: "task-1",
+      linked_task: {
+        id: "task-1",
+        title: "Current task title",
+        status: "not_started",
+        estimateMinutes: 45,
+      },
+    }),
+    "ocean",
+  )
+
+  assert.equal(item.title, "Current task title")
+})
+
 test("sorts bars, open task dues, timed events, then completed task dues", () => {
   const items = [
     taskDueToMonthItem({ taskId: "done", title: "Done", dueAt: "2026-07-14T08:00:00.000Z", status: "done" }),

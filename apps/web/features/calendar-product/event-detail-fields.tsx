@@ -20,6 +20,7 @@ type EventDetailFieldsProps = {
   calendars: CalendarRow[];
   durationLabel: string | null;
   showCrossLinks: boolean;
+  taskLinked?: boolean;
   onOpenCrossLink?: (panel: EventCrossLinkPanel) => void;
   titleRef?: React.RefObject<HTMLInputElement | null>;
 };
@@ -140,6 +141,7 @@ export function EventDetailFields({
   calendars,
   durationLabel,
   showCrossLinks,
+  taskLinked = false,
   onOpenCrossLink,
   titleRef,
 }: EventDetailFieldsProps) {
@@ -206,6 +208,7 @@ export function EventDetailFields({
         <Repeat aria-hidden="true" className="size-3.5 shrink-0 text-text-muted" />
         <select
           aria-label="Repeats"
+          disabled={taskLinked}
           value={recurrencePreset(form)}
           onChange={(changeEvent) => {
             const value = changeEvent.target.value;
@@ -220,7 +223,10 @@ export function EventDetailFields({
                     : value,
             });
           }}
-          className={PLAIN_INPUT_CLASS}
+          className={cn(
+            PLAIN_INPUT_CLASS,
+            taskLinked && "cursor-not-allowed text-text-muted",
+          )}
         >
           <option value="">Does not repeat</option>
           <option value="FREQ=DAILY">Daily</option>
@@ -278,11 +284,13 @@ export function EventDetailFields({
 
       {showCrossLinks && onOpenCrossLink ? (
         <div className={cn(ROW_CLASS, "flex-wrap gap-1.5")}>
-          <CrossLinkButton
-            icon={<Link2 aria-hidden="true" className="size-3.5" />}
-            label="Link task"
-            onClick={() => onOpenCrossLink("task")}
-          />
+          {!taskLinked ? (
+            <CrossLinkButton
+              icon={<Link2 aria-hidden="true" className="size-3.5" />}
+              label="Link task"
+              onClick={() => onOpenCrossLink("task")}
+            />
+          ) : null}
           <CrossLinkButton
             icon={<Paperclip aria-hidden="true" className="size-3.5" />}
             label="Attach file"

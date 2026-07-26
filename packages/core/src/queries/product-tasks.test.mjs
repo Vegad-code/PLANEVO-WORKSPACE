@@ -28,15 +28,25 @@ test("loadProductTasks returns tasks ordered by position", async () => {
       if (table === "file_links") {
         return { select: () => ({ eq: () => ({ in: async () => ({ data: [], error: null }) }) }) };
       }
+      if (table === "calendar_events") {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({ in: async () => ({ data: [], error: null }) }),
+            }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
   };
   const result = await loadProductTasks(client, "u1");
   assert.equal(result.length, 2);
   assert.equal(result[0].title, "B");
+  assert.equal(result[0].linkedEventCount, 0);
 });
 
-test("loadProductTasks aggregates subtask and file counts per task", async () => {
+test("loadProductTasks aggregates subtask, file, and live linked-event counts per task", async () => {
   const rows = [
     { id: "t1", user_id: "u1", title: "A", status: "not_started", priority: null,
       due_at: null, description_json: {}, position: 1, completed_at: null,
@@ -53,8 +63,15 @@ test("loadProductTasks aggregates subtask and file counts per task", async () =>
     { target_id: "t1" },
     { target_id: "t1" },
   ];
+  const linkedEvents = [
+    { task_id: "t1" },
+    { task_id: "t1" },
+    { task_id: null },
+  ];
   let subtaskInIds = null;
   let fileInIds = null;
+  let linkedEventQuery = null;
+  let linkedEventInIds = null;
   const client = {
     from(table) {
       if (table === "tasks") {
@@ -84,6 +101,29 @@ test("loadProductTasks aggregates subtask and file counts per task", async () =>
           }),
         };
       }
+      if (table === "calendar_events") {
+        return {
+          select: () => ({
+            eq: (col, value) => {
+              linkedEventQuery = { ...(linkedEventQuery ?? {}), [col]: value };
+              return {
+                is: (isCol, isValue) => {
+                  linkedEventQuery = {
+                    ...(linkedEventQuery ?? {}),
+                    [isCol]: isValue,
+                  };
+                  return {
+                    in: async (_col, ids) => {
+                      linkedEventInIds = ids;
+                      return { data: linkedEvents, error: null };
+                    },
+                  };
+                },
+              };
+            },
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
   };
@@ -92,13 +132,17 @@ test("loadProductTasks aggregates subtask and file counts per task", async () =>
   const t2 = result.find((task) => task.id === "t2");
   assert.deepEqual(subtaskInIds, ["t1", "t2"]);
   assert.deepEqual(fileInIds, ["t1", "t2"]);
+  assert.deepEqual(linkedEventInIds, ["t1", "t2"]);
+  assert.deepEqual(linkedEventQuery, { user_id: "u1", deleted_at: null });
   assert.equal(t1.subtaskTotal, 2);
   assert.equal(t1.subtaskDone, 1);
   assert.equal(t1.fileCount, 2);
+  assert.equal(t1.linkedEventCount, 2);
   assert.deepEqual(t1.subtasks.map((s) => s.id), ["s2", "s1"]);
   assert.equal(t2.subtaskTotal, 0);
   assert.equal(t2.subtaskDone, 0);
   assert.equal(t2.fileCount, 0);
+  assert.equal(t2.linkedEventCount, 0);
   assert.deepEqual(t2.subtasks, []);
 });
 
@@ -144,6 +188,15 @@ test("loadProductTasks filters to a workspace via workspace_links", async () => 
       }
       if (table === "file_links") {
         return { select: () => ({ eq: () => ({ in: async () => ({ data: [], error: null }) }) }) };
+      }
+      if (table === "calendar_events") {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({ in: async () => ({ data: [], error: null }) }),
+            }),
+          }),
+        };
       }
       throw new Error(`unexpected table ${table}`);
     },

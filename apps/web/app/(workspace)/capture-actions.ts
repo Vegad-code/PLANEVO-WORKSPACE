@@ -183,9 +183,15 @@ export async function undoQuickCapture(
   const access = await requireMutationDataAccess();
 
   if (kind === "task") {
-    await deleteTask(access.client, access.ownerId, id);
+    await deleteTask(
+      access.client,
+      access.ownerId,
+      id,
+      "delete_linked_block",
+    );
     revalidatePath("/", "layout");
     revalidatePath("/tasks");
+    revalidatePath("/calendar");
     return;
   }
 

@@ -156,7 +156,10 @@ const moveProductTaskSchema = z
     }
   });
 
-const taskMutationSchema = z.object({ taskId: taskIdSchema });
+const deleteProductTaskSchema = z.object({
+  taskId: taskIdSchema,
+  linkedEventAction: z.enum(["delete_linked_block", "keep_linked_block"]),
+});
 const createSubtaskSchema = z.object({
   taskId: taskIdSchema,
   title: z.string().trim().min(1).max(500),
@@ -626,6 +629,7 @@ export async function updateProductTaskAction(input: {
       );
     }
     revalidatePath("/tasks");
+    revalidatePath("/calendar");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not update the task.");
@@ -734,6 +738,7 @@ export async function moveProductTaskAction(input: {
       parsed.data.afterTaskId,
     );
     revalidatePath("/tasks");
+    revalidatePath("/calendar");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not move the task.");
@@ -742,14 +747,26 @@ export async function moveProductTaskAction(input: {
 
 export async function deleteProductTaskAction(input: {
   taskId: string;
+  linkedEventAction: "delete_linked_block" | "keep_linked_block";
 }): Promise<TaskActionResult> {
   try {
     const access = await requireMutationDataAccess();
-    const parsed = taskMutationSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: "Invalid task." };
+    const parsed = deleteProductTaskSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "Choose what should happen to the scheduled block.",
+      };
+    }
     await requireOwnedTask(access, parsed.data.taskId);
-    await deleteTask(access.client, access.ownerId, parsed.data.taskId);
+    await deleteTask(
+      access.client,
+      access.ownerId,
+      parsed.data.taskId,
+      parsed.data.linkedEventAction,
+    );
     revalidatePath("/tasks");
+    revalidatePath("/calendar");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not delete the task.");

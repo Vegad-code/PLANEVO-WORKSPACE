@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createTask,
+  deleteTask,
   moveTaskAndStatus,
   updateTaskAndStatus,
   updateTaskStatus,
@@ -298,4 +299,23 @@ test("moveTaskOrdered appends to column end when neighbors are null", async () =
   await moveTaskOrdered(client, "user-1", "task-1", "done", null, null);
   assert.equal(captured.args.p_before_task_id, null);
   assert.equal(captured.args.p_after_task_id, null);
+});
+
+test("deleteTask requires an explicit linked-event disposition", async () => {
+  let captured = null;
+  const client = {
+    async rpc(name, args) {
+      captured = { name, args };
+      return { data: true, error: null };
+    },
+  };
+
+  await deleteTask(client, "user-1", "task-1", "keep_linked_block");
+
+  assert.equal(captured.name, "delete_task_cascade");
+  assert.deepEqual(captured.args, {
+    p_owner_id: "user-1",
+    p_task_id: "task-1",
+    p_linked_event_action: "keep_linked_block",
+  });
 });

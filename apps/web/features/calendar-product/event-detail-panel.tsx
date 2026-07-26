@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Check, ListTodo, X } from "lucide-react";
 import type {
+  CalendarDisplayEvent,
   CalendarEventRow,
   CalendarRow,
 } from "@planevo/core/types/calendar";
@@ -44,11 +45,17 @@ export type EventPanelSavePayload = {
 type EventDetailPanelProps = {
   mode: "create" | "edit";
   calendars: CalendarRow[];
-  event?: CalendarEventRow | null;
+  event?: CalendarDisplayEvent | CalendarEventRow | null;
   initialRange?: { startsAt: string; endsAt: string };
   onClose: (options?: { force?: boolean }) => void;
   onSave: (payload: EventPanelSavePayload) => void;
   onDelete?: (
+    event: CalendarEventRow,
+  ) => Promise<{ ok: boolean; error?: string } | void>;
+  onCompleteLinkedTask?: (
+    event: CalendarEventRow,
+  ) => Promise<{ ok: boolean; error?: string } | void>;
+  onUnscheduleLinkedTask?: (
     event: CalendarEventRow,
   ) => Promise<{ ok: boolean; error?: string } | void>;
   onOpenCrossLink?: (panel: EventCrossLinkPanel) => void;
@@ -70,6 +77,8 @@ export function EventDetailPanel({
   onClose,
   onSave,
   onDelete,
+  onCompleteLinkedTask,
+  onUnscheduleLinkedTask,
   onOpenCrossLink,
   isPending = false,
   onDirtyChange,
@@ -96,6 +105,7 @@ export function EventDetailPanel({
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [linkedActionPending, setLinkedActionPending] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   const isQuick = captureMode === "quick";
@@ -111,6 +121,12 @@ export function EventDetailPanel({
   const selectedCalendar = calendars.find(
     (calendar) => calendar.id === selectedCalendarId,
   );
+  const linkedTask =
+    event && "linked_task" in event ? event.linked_task : null;
+  const hasLinkedTask = Boolean(event?.task_id);
+  const linkedTaskTitle = linkedTask?.title ?? event?.title ?? "Task";
+  const linkedTaskComplete =
+    linkedTask?.status === "done" || linkedTask?.status === "cancelled";
 
   /** The slot the card opened with — what quick capture keeps for anything unsaid. */
   const captureFallback = useMemo(() => {
@@ -269,11 +285,59 @@ export function EventDetailPanel({
               calendars={calendars}
               durationLabel={durationLabel}
               showCrossLinks={!isCreate && Boolean(event)}
+              taskLinked={hasLinkedTask}
               onOpenCrossLink={onOpenCrossLink}
               titleRef={titleRef}
             />
           )}
         </div>
+
+        {!isCreate && event && hasLinkedTask ? (
+          <section
+            aria-label={`Linked task: ${linkedTaskTitle}`}
+            className="flex items-center gap-2 rounded-lg border border-border bg-surface-raised px-3 py-2"
+          >
+            <ListTodo
+              aria-hidden="true"
+              className="size-4 shrink-0 text-text-secondary"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-product-meta font-medium text-ink">
+                {linkedTaskTitle}
+              </span>
+              <span className="block text-product-meta text-text-muted">
+                {linkedTaskComplete ? "Completed task" : "Linked task"}
+              </span>
+            </span>
+            {!linkedTaskComplete && onCompleteLinkedTask ? (
+              <button
+                type="button"
+                disabled={isPending || linkedActionPending}
+                aria-label={`Complete task: ${linkedTaskTitle}`}
+                onClick={async () => {
+                  setLinkedActionPending(true);
+                  setValidationError(null);
+                  try {
+                    const result = await onCompleteLinkedTask(event);
+                    if (result && !result.ok) {
+                      setValidationError(
+                        result.error ?? "Could not complete the task.",
+                      );
+                    } else {
+                      onClose({ force: true });
+                    }
+                  } finally {
+                    setLinkedActionPending(false);
+                  }
+                }}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-border-strong px-2.5 text-product-meta font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50"
+              >
+                <Check aria-hidden="true" className="size-3.5" />
+                Complete
+              </button>
+            ) : null}
+          </section>
+        ) : null}
 
         {validationError ? (
           <p
@@ -286,14 +350,16 @@ export function EventDetailPanel({
 
         <footer className="flex shrink-0 items-center justify-between gap-2 pl-1">
           <div>
-            {!isCreate && event && onDelete ? (
+            {!isCreate &&
+            event &&
+            (hasLinkedTask ? onUnscheduleLinkedTask : onDelete) ? (
               <button
                 type="button"
                 onClick={() => setDeleteOpen(true)}
-                disabled={isPending}
+                disabled={isPending || linkedActionPending}
                 className="rounded-lg px-2 py-1.5 text-product-meta font-medium text-brick outline-none hover:bg-brick-tint focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink disabled:opacity-50"
               >
-                Delete
+                {hasLinkedTask ? "Unschedule" : "Delete"}
               </button>
             ) : null}
           </div>
@@ -317,15 +383,23 @@ export function EventDetailPanel({
         </footer>
       </form>
 
-      {!isCreate && event && onDelete ? (
+      {!isCreate &&
+      event &&
+      (hasLinkedTask ? onUnscheduleLinkedTask : onDelete) ? (
         <ConfirmDeleteDialog
           open={deleteOpen}
           onClose={() => setDeleteOpen(false)}
-          title="Delete event?"
-          description="This removes the event from your calendar. Linked tasks stay in Tasks."
-          confirmLabel="Delete event"
+          title={hasLinkedTask ? "Unschedule task?" : "Delete event?"}
+          description={
+            hasLinkedTask
+              ? "This removes the time block from your calendar. The task stays in Tasks and returns to the backlog."
+              : "This permanently removes the event from your calendar."
+          }
+          confirmLabel={hasLinkedTask ? "Unschedule task" : "Delete event"}
           onConfirm={async () => {
-            const result = await onDelete(event);
+            const result = hasLinkedTask
+              ? await onUnscheduleLinkedTask?.(event)
+              : await onDelete?.(event);
             if (result && !result.ok) {
               return {
                 ok: false as const,

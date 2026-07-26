@@ -27,6 +27,7 @@ import { getShellLayoutTransition } from "@/lib/motion/shell-spring"
 import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion"
 import { cn } from "@/lib/utils"
 import {
+  completeTaskLinkedEventAction,
   createCalendarAction,
   createCalendarEventAction,
   deleteCalendarEventAction,
@@ -36,6 +37,7 @@ import {
   scheduleTaskFromDragAction,
   setTaskStatusAction,
   toggleCalendarVisibilityAction,
+  unscheduleTaskLinkedEventAction,
   updateCalendarEventAction,
   updateEventTimesAction,
   updateRecurringEventAction,
@@ -510,6 +512,26 @@ function CalendarProductViewInner({
     return { ok: true as const }
   }
 
+  async function handleCompleteLinkedTask(event: CalendarEventRow) {
+    const result = await completeTaskLinkedEventAction({ eventId: event.id })
+    if (!result.ok) {
+      return { ok: false as const, error: result.error }
+    }
+    toast("Task completed")
+    invalidateCalendar(scope)
+    return { ok: true as const }
+  }
+
+  async function handleUnscheduleLinkedTask(event: CalendarEventRow) {
+    const result = await unscheduleTaskLinkedEventAction({ eventId: event.id })
+    if (!result.ok) {
+      return { ok: false as const, error: result.error }
+    }
+    toast("Task returned to the backlog")
+    invalidateCalendar(scope)
+    return { ok: true as const }
+  }
+
   function handleToggleTask(taskId: string, done: boolean) {
     startTransition(async () => {
       const result = await setTaskStatusAction({
@@ -732,9 +754,13 @@ function CalendarProductViewInner({
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <CalendarDndContext
-      onScheduleTask={handleScheduleTask}
-      onMonthMove={applyMonthMove}
-    >
+          onScheduleTask={handleScheduleTask}
+          onMonthMove={applyMonthMove}
+          onUnscheduleTaskEvent={(eventId) => {
+            const event = events.find((candidate) => candidate.id === eventId)
+            if (event) void handleUnscheduleLinkedTask(event)
+          }}
+        >
           {planningPrefsRestored ? (
             <motion.aside
               initial={{ width: sidebarCollapsed ? 0 : planningWidth }}
@@ -869,6 +895,9 @@ function CalendarProductViewInner({
                   onSlotSelect={openCreateEventPanel}
                   onEventSelect={openEditEventPanel}
                   onEventTimesChange={handleEventTimesChange}
+                  onUnscheduleTaskEvent={(event) => {
+                    void handleUnscheduleLinkedTask(event)
+                  }}
                   onToggleTask={handleToggleTask}
                   onOpenDay={handleSelectDay}
                   onNavigateMonth={(offset) =>
@@ -987,6 +1016,14 @@ function CalendarProductViewInner({
               onSave={handleEventPanelSave}
               onDelete={
                 eventPanel.mode === "edit" ? handleEventPanelDelete : undefined
+              }
+              onCompleteLinkedTask={
+                eventPanel.mode === "edit" ? handleCompleteLinkedTask : undefined
+              }
+              onUnscheduleLinkedTask={
+                eventPanel.mode === "edit"
+                  ? handleUnscheduleLinkedTask
+                  : undefined
               }
               onOpenCrossLink={
                 eventPanel.mode === "edit" ? setCrossLinkPanel : undefined

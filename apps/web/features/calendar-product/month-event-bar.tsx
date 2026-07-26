@@ -1,6 +1,7 @@
 "use client"
 
 import { useDraggable } from "@dnd-kit/core"
+import { ListTodo } from "lucide-react"
 import type { BarSegment } from "@/lib/calendar/month-lane-layout"
 import type { MonthItem } from "@/lib/calendar/month-items"
 import type { MonthDragData } from "@/lib/calendar/month-drag"
@@ -124,10 +125,31 @@ export function MonthEventBar({
           )}
         />
         <span className="calendar-month-bar-title">
+          {item.linkedTask ? (
+            <span
+              aria-hidden="true"
+              className="mr-1 inline-flex align-middle text-text-secondary"
+            >
+              <ListTodo aria-hidden="true" className="size-3" />
+            </span>
+          ) : null}
+          {item.linkedTask ? (
+            <span className="sr-only">
+              {item.isTaskComplete
+                ? "Completed task block: "
+                : "Scheduled task block: "}
+            </span>
+          ) : null}
           {isContinuedFromPrevWeek ? (
             <span className="sr-only">Continued: </span>
           ) : null}
-          {item.title}
+          <span
+            className={
+              item.isTaskComplete ? "text-text-muted line-through" : undefined
+            }
+          >
+            {item.title}
+          </span>
         </span>
       </button>
 

@@ -269,6 +269,43 @@ test("scheduleTaskFromDrag creates a one-hour event linked to the task", async (
   assert.equal(rpcArgs.p_ends_at, "2026-07-14T10:00:00.000Z");
 });
 
+test("scheduleTaskFromDrag honors the task estimate", async () => {
+  let captured = null;
+  const client = {
+    async rpc(name, args) {
+      assert.equal(name, "schedule_task_idempotent");
+      captured = args;
+      return {
+        data: { id: "e1", task_id: args.p_task_id, ends_at: args.p_ends_at },
+        error: null,
+      };
+    },
+  };
+
+  await scheduleTaskFromDrag(client, "u1", {
+    operationKey: "op-1",
+    taskId: "t1",
+    title: "Deep work",
+    startsAt: "2026-07-14T13:00:00.000Z",
+    durationMinutes: 90,
+  });
+
+  assert.equal(captured.p_ends_at, "2026-07-14T14:30:00.000Z");
+});
+
+test("scheduleTaskFromDrag rejects invalid task estimates", async () => {
+  await assert.rejects(
+    scheduleTaskFromDrag({}, "u1", {
+      operationKey: "op-1",
+      taskId: "t1",
+      title: "Deep work",
+      startsAt: "2026-07-14T13:00:00.000Z",
+      durationMinutes: 0,
+    }),
+    /Invalid task duration/,
+  );
+});
+
 test("scheduleTaskFromDrag rejects malformed drop times", async () => {
   await assert.rejects(
     () =>

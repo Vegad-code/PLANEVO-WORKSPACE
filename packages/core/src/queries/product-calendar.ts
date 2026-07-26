@@ -5,6 +5,7 @@ import type {
   CalendarRow,
   TaskDueChip,
 } from "../types/calendar";
+import type { TaskStatus } from "../types/tasks";
 import { listWorkspaceResourceIds } from "./workspace-links.ts";
 
 const EXCEPTION_PARENT_CHUNK_SIZE = 100;
@@ -17,6 +18,13 @@ export type CalendarWeekData = {
   recurringMasters: CalendarEventRow[];
   /** Overrides and cancellations for `recurringMasters`. */
   recurrenceExceptions: CalendarEventRow[];
+  /** Current task state for task-backed event rows in this event window. */
+  linkedTasks: Array<{
+    id: string;
+    title: string;
+    status: TaskStatus;
+    description_json: Record<string, unknown>;
+  }>;
   taskDues: TaskDueChip[];
 };
 
@@ -160,6 +168,24 @@ export async function loadCalendarWeek(
   }
 
   let taskDues: TaskDueChip[] = [];
+  const taskIds = [
+    ...new Set(
+      [...events, ...recurringMasters, ...recurrenceExceptions]
+        .map(({ task_id }) => task_id)
+        .filter((taskId): taskId is string => taskId !== null),
+    ),
+  ];
+  let linkedTasks: CalendarWeekData["linkedTasks"] = [];
+  if (taskIds.length > 0) {
+    const { data, error } = await client
+      .from("tasks")
+      .select("id,title,status,description_json")
+      .eq("user_id", userId)
+      .in("id", taskIds);
+    if (error) throw error;
+    linkedTasks = (data ?? []) as unknown as CalendarWeekData["linkedTasks"];
+  }
+
   if (allowedTaskIds === null || allowedTaskIds.length > 0) {
     let taskQuery = client
       .from("tasks")
@@ -176,7 +202,8 @@ export async function loadCalendarWeek(
       taskId: row.id,
       title: row.title,
       dueAt: row.due_at as string,
-      status: row.status,
+      // DB CHECK constrains this text column to TASK_STATUSES.
+      status: row.status as TaskStatus,
     }));
   }
 
@@ -185,6 +212,7 @@ export async function loadCalendarWeek(
     events,
     recurringMasters,
     recurrenceExceptions,
+    linkedTasks,
     taskDues,
   };
 }

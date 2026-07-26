@@ -9,6 +9,7 @@ export type TaskWithMeta = TaskRow & {
   subtaskTotal: number;
   subtaskDone: number;
   fileCount: number;
+  linkedEventCount: number;
   subtasks: SubtaskRow[];
 };
 
@@ -19,9 +20,9 @@ export type LoadProductTasksOptions = {
 
 /**
  * Load a user's tasks (ordered by `position`) with subtask progress and
- * attached-file counts. Batch-loads subtasks and file_links in one query each
- * (via `.in(...)`) rather than per-task, so this stays two extra round-trips
- * regardless of task count.
+ * attached-file and live scheduled-block counts. Related rows are batch-loaded
+ * with `.in(...)` rather than per-task, so query count stays constant as the
+ * task list grows.
  */
 export async function loadProductTasks(
   client: SupabaseClient<Database>,
@@ -63,6 +64,14 @@ export async function loadProductTasks(
     .in("target_id", taskIds);
   if (fileError) throw fileError;
 
+  const { data: linkedEventData, error: linkedEventError } = await client
+    .from("calendar_events")
+    .select("task_id")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .in("task_id", taskIds);
+  if (linkedEventError) throw linkedEventError;
+
   const subtasksByTask = new Map<string, SubtaskRow[]>();
   for (const subtask of subtaskData ?? []) {
     const list = subtasksByTask.get(subtask.task_id) ?? [];
@@ -78,6 +87,15 @@ export async function loadProductTasks(
     );
   }
 
+  const linkedEventCountByTask = new Map<string, number>();
+  for (const event of linkedEventData ?? []) {
+    if (!event.task_id) continue;
+    linkedEventCountByTask.set(
+      event.task_id,
+      (linkedEventCountByTask.get(event.task_id) ?? 0) + 1,
+    );
+  }
+
   return tasks.map((task) => {
     const subtasks = (subtasksByTask.get(task.id) ?? []).sort(
       (left, right) => left.position - right.position,
@@ -88,6 +106,7 @@ export async function loadProductTasks(
       subtaskTotal: subtasks.length,
       subtaskDone: subtasks.filter((subtask) => subtask.is_done).length,
       fileCount: fileCountByTask.get(task.id) ?? 0,
+      linkedEventCount: linkedEventCountByTask.get(task.id) ?? 0,
     };
   });
 }

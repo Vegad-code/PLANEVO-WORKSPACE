@@ -10,9 +10,7 @@ import {
   type CalendarQueryPayload,
 } from "@/lib/calendar/fetch-calendar-page-data"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
-import type { TodayColumnTask } from "@/features/calendar-product/today-task-row"
 import type { CalendarToolbarView } from "@/lib/calendar/calendar-navigation"
-import type { CalendarWeekData } from "@planevo/core/queries/product-calendar"
 
 export type { CalendarPageRequest, CalendarQueryPayload, CalendarReadyData }
 export { fetchCalendarPageData, serializeCalendarQueryData }
@@ -24,12 +22,8 @@ export type CalendarPageData =
     }
   | ({
       status: "ready"
-      scope: CalendarScope
-      anchorDate: Date
       initialView: CalendarToolbarView
-      todayTasks: TodayColumnTask[]
-      workspaceId: string | null
-    } & Pick<CalendarWeekData, "calendars" | "events" | "taskDues">)
+    } & Omit<CalendarReadyData, "view">)
 
 /**
  * Server loader for the Calendar product. Event window follows `view` + `date`

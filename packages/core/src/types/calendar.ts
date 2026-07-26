@@ -1,3 +1,5 @@
+import type { TaskStatus } from "./tasks";
+
 export const CALENDAR_COLORS = [
   "slate",
   "marigold",
@@ -76,10 +78,22 @@ export type CalendarEventRow = {
   updated_at: string;
 };
 
+export type CalendarLinkedTask = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  estimateMinutes: number | null;
+};
+
+/** Runtime projection used by renderers after task state is joined in. */
+export type CalendarDisplayEvent = CalendarEventRow & {
+  linked_task: CalendarLinkedTask | null;
+};
+
 /** A task due date rendered on the calendar without a calendar_events row. */
 export type TaskDueChip = {
   taskId: string;
   title: string;
   dueAt: string;
-  status: string;
+  status: TaskStatus;
 };

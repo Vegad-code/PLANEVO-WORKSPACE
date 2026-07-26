@@ -643,8 +643,41 @@ export interface Database {
         Returns: undefined;
       };
       delete_task_cascade: {
-        Args: { p_owner_id: string; p_task_id: string };
+        Args: {
+          p_owner_id: string;
+          p_task_id: string;
+          p_linked_event_action: string;
+        };
         Returns: boolean;
+      };
+      move_task_linked_event: {
+        Args: {
+          p_owner_id: string;
+          p_event_id: string;
+          p_starts_at: string;
+          p_ends_at: string;
+        };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      set_task_status_with_linked_events: {
+        Args: { p_owner_id: string; p_task_id: string; p_status: string };
+        Returns: Json;
+      };
+      complete_task_linked_event: {
+        Args: { p_owner_id: string; p_event_id: string };
+        Returns: Json;
+      };
+      unschedule_task_linked_event: {
+        Args: { p_owner_id: string; p_event_id: string };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      link_task_to_event: {
+        Args: {
+          p_owner_id: string;
+          p_event_id: string;
+          p_task_id: string;
+        };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
       };
       schedule_task_idempotent: {
         Args: { p_owner_id: string; p_task_id: string; p_operation_key: string; p_title: string; p_starts_at: string; p_ends_at: string };

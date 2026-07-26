@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Check } from "lucide-react";
+import type { TaskStatus } from "@planevo/core/types/tasks";
 
 export type TodayColumnTask = {
   id: string;
   title: string;
-  status: string;
+  status: TaskStatus;
   due_at: string | null;
 };
 
@@ -26,7 +26,7 @@ export function TodayTaskRow({
   task: TodayColumnTask;
   onToggle?: (taskId: string, done: boolean) => void;
 }) {
-  const [checked, setChecked] = useState(task.status === "done");
+  const checked = task.status === "done";
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: `today-task-${task.id}`,
@@ -54,7 +54,6 @@ export function TodayTaskRow({
         }
         onClick={() => {
           const next = !checked;
-          setChecked(next);
           onToggle?.(task.id, next);
         }}
         className={`flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-md border outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${

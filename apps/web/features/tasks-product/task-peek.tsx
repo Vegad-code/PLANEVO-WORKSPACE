@@ -40,6 +40,10 @@ type TaskPeekProps = {
   onClose: () => void;
 };
 
+type LinkedEventDeleteAction =
+  | "delete_linked_block"
+  | "keep_linked_block";
+
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: "High",
   medium: "Medium",
@@ -86,6 +90,7 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
   const [estimate, setEstimate] = useState(taskEstimateMinutes(task));
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const taskIcon = resolveTaskIcon(task, task.fileCount);
   const [optimisticIconRef, setOptimisticIconRef] = useState<TaskIconRef | null>(
     null,
@@ -148,17 +153,29 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
     });
   }
 
-  function removeTask() {
-    if (!window.confirm(`Delete “${task.title}”? This cannot be undone.`)) return;
+  function removeTask(linkedEventAction: LinkedEventDeleteAction) {
     startTransition(async () => {
-      const result = await deleteProductTaskAction({ taskId: task.id });
+      const result = await deleteProductTaskAction({
+        taskId: task.id,
+        linkedEventAction,
+      });
       if (!result.ok) {
         toast(result.error, { tone: "error" });
         return;
       }
+      setDeleteDialogOpen(false);
       onClose();
       refreshAfter("Task deleted");
     });
+  }
+
+  function requestTaskDeletion() {
+    if (task.linkedEventCount > 0) {
+      setDeleteDialogOpen(true);
+      return;
+    }
+    if (!window.confirm(`Delete “${task.title}”? This cannot be undone.`)) return;
+    removeTask("delete_linked_block");
   }
 
   function addSubtask(event: React.FormEvent<HTMLFormElement>) {
@@ -206,30 +223,31 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
     "w-full rounded-lg border border-border-strong bg-paper px-3 py-2 text-body text-ink outline-none placeholder:text-text-muted focus:border-ink";
 
   return (
-    <Dialog
-      open
-      onClose={onClose}
-      labelledBy="task-peek-title"
-      className="m-0 ml-auto h-dvh max-h-none w-full max-w-md border-l border-border bg-surface-raised p-0 text-ink backdrop:bg-ink/30"
-    >
-      <div className="flex h-full flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <p className="text-label uppercase text-text-muted">Task details</p>
-            <h2 id="task-peek-title" className="truncate text-h3">
-              {task.title || "Untitled task"}
-            </h2>
-          </div>
-          <button
-            autoFocus
-            type="button"
-            onClick={onClose}
-            aria-label="Close task details"
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-          >
-            <Icon name="close" className="size-4" />
-          </button>
-        </header>
+    <>
+      <Dialog
+        open
+        onClose={onClose}
+        labelledBy="task-peek-title"
+        className="m-0 ml-auto h-dvh max-h-none w-full max-w-md border-l border-border bg-surface-raised p-0 text-ink backdrop:bg-ink/30"
+      >
+        <div className="flex h-full flex-col">
+          <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+            <div className="min-w-0">
+              <p className="text-label uppercase text-text-muted">Task details</p>
+              <h2 id="task-peek-title" className="truncate text-h3">
+                {task.title || "Untitled task"}
+              </h2>
+            </div>
+            <button
+              autoFocus
+              type="button"
+              onClick={onClose}
+              aria-label="Close task details"
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-paper hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              <Icon name="close" className="size-4" />
+            </button>
+          </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           <div className="flex flex-col gap-5">
@@ -430,7 +448,7 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
             type="button"
             variant="ghost"
             disabled={isPending}
-            onClick={removeTask}
+            onClick={requestTaskDeletion}
             className="text-brick hover:bg-brick-tint"
           >
             Delete task
@@ -444,7 +462,60 @@ export function TaskPeek({ task, onClose }: TaskPeekProps) {
             {isPending ? "Saving…" : "Save changes"}
           </Button>
         </footer>
-      </div>
-    </Dialog>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        labelledBy="delete-task-title"
+        className="w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-border bg-paper p-0 text-ink shadow-none backdrop:bg-ink/30"
+      >
+        <div className="flex flex-col gap-5 p-5">
+          <div>
+            <h2 id="delete-task-title" className="text-h3">
+              Delete task?
+            </h2>
+            <p className="mt-2 text-body text-text-secondary">
+              This task has{" "}
+              {task.linkedEventCount === 1
+                ? "a scheduled block"
+                : `${task.linkedEventCount} scheduled blocks`}
+              . Choose what should happen on your calendar.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="ink"
+              disabled={isPending}
+              onClick={() => removeTask("delete_linked_block")}
+              className="w-full"
+            >
+              {isPending ? "Deleting…" : "Delete task and block"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => removeTask("keep_linked_block")}
+              className="w-full"
+            >
+              Keep block, delete task
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isPending}
+              onClick={() => setDeleteDialogOpen(false)}
+              className="w-full"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </>
   );
 }

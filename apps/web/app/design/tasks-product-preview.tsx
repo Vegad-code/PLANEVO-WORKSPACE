@@ -46,6 +46,7 @@ const DEFAULT_TASK: TaskWithMeta = {
   subtaskTotal: 3,
   subtaskDone: 1,
   fileCount: 1,
+  linkedEventCount: 0,
   subtasks: [],
 };
 
@@ -116,6 +117,7 @@ const SUBTASKS_DONE_TASK: TaskWithMeta = {
   subtaskTotal: 3,
   subtaskDone: 3,
   fileCount: 0,
+  linkedEventCount: 0,
 };
 
 const DONE_TASK: TaskWithMeta = {

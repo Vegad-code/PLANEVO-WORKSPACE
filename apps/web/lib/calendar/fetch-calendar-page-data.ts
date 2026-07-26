@@ -4,12 +4,17 @@ import {
 } from "@planevo/core/queries/product-calendar"
 import { loadProductTasks } from "@planevo/core/queries/product-tasks"
 import type { DataAccess } from "@planevo/core/types/data-access"
+import type { CalendarDisplayEvent } from "@planevo/core/types/calendar"
 import {
   parseCalendarSearchParams,
   type CalendarToolbarView,
 } from "@/lib/calendar/calendar-navigation"
 import { calendarRange, dateParam } from "@/lib/calendar/calendar-range"
 import { materializeCalendarEvents } from "@/lib/calendar/recurrence-window"
+import {
+  decorateTaskLinkedEvents,
+  toCalendarLinkedTask,
+} from "@/lib/calendar/task-linked-events"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import type { TodayColumnTask } from "@/features/calendar-product/today-task-row"
 
@@ -25,7 +30,10 @@ export type CalendarReadyData = {
   view: CalendarToolbarView
   todayTasks: TodayColumnTask[]
   workspaceId: string | null
-} & Pick<CalendarWeekData, "calendars" | "events" | "taskDues">
+  calendars: CalendarWeekData["calendars"]
+  events: CalendarDisplayEvent[]
+  taskDues: CalendarWeekData["taskDues"]
+}
 
 /** Serializable payload for TanStack Query cache and API responses. */
 export type CalendarQueryPayload = {
@@ -34,7 +42,7 @@ export type CalendarQueryPayload = {
   view: CalendarToolbarView
   workspaceId: string | null
   calendars: CalendarWeekData["calendars"]
-  events: CalendarWeekData["events"]
+  events: CalendarDisplayEvent[]
   taskDues: CalendarWeekData["taskDues"]
   todayTasks: TodayColumnTask[]
 }
@@ -81,13 +89,16 @@ export async function fetchCalendarPageData(
     status: task.status,
     due_at: task.due_at,
   }))
-  const events = materializeCalendarEvents({
-    standalone: week.events,
-    masters: week.recurringMasters,
-    exceptions: week.recurrenceExceptions,
-    windowStart: start,
-    windowEnd: end,
-    eventRange: view === "month" ? "overlaps" : "starts-in",
+  const events = decorateTaskLinkedEvents({
+    events: materializeCalendarEvents({
+      standalone: week.events,
+      masters: week.recurringMasters,
+      exceptions: week.recurrenceExceptions,
+      windowStart: start,
+      windowEnd: end,
+      eventRange: view === "month" ? "overlaps" : "starts-in",
+    }),
+    tasks: week.linkedTasks.map(toCalendarLinkedTask),
   })
 
   return {

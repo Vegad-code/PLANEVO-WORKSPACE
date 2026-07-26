@@ -3,7 +3,7 @@ import type { Database, Json } from "../types/database.types";
 import type { CalendarColor, CalendarEventRow, CalendarRow } from "../types/calendar";
 import { scheduleTask } from "./task-cross-links.ts";
 
-const DRAG_SCHEDULE_DURATION_MS = 60 * 60 * 1000;
+const DEFAULT_TASK_BLOCK_DURATION_MINUTES = 60;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -317,6 +317,8 @@ export type ScheduleTaskFromDragInput = {
   title: string;
   /** Drop-slot start time; the event gets a default 1h duration. */
   startsAt: string;
+  /** Task estimate when present; otherwise the default one-hour block. */
+  durationMinutes?: number;
 };
 
 /**
@@ -334,7 +336,16 @@ export async function scheduleTaskFromDrag(
   if (Number.isNaN(startsAtMs)) {
     throw new Error(`Invalid drop time: ${input.startsAt}`);
   }
-  const endsAt = new Date(startsAtMs + DRAG_SCHEDULE_DURATION_MS).toISOString();
+  const durationMinutes =
+    input.durationMinutes === undefined
+      ? DEFAULT_TASK_BLOCK_DURATION_MINUTES
+      : input.durationMinutes;
+  if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+    throw new Error(`Invalid task duration: ${durationMinutes}`);
+  }
+  const endsAt = new Date(
+    startsAtMs + durationMinutes * 60_000,
+  ).toISOString();
   const event = await scheduleTask(client, userId, {
     operationKey: input.operationKey,
     taskId: input.taskId,

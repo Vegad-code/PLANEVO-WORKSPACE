@@ -18,11 +18,13 @@ import {
   type MonthMoveResult,
 } from "@/lib/calendar/month-drag"
 import type { TaskDragData } from "./today-task-row"
+import { monthOffGridTaskEventId } from "@/lib/calendar/task-event-unschedule-drop"
 import { MonthDragOverlay } from "./month-drag-overlay"
 
 type CalendarDndContextProps = {
   onScheduleTask: (taskId: string, startsAt: string) => void
   onMonthMove: (move: MonthMoveResult) => void
+  onUnscheduleTaskEvent: (eventId: string) => void
   children: React.ReactNode
 }
 
@@ -45,6 +47,7 @@ type ActiveMonthDrag = {
 export function CalendarDndContext({
   onScheduleTask,
   onMonthMove,
+  onUnscheduleTaskEvent,
   children,
 }: CalendarDndContextProps) {
   const [activeMonthDrag, setActiveMonthDrag] = useState<ActiveMonthDrag | null>(
@@ -83,6 +86,11 @@ export function CalendarDndContext({
 
     if (dragged?.type === "month-move" || dragged?.type === "month-resize") {
       const dropped = dragEvent.over?.data.current as MonthDropData | undefined
+      const eventId = monthOffGridTaskEventId(dragged, dropped)
+      if (eventId) {
+        onUnscheduleTaskEvent(eventId)
+        return
+      }
       if (dropped?.type !== "month-day") return
       const move = resolveMonthDrag(dragged, dropped)
       if (move) onMonthMove(move)

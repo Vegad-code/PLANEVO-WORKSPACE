@@ -1,6 +1,7 @@
 "use client"
 
 import { useDraggable } from "@dnd-kit/core"
+import { ListTodo } from "lucide-react"
 import type { MonthItem } from "@/lib/calendar/month-items"
 import type { MonthDragData } from "@/lib/calendar/month-drag"
 import { formatCompactMonthTime } from "@/lib/calendar/format-compact-month-time"
@@ -123,7 +124,31 @@ export function MonthItemChip({
       <span className="calendar-month-chip-time">
         {formatCompactMonthTime(item.start)}
       </span>
-      <span className="calendar-month-chip-title text-ink">{item.title}</span>
+      {item.linkedTask ? (
+        <span
+          aria-hidden="true"
+          className="shrink-0 text-text-secondary"
+        >
+          <ListTodo aria-hidden="true" className="size-3" />
+        </span>
+      ) : null}
+      {item.linkedTask ? (
+        <span className="sr-only">
+          {item.isTaskComplete
+            ? "Completed task block: "
+            : "Scheduled task block: "}
+        </span>
+      ) : null}
+      <span
+        className={cn(
+          "calendar-month-chip-title",
+          item.isTaskComplete
+            ? "text-text-muted line-through"
+            : "text-ink",
+        )}
+      >
+        {item.title}
+      </span>
       {item.isSyncedSource ? (
         <span
           aria-label="Synced calendar event"

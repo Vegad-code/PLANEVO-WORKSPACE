@@ -204,6 +204,7 @@ test("loads live standalone events and task due chips in the requested range", a
   assert.deepEqual(result.events, [standalone]);
   assert.deepEqual(result.recurringMasters, []);
   assert.deepEqual(result.recurrenceExceptions, []);
+  assert.deepEqual(result.linkedTasks, []);
   assert.equal(hasCall(eventCalls, "is", "deleted_at", null), true);
   assert.equal(hasCall(eventCalls, "is", "parent_event_id", null), true);
   assert.equal(hasCall(eventCalls, "is", "rrule", null), true);
@@ -224,6 +225,30 @@ test("loads live standalone events and task due chips in the requested range", a
     },
   ]);
 });
+
+test("loads current task state for task-backed event cards even when the due date is outside the window", async () => {
+  const linkedEvent = event({ task_id: "task-1" });
+  const linkedTask = {
+    id: "task-1",
+    title: "Ship report",
+    status: "done",
+    description_json: { estimateMinutes: 90 },
+  };
+  const client = calendarClient({
+    eventQueries: [[linkedEvent]],
+    taskRows: [linkedTask],
+  });
+
+  const result = await loadCalendarWeek(client, "u1", WEEK);
+  const linkedTaskCalls = callsFor(client, "tasks", 0);
+
+  assert.deepEqual(result.linkedTasks, [linkedTask]);
+  assert.equal(
+    hasCall(linkedTaskCalls, "select", "id,title,status,description_json"),
+    true,
+  );
+  assert.equal(hasCall(linkedTaskCalls, "in", "id", ["task-1"]), true);
+})
 
 test("keeps a master returned for a moved-in override even when its natural series is outside the window", async () => {
   const master = event({

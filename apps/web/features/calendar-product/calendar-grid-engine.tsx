@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Calendar,
   type EventProps,
@@ -11,6 +11,7 @@ import {
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop"
 import { format } from "date-fns/format"
 import type {
+  CalendarDisplayEvent,
   CalendarEventRow,
   CalendarRow,
   TaskDueChip,
@@ -24,6 +25,7 @@ import {
   type PlanevoRbcEvent,
 } from "@/lib/calendar/rbc-event-adapter"
 import { isCalendarEventPast } from "@/lib/calendar/event-is-past"
+import { isPointOutsideRect } from "@/lib/calendar/task-event-unschedule-drop"
 import { calendarLocalizer } from "@/lib/calendar/rbc-localizer"
 import { startOfWeekSunday } from "@/lib/calendar/calendar-navigation"
 import { isCalendarToday } from "@/lib/calendar/day-header-model"
@@ -70,6 +72,11 @@ type DragAndDropCalendarProps = React.ComponentProps<
   resizable?: boolean
   draggableAccessor?: (event: PlanevoRbcEvent) => boolean
   resizableAccessor?: (event: PlanevoRbcEvent) => boolean
+  onDragStart?: (info: {
+    event: PlanevoRbcEvent
+    action: "move" | "resize"
+    direction: "UP" | "DOWN" | "LEFT" | "RIGHT"
+  }) => void
 }
 
 const DragAndDropCalendar = withDragAndDrop(
@@ -95,6 +102,7 @@ type CalendarGridEngineProps = {
     startsAt: string
     endsAt: string
   }) => void
+  onUnscheduleTaskEvent?: (event: CalendarEventRow) => void
   onToggleTask: (taskId: string, done: boolean) => void
   onOpenDay: (date: Date) => void
   onNavigateMonth: (offset: number) => void
@@ -140,6 +148,7 @@ export function CalendarGridEngine({
   draftCreateEvent = null,
   onEventSelect,
   onEventTimesChange,
+  onUnscheduleTaskEvent,
   onToggleTask,
   onOpenDay,
   onNavigateMonth,
@@ -160,9 +169,18 @@ export function CalendarGridEngine({
   const isMonthView = renderer.id === "month-grid"
   const rbcView: View = renderer.navigationUnit === "day" ? "day" : "week"
 
+  const displayEvents = useMemo<CalendarDisplayEvent[]>(
+    () =>
+      events.map((event) =>
+        "linked_task" in event
+          ? (event as CalendarDisplayEvent)
+          : { ...event, linked_task: null },
+      ),
+    [events],
+  )
   const timeGridEvents = useMemo(
-    () => toRbcEvents(events, calendars),
-    [events, calendars],
+    () => toRbcEvents(displayEvents, calendars),
+    [displayEvents, calendars],
   )
   const draftRbcEvent = useMemo(() => {
     if (!draftCreateEvent) return null
@@ -177,8 +195,8 @@ export function CalendarGridEngine({
     [draftRbcEvent, timeGridEvents],
   )
   const monthItems = useMemo(
-    () => toMonthItems(events, taskDues, calendars),
-    [events, taskDues, calendars],
+    () => toMonthItems(displayEvents, taskDues, calendars),
+    [displayEvents, taskDues, calendars],
   )
   const eventsById = useMemo(() => {
     const map = new Map<string, CalendarEventRow>()
@@ -193,6 +211,7 @@ export function CalendarGridEngine({
 
   const scrollToTime = useMemo(() => scrollTimeNearNow(), [])
   const gridRef = useRef<HTMLDivElement>(null)
+  const activeRbcTaskDragRef = useRef<PlanevoRbcEvent | null>(null)
 
   const todayInVisibleRange = useMemo(() => {
     if (view === "day") return isCalendarToday(anchor, now)
@@ -305,6 +324,21 @@ export function CalendarGridEngine({
     [eventsById, onEventTimesChange],
   )
 
+  useEffect(() => {
+    function finishDrag(event: MouseEvent) {
+      const dragged = activeRbcTaskDragRef.current
+      activeRbcTaskDragRef.current = null
+      const grid = gridRef.current
+      if (!dragged || !grid || !onUnscheduleTaskEvent) return
+      if (!isPointOutsideRect(event, grid.getBoundingClientRect())) return
+      const row = eventsById.get(getPlanevoEventId(dragged))
+      if (row?.task_id) onUnscheduleTaskEvent(row)
+    }
+
+    document.addEventListener("mouseup", finishDrag, true)
+    return () => document.removeEventListener("mouseup", finishDrag, true)
+  }, [eventsById, onUnscheduleTaskEvent])
+
   const eventPropGetter = useCallback(
     (event: PlanevoRbcEvent) => {
       const isDraft = isDraftCreateEvent(event)
@@ -316,6 +350,7 @@ export function CalendarGridEngine({
           `planevo-rbc-event--${event.color}`,
           isDraft && "planevo-rbc-event--draft pointer-events-none",
           isPast && "planevo-rbc-event--past",
+          event.isTaskComplete && "opacity-65",
         ),
         "data-event-id": event.id,
       }
@@ -402,6 +437,10 @@ export function CalendarGridEngine({
               onSelectEvent={handleSelectEvent}
               onEventDrop={handleEventTimes}
               onEventResize={handleEventTimes}
+              onDragStart={({ event, action }) => {
+                activeRbcTaskDragRef.current =
+                  action === "move" && event.linkedTask ? event : null
+              }}
               style={{ height: "100%" }}
             />
             <CalendarNowIndicator
