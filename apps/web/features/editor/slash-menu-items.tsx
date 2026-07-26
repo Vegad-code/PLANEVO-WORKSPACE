@@ -4,6 +4,7 @@ import { insertOrUpdateBlockForSlashMenu } from "@blocknote/core/extensions";
 import type { DefaultReactSuggestionItem } from "@blocknote/react";
 import { getDefaultReactSlashMenuItems } from "@blocknote/react";
 import {
+  CalendarDaysIcon,
   DocumentPlusIcon,
   RectangleStackIcon,
   TableCellsIcon,
@@ -16,6 +17,7 @@ import {
 import type { PlanevoEditorInstance } from "@/features/editor/editor-types";
 
 export type DatabaseOption = { id: string; name: string };
+export type CalendarViewOption = { id: string; name: string };
 
 type Editor = PlanevoEditorInstance;
 
@@ -35,6 +37,16 @@ function insertDatabaseView(editor: Editor, databaseId: string) {
       viewId: "",
       filterKey: "",
       recordIds: "",
+    },
+  });
+}
+
+function insertCalendarEmbed(editor: Editor, viewId: string) {
+  insertOrUpdateBlockForSlashMenu(editor, {
+    type: "calendar_embed",
+    props: {
+      viewId,
+      height: "standard",
     },
   });
 }
@@ -61,6 +73,7 @@ export function getPlanevoSlashMenuItems(
   options: {
     pageId: string;
     databaseOptions: DatabaseOption[];
+    calendarViewOptions?: CalendarViewOption[];
     onNavigate?: (href: string) => void;
   },
 ): DefaultReactSuggestionItem[] {
@@ -114,7 +127,24 @@ export function getPlanevoSlashMenuItems(
     }),
   );
 
-  return [...defaults, pageItem, ...databaseItems, ...embedItems];
+  const calendarEmbedItems: DefaultReactSuggestionItem[] = (
+    options.calendarViewOptions ?? []
+  ).map((view) => ({
+    title: `Calendar · ${view.name}`,
+    subtext: "Embed this saved calendar view",
+    group: "Embed calendar",
+    aliases: ["calendar", "schedule", "embed calendar", view.name],
+    icon: <CalendarDaysIcon className="h-4 w-4" />,
+    onItemClick: () => insertCalendarEmbed(editor, view.id),
+  }));
+
+  return [
+    ...defaults,
+    pageItem,
+    ...databaseItems,
+    ...embedItems,
+    ...calendarEmbedItems,
+  ];
 }
 
 /** Fuzzy-filter slash items; falls back to substring when query is empty. */

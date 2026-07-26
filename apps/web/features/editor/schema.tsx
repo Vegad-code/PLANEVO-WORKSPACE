@@ -3,6 +3,7 @@ import {
   createReactBlockSpec,
   createReactInlineContentSpec,
 } from "@blocknote/react";
+import { EmbeddedCalendarView } from "@/features/editor/embedded-calendar-view";
 import { EmbeddedDatabaseView } from "@/features/editor/embedded-database-view";
 
 /**
@@ -47,6 +48,43 @@ const createDatabaseView = createReactBlockSpec(
 );
 
 /**
+ * Saved calendar lens. `viewId` is the only data identity; height is a
+ * presentation preference and the renderer always reloads the current view.
+ */
+const createCalendarEmbed = createReactBlockSpec(
+  {
+    type: "calendar_embed",
+    content: "none",
+    propSchema: {
+      viewId: { default: "" },
+      height: { default: "standard" },
+    },
+  },
+  {
+    meta: {
+      selectable: false,
+      isolating: true,
+      defining: true,
+    },
+    render: ({ block }) => (
+      <EmbeddedCalendarView
+        viewId={block.props.viewId}
+        height={block.props.height}
+      />
+    ),
+    toExternalHTML: ({ block }) => (
+      <div
+        data-calendar-embed=""
+        data-view-id={block.props.viewId}
+        data-height={block.props.height}
+      >
+        Calendar view
+      </div>
+    ),
+  },
+);
+
+/**
  * F-16 mention chip. Props carry the linked entity; content is the display label.
  */
 const mention = createReactInlineContentSpec(
@@ -75,6 +113,7 @@ const mention = createReactInlineContentSpec(
 export const planevoSchema = BlockNoteSchema.create().extend({
   blockSpecs: {
     database_view: createDatabaseView(),
+    calendar_embed: createCalendarEmbed(),
   },
   inlineContentSpecs: {
     mention: mention,

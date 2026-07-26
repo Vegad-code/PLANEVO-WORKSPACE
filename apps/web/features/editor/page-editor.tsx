@@ -20,11 +20,13 @@ export function PageEditor({
   pageId,
   initialContent,
   databaseOptions,
+  calendarViewOptions,
   trackOnboardingChecklist = false,
 }: {
   pageId: string;
   initialContent: unknown;
   databaseOptions: { id: string; name: string }[];
+  calendarViewOptions: { id: string; name: string }[];
   trackOnboardingChecklist?: boolean;
 }) {
   const editorRef = useRef<PlanevoEditorInstance | null>(null);
@@ -153,6 +155,7 @@ export function PageEditor({
         pageId={pageId}
         initialContent={initialContent}
         databaseOptions={databaseOptions}
+        calendarViewOptions={calendarViewOptions}
         onSave={async (content) => {
           if (trackOnboardingChecklist) setAnalyticsContent(content);
           return savePageContent(pageId, content);

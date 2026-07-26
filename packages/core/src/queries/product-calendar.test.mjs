@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isDeepStrictEqual } from "node:util";
-import { loadCalendars, loadCalendarWeek } from "./product-calendar.ts";
+import {
+  loadCalendars,
+  loadCalendarView,
+  loadCalendarWeek,
+} from "./product-calendar.ts";
 
 const WEEK = {
   start: new Date("2026-07-13T00:00:00.000Z"),
@@ -73,6 +77,10 @@ function fluentQuery({ rows, table, queryIndex, calls }) {
       calls.push({ table, queryIndex, method: "order", args });
       return Promise.resolve({ data: rows, error: null });
     },
+    maybeSingle() {
+      calls.push({ table, queryIndex, method: "maybeSingle", args: [] });
+      return Promise.resolve({ data: rows[0] ?? null, error: null });
+    },
     then(resolve, reject) {
       return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
     },
@@ -84,6 +92,7 @@ function calendarClient({
   eventQueries = [],
   recurringMasters = [],
   taskRows = [],
+  calendarViewRows = [],
   workspaceLinks = {},
 } = {}) {
   const calls = [];
@@ -105,6 +114,7 @@ function calendarClient({
 
       let rows;
       if (table === "calendars") rows = CALENDAR_ROWS;
+      else if (table === "calendar_views") rows = calendarViewRows;
       else if (table === "calendar_events") {
         rows = eventQueries[queryIndex] ?? [];
       } else if (table === "tasks") rows = taskRows;
@@ -179,6 +189,50 @@ test("loadCalendars returns user calendars ordered by position", async () => {
     hasCall(callsFor(client, "calendars", 0), "order", "position", {
       ascending: true,
     }),
+    true,
+  );
+});
+
+test("loadCalendarView scopes the embedded lens to both view id and owner", async () => {
+  const view = {
+    id: "view-1",
+    user_id: "u1",
+    name: "My flow",
+    preset: "flow",
+    config: {},
+    source_calendar_ids: ["c1", "deleted-calendar"],
+    include_task_dues: true,
+    is_default: false,
+    position: 1,
+    created_at: "",
+    updated_at: "",
+  };
+  const client = calendarClient({ calendarViewRows: [view] });
+
+  const result = await loadCalendarView(client, "u1", "view-1");
+  const viewCalls = callsFor(client, "calendar_views", 0);
+
+  assert.equal(hasCall(viewCalls, "eq", "id", "view-1"), true);
+  assert.equal(hasCall(viewCalls, "eq", "user_id", "u1"), true);
+  assert.deepEqual(result, {
+    ...view,
+    source_calendar_ids: ["c1"],
+  });
+});
+
+test("loadCalendarView returns nothing for a missing or foreign saved view", async () => {
+  const client = calendarClient({ calendarViewRows: [] });
+
+  const result = await loadCalendarView(client, "u1", "foreign-view");
+
+  assert.equal(result, null);
+  assert.equal(
+    hasCall(
+      callsFor(client, "calendar_views", 0),
+      "eq",
+      "user_id",
+      "u1",
+    ),
     true,
   );
 });

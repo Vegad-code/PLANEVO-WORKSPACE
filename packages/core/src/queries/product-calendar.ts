@@ -80,12 +80,53 @@ export async function listCalendarViews(
   const ownedCalendarIds = new Set(
     (calendarsResult.data ?? []).map(({ id }) => id),
   );
-  return (viewsResult.data ?? []).map((row) => ({
-    ...(row as unknown as CalendarViewRow),
-    source_calendar_ids: row.source_calendar_ids.filter((calendarId) =>
+  return (viewsResult.data ?? []).map((row) =>
+    calendarViewWithOwnedSources(row as unknown as CalendarViewRow, ownedCalendarIds),
+  );
+}
+
+function calendarViewWithOwnedSources(
+  view: CalendarViewRow,
+  ownedCalendarIds: ReadonlySet<string>,
+): CalendarViewRow {
+  return {
+    ...view,
+    source_calendar_ids: view.source_calendar_ids.filter((calendarId) =>
       ownedCalendarIds.has(calendarId),
     ),
-  }));
+  };
+}
+
+/**
+ * Loads one saved lens for an embedded calendar. The explicit owner predicate
+ * is required even when the auth client already applies RLS because local
+ * development can use an administrative client.
+ */
+export async function loadCalendarView(
+  client: SupabaseClient<Database>,
+  userId: string,
+  viewId: string,
+): Promise<CalendarViewRow | null> {
+  const [viewResult, calendarsResult] = await Promise.all([
+    client
+      .from("calendar_views")
+      .select("*")
+      .eq("id", viewId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    client.from("calendars").select("id").eq("user_id", userId),
+  ]);
+  if (viewResult.error) throw viewResult.error;
+  if (calendarsResult.error) throw calendarsResult.error;
+  if (!viewResult.data) return null;
+
+  const ownedCalendarIds = new Set(
+    (calendarsResult.data ?? []).map(({ id }) => id),
+  );
+  return calendarViewWithOwnedSources(
+    viewResult.data as unknown as CalendarViewRow,
+    ownedCalendarIds,
+  );
 }
 
 /**

@@ -197,6 +197,11 @@
   --size-calendar-timeline-all-day-card: 3rem;
   --spacing-calendar-timeline-card-gap: 0.25rem;
   --spacing-calendar-timeline-empty-inset: 1rem;
+  --size-calendar-embed-compact: 22rem;
+  --size-calendar-embed-standard: 30rem;
+  --size-calendar-embed-tall: 42rem;
+  --spacing-calendar-embed-block: 0.5rem;
+  --spacing-calendar-embed-header: 0.75rem;
 
   /* Layout */
   --spacing-sidebar: 210px;
@@ -1797,6 +1802,52 @@ body {
   top: var(--spacing-calendar-timeline-empty-inset);
   pointer-events: none;
   text-align: center;
+}
+
+.calendar-embed {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: var(--size-calendar-embed-standard);
+  min-height: 0;
+  margin-block: var(--spacing-calendar-embed-block);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-calendar-event);
+  background: var(--color-calendar-chrome);
+}
+
+.calendar-embed[data-height="compact"] {
+  height: var(--size-calendar-embed-compact);
+}
+
+.calendar-embed[data-height="tall"] {
+  height: var(--size-calendar-embed-tall);
+}
+
+.calendar-embed--placeholder {
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-calendar-embed-header);
+  border-style: dashed;
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.calendar-embed-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-calendar-embed-header);
+  padding: var(--spacing-calendar-embed-header);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.calendar-embed-surface {
+  min-height: 0;
+  flex: 1 1 0;
 }
 
 .planevo-rbc .rbc-time-content {
