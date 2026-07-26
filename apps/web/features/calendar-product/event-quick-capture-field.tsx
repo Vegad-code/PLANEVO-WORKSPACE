@@ -244,10 +244,10 @@ export function EventQuickCaptureField({
               index={2}
               isStatic={prefersReducedMotion}
             />
-            {capture.recurrenceDetected ? (
+            {capture.rrule ? (
               <span className="inline-flex items-center gap-1.5 text-product-meta text-text-secondary">
                 <Repeat aria-hidden="true" className="size-3" />
-                Repeats aren&apos;t supported yet — saving a single event
+                Repeats weekly
               </span>
             ) : null}
           </>

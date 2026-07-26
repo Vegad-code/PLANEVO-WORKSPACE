@@ -9,6 +9,7 @@ import {
   type CalendarToolbarView,
 } from "@/lib/calendar/calendar-navigation"
 import { calendarRange, dateParam } from "@/lib/calendar/calendar-range"
+import { materializeCalendarEvents } from "@/lib/calendar/recurrence-window"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import type { TodayColumnTask } from "@/features/calendar-product/today-task-row"
 
@@ -24,7 +25,7 @@ export type CalendarReadyData = {
   view: CalendarToolbarView
   todayTasks: TodayColumnTask[]
   workspaceId: string | null
-} & CalendarWeekData
+} & Pick<CalendarWeekData, "calendars" | "events" | "taskDues">
 
 /** Serializable payload for TanStack Query cache and API responses. */
 export type CalendarQueryPayload = {
@@ -80,6 +81,14 @@ export async function fetchCalendarPageData(
     status: task.status,
     due_at: task.due_at,
   }))
+  const events = materializeCalendarEvents({
+    standalone: week.events,
+    masters: week.recurringMasters,
+    exceptions: week.recurrenceExceptions,
+    windowStart: start,
+    windowEnd: end,
+    eventRange: view === "month" ? "overlaps" : "starts-in",
+  })
 
   return {
     scope,
@@ -87,6 +96,8 @@ export async function fetchCalendarPageData(
     view,
     todayTasks,
     workspaceId,
-    ...week,
+    calendars: week.calendars,
+    events,
+    taskDues: week.taskDues,
   }
 }

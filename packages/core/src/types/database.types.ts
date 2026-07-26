@@ -505,15 +505,15 @@ export interface Database {
         Relationships: [];
       };
       calendars: {
-        Row: { id: string; user_id: string; name: string; color: string; is_visible: boolean; position: number; created_at: string };
-        Insert: { id?: string; user_id: string; name: string; color?: string; is_visible?: boolean; position?: number; created_at?: string };
-        Update: { id?: string; user_id?: string; name?: string; color?: string; is_visible?: boolean; position?: number; created_at?: string };
+        Row: { id: string; user_id: string; name: string; color: string; is_visible: boolean; is_default: boolean; position: number; created_at: string };
+        Insert: { id?: string; user_id: string; name: string; color?: string; is_visible?: boolean; is_default?: boolean; position?: number; created_at?: string };
+        Update: { id?: string; user_id?: string; name?: string; color?: string; is_visible?: boolean; is_default?: boolean; position?: number; created_at?: string };
         Relationships: [];
       };
       calendar_events: {
-        Row: { id: string; calendar_id: string; user_id: string; operation_key: string | null; title: string; starts_at: string; ends_at: string; all_day: boolean; location: string | null; description_json: Json; task_id: string | null; google_event_id: string | null; source: string; created_at: string; updated_at: string };
-        Insert: { id?: string; calendar_id: string; user_id: string; operation_key?: string | null; title: string; starts_at: string; ends_at: string; all_day?: boolean; location?: string | null; description_json?: Json; task_id?: string | null; google_event_id?: string | null; source?: string; created_at?: string; updated_at?: string };
-        Update: { id?: string; calendar_id?: string; user_id?: string; operation_key?: string | null; title?: string; starts_at?: string; ends_at?: string; all_day?: boolean; location?: string | null; description_json?: Json; task_id?: string | null; google_event_id?: string | null; source?: string; created_at?: string; updated_at?: string };
+        Row: { id: string; calendar_id: string; user_id: string; operation_key: string | null; title: string; starts_at: string; ends_at: string; starts_at_local: string | null; ends_at_local: string | null; timezone: string | null; duration_minutes: number | null; rrule: string | null; recurrence_end: string | null; parent_event_id: string | null; recurrence_id: string | null; is_exception: boolean; is_cancelled: boolean; deleted_at: string | null; color: string | null; conference_url: string | null; all_day: boolean; location: string | null; description_json: Json; task_id: string | null; google_event_id: string | null; source: string; created_at: string; updated_at: string };
+        Insert: { id?: string; calendar_id: string; user_id: string; operation_key?: string | null; title: string; starts_at: string; ends_at: string; starts_at_local?: string | null; ends_at_local?: string | null; timezone?: string | null; duration_minutes?: number | null; rrule?: string | null; recurrence_end?: string | null; parent_event_id?: string | null; recurrence_id?: string | null; is_exception?: boolean; is_cancelled?: boolean; deleted_at?: string | null; color?: string | null; conference_url?: string | null; all_day?: boolean; location?: string | null; description_json?: Json; task_id?: string | null; google_event_id?: string | null; source?: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; calendar_id?: string; user_id?: string; operation_key?: string | null; title?: string; starts_at?: string; ends_at?: string; starts_at_local?: string | null; ends_at_local?: string | null; timezone?: string | null; duration_minutes?: number | null; rrule?: string | null; recurrence_end?: string | null; parent_event_id?: string | null; recurrence_id?: string | null; is_exception?: boolean; is_cancelled?: boolean; deleted_at?: string | null; color?: string | null; conference_url?: string | null; all_day?: boolean; location?: string | null; description_json?: Json; task_id?: string | null; google_event_id?: string | null; source?: string; created_at?: string; updated_at?: string };
         Relationships: [];
       };
       workspace_links: {
@@ -543,6 +543,72 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      list_calendar_recurrence_masters: {
+        Args: {
+          p_owner_id: string;
+          p_window_start: string;
+          p_window_end: string;
+          p_overlaps: boolean;
+          p_workspace_event_ids?: string[] | null;
+        };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"][];
+      };
+      upsert_calendar_event_exception: {
+        Args: {
+          p_owner_id: string;
+          p_master_event_id: string;
+          p_calendar_id: string;
+          p_recurrence_id: string;
+          p_operation_key: string;
+          p_is_cancelled: boolean;
+          p_title: string;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_starts_at_local: string;
+          p_ends_at_local: string;
+          p_timezone: string;
+          p_duration_minutes: number;
+          p_all_day: boolean;
+          p_location: string | null;
+          p_description_json: Json;
+          p_color: string | null;
+          p_conference_url: string | null;
+        };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      truncate_calendar_event_series: {
+        Args: {
+          p_owner_id: string;
+          p_master_event_id: string;
+          p_recurrence_id: string;
+        };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      split_calendar_event_series: {
+        Args: {
+          p_owner_id: string;
+          p_master_event_id: string;
+          p_split_recurrence_id: string;
+          p_operation_key: string;
+          p_new_calendar_id: string;
+          p_new_title: string;
+          p_new_starts_at: string;
+          p_new_ends_at: string;
+          p_new_starts_at_local: string;
+          p_new_ends_at_local: string;
+          p_new_timezone: string;
+          p_new_duration_minutes: number;
+          p_new_rrule: string;
+          p_new_recurrence_end: string | null;
+          p_new_all_day: boolean;
+          p_new_location: string | null;
+          p_new_description_json: Json;
+          p_new_color: string | null;
+          p_new_conference_url: string | null;
+          p_exception_recurrence_id_map: Json;
+        };
+        Returns: Json;
+      };
       claim_task_attachment: {
         Args: {
           p_owner_id: string;

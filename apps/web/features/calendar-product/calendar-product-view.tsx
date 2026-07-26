@@ -30,13 +30,21 @@ import {
   createCalendarAction,
   createCalendarEventAction,
   deleteCalendarEventAction,
+  deleteRecurringEventAction,
   quickAddTaskAction,
+  type RecurrenceMutationScope,
   scheduleTaskFromDragAction,
   setTaskStatusAction,
   toggleCalendarVisibilityAction,
   updateCalendarEventAction,
   updateEventTimesAction,
+  updateRecurringEventAction,
 } from "@/app/(workspace)/calendar/actions"
+import {
+  resolveEventMutationTarget,
+  type EventMutationTarget,
+} from "@/lib/calendar/event-mutation-target"
+import { instantToLocalDateTime } from "@/lib/calendar/recurrence"
 import { EventDetailPopover } from "./event-detail-popover"
 import { CalendarDndContext } from "./calendar-dnd-context"
 import { useMonthMutations } from "./use-month-mutations"
@@ -61,6 +69,7 @@ import { useCalendarHotkeys } from "./use-calendar-hotkeys"
 import { useCalendarNavigation } from "./use-calendar-navigation"
 import { YearView } from "./year-view"
 import { CalendarViewTransition } from "./calendar-view-transition"
+import { EventRecurrenceScopeDialog } from "./event-recurrence-scope-dialog"
 
 type CalendarProductViewProps = {
   initialScope: CalendarScope
@@ -82,8 +91,72 @@ type EventPanelState =
       endsAt: string
       anchorRect: DOMRect
     }
-  | { mode: "edit"; eventId: string; anchorRect: DOMRect }
+  | {
+      mode: "edit"
+      eventId: string
+      event: CalendarEventRow
+      mutationTarget: EventMutationTarget
+      anchorRect: DOMRect
+    }
   | null
+
+type PendingRecurrenceMutation =
+  | {
+      kind: "save"
+      event: CalendarEventRow
+      payload: EventPanelSavePayload
+    }
+  | { kind: "delete"; event: CalendarEventRow }
+  | {
+      kind: "move"
+      event: CalendarEventRow
+      startsAt: string
+      endsAt: string
+    }
+
+function eventDescription(event: CalendarEventRow): string {
+  const text = event.description_json.text
+  return typeof text === "string" ? text : ""
+}
+
+function recurrencePayload(
+  pending: Exclude<PendingRecurrenceMutation, { kind: "delete" }>,
+): EventPanelSavePayload {
+  if (pending.kind === "save") return pending.payload
+
+  const timezone =
+    pending.event.timezone ??
+    Intl.DateTimeFormat().resolvedOptions().timeZone ??
+    "UTC"
+  const startsAtLocal =
+    instantToLocalDateTime(pending.startsAt, timezone) ??
+    pending.startsAt.slice(0, 19)
+  const endsAtLocal =
+    instantToLocalDateTime(pending.endsAt, timezone) ??
+    pending.endsAt.slice(0, 19)
+  const durationMinutes = Math.max(
+    1,
+    Math.round(
+      (new Date(pending.endsAt).getTime() -
+        new Date(pending.startsAt).getTime()) /
+        60_000,
+    ),
+  )
+
+  return {
+    calendarId: pending.event.calendar_id,
+    title: pending.event.title,
+    startsAt: pending.startsAt,
+    endsAt: pending.endsAt,
+    startsAtLocal,
+    endsAtLocal,
+    timezone,
+    durationMinutes,
+    rrule: pending.event.rrule,
+    location: pending.event.location,
+    description: eventDescription(pending.event),
+  }
+}
 
 const PLANNING_TOGGLE_TRANSITION = {
   duration: 0.15,
@@ -123,6 +196,8 @@ function CalendarProductViewInner({
   const [now, setNow] = useState(() => new Date())
   const [eventPanel, setEventPanel] = useState<EventPanelState>(null)
   const [eventPanelDirty, setEventPanelDirty] = useState(false)
+  const [pendingRecurrence, setPendingRecurrence] =
+    useState<PendingRecurrenceMutation | null>(null)
   const [draftCreateEvent, setDraftCreateEvent] =
     useState<DraftCreateEventState | null>(null)
   const [crossLinkPanel, setCrossLinkPanel] =
@@ -354,9 +429,20 @@ function CalendarProductViewInner({
 
   function openEditEventPanel(event: CalendarEventRow, anchorRect: DOMRect) {
     if (eventPanelDirty && !window.confirm("Discard unsaved changes?")) return
+    const mutationTarget = resolveEventMutationTarget(event)
+    if (!mutationTarget) {
+      toast("This event has an invalid recurrence identity.", { tone: "error" })
+      return
+    }
     setCrossLinkPanel(null)
     setDraftCreateEvent(null)
-    setEventPanel({ mode: "edit", eventId: event.id, anchorRect })
+    setEventPanel({
+      mode: "edit",
+      eventId: event.id,
+      event,
+      mutationTarget,
+      anchorRect,
+    })
     setEventPanelDirty(false)
   }
 
@@ -367,6 +453,17 @@ function CalendarProductViewInner({
   function handleEventPanelSave(payload: EventPanelSavePayload) {
     if (!eventPanel) return
 
+    if (eventPanel.mode === "edit") {
+      if (eventPanel.mutationTarget.kind !== "standalone") {
+        setPendingRecurrence({
+          kind: "save",
+          event: eventPanel.event,
+          payload,
+        })
+        return
+      }
+    }
+
     startTransition(async () => {
       if (eventPanel.mode === "create") {
         const result = await createCalendarEventAction(payload)
@@ -376,8 +473,12 @@ function CalendarProductViewInner({
         }
         toast("Event created")
       } else {
+        if (eventPanel.mutationTarget.kind !== "standalone") {
+          toast("Choose which recurring events to update.", { tone: "error" })
+          return
+        }
         const result = await updateCalendarEventAction({
-          eventId: eventPanel.eventId,
+          eventId: eventPanel.mutationTarget.eventId,
           ...payload,
         })
         if (!result.ok) {
@@ -393,8 +494,14 @@ function CalendarProductViewInner({
     })
   }
 
-  async function handleEventPanelDelete(eventId: string) {
-    const result = await deleteCalendarEventAction({ eventId })
+  async function handleEventPanelDelete(event: CalendarEventRow) {
+    const target = resolveEventMutationTarget(event)
+    if (target && target.kind !== "standalone") {
+      setPendingRecurrence({ kind: "delete", event })
+      return
+    }
+
+    const result = await deleteCalendarEventAction({ eventId: event.id })
     if (!result.ok) {
       return { ok: false as const, error: result.error }
     }
@@ -451,15 +558,36 @@ function CalendarProductViewInner({
     scope,
     anchor: anchorDate,
     onSettled: () => invalidateCalendar(scope),
+    onRecurringEventMove: (move) =>
+      setPendingRecurrence({
+        kind: "move",
+        event: move.event,
+        startsAt: move.startsAt,
+        endsAt: move.endsAt,
+      }),
   })
 
   function handleEventTimesChange(input: {
-    eventId: string
+    event: CalendarEventRow
     startsAt: string
     endsAt: string
   }) {
+    const target = resolveEventMutationTarget(input.event)
+    if (!target) {
+      toast("This event has an invalid recurrence identity.", { tone: "error" })
+      return
+    }
+    if (target.kind !== "standalone") {
+      setPendingRecurrence({ kind: "move", ...input })
+      return
+    }
+
     startTransition(async () => {
-      const result = await updateEventTimesAction(input)
+      const result = await updateEventTimesAction({
+        eventId: target.eventId,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+      })
       if (!result.ok) {
         toast(result.error, { tone: "error" })
         invalidateCalendar(scope)
@@ -469,10 +597,71 @@ function CalendarProductViewInner({
     })
   }
 
+  function executePendingRecurrence(scopeChoice: RecurrenceMutationScope) {
+    if (!pendingRecurrence) return
+    const target = resolveEventMutationTarget(pendingRecurrence.event)
+    if (!target || target.kind === "standalone") {
+      setPendingRecurrence(null)
+      return
+    }
+    const masterId =
+      target.kind === "series-master" ? target.masterId : target.masterId
+    const recurrenceId =
+      target.kind === "series-master"
+        ? pendingRecurrence.event.starts_at
+        : target.recurrenceId
+
+    startTransition(async () => {
+      const operationKey = crypto.randomUUID()
+      const result =
+        pendingRecurrence.kind === "delete"
+          ? await deleteRecurringEventAction({
+              masterId,
+              recurrenceId,
+              operationKey,
+              scope: scopeChoice,
+            })
+          : await updateRecurringEventAction({
+              masterId,
+              recurrenceId,
+              operationKey,
+              scope: scopeChoice,
+              ...recurrencePayload(pendingRecurrence),
+            })
+
+      if (!result.ok) {
+        toast(result.error, { tone: "error" })
+        return
+      }
+
+      toast(
+        pendingRecurrence.kind === "delete"
+          ? "Recurring event deleted"
+          : "Recurring event saved",
+      )
+      setPendingRecurrence(null)
+      if (pendingRecurrence.kind === "save") {
+        setEventPanel(null)
+        setEventPanelDirty(false)
+      }
+      invalidateCalendar(scope)
+    })
+  }
+
   const editingEvent =
     eventPanel?.mode === "edit"
-      ? events.find((event) => event.id === eventPanel.eventId) ?? null
+      ? events.find((event) => event.id === eventPanel.eventId) ??
+        eventPanel.event
       : null
+  const editingTarget =
+    eventPanel?.mode === "edit" ? eventPanel.mutationTarget : null
+  const crossLinkEventId =
+    editingTarget?.kind === "standalone"
+      ? editingTarget.eventId
+      : editingTarget?.kind === "series-master" ||
+          editingTarget?.kind === "series-instance"
+        ? editingTarget.masterId
+        : null
 
   const handleDismissOverlay = useCallback(() => {
     if (crossLinkPanel) {
@@ -742,6 +931,22 @@ function CalendarProductViewInner({
         onClose={() => setCheatSheetOpen(false)}
       />
 
+      <EventRecurrenceScopeDialog
+        open={pendingRecurrence !== null}
+        action={
+          pendingRecurrence?.kind === "delete"
+            ? "delete"
+            : pendingRecurrence?.kind === "move"
+              ? "move"
+              : "edit"
+        }
+        isPending={isPending}
+        onClose={() => {
+          if (!isPending) setPendingRecurrence(null)
+        }}
+        onChoose={executePendingRecurrence}
+      />
+
       {/*
         AnimatePresence stays mounted and the card is the conditional child —
         mounting the two together gives it nothing to transition from, and the
@@ -796,9 +1001,9 @@ function CalendarProductViewInner({
         ) : null}
       </AnimatePresence>
 
-      {eventPanel?.mode === "edit" && crossLinkPanel ? (
+      {eventPanel?.mode === "edit" && crossLinkPanel && crossLinkEventId ? (
         <EventCrossLinkDialogs
-          eventId={eventPanel.eventId}
+          eventId={crossLinkEventId}
           panel={crossLinkPanel}
           onClose={() => setCrossLinkPanel(null)}
           onMutationSuccess={() => invalidateCalendar(scope)}

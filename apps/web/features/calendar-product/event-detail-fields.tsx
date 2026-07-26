@@ -1,10 +1,13 @@
 "use client";
 
-import { AlignLeft, Link2, MapPin, Paperclip } from "lucide-react";
+import { AlignLeft, Link2, MapPin, Paperclip, Repeat } from "lucide-react";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import type { CalendarRow } from "@planevo/core/types/calendar";
 import { cn } from "@/lib/utils";
-import type { EventFormState } from "@/lib/calendar/event-form-state";
+import {
+  weeklyRruleForDate,
+  type EventFormState,
+} from "@/lib/calendar/event-form-state";
 import type { EventCrossLinkPanel } from "./event-cross-links";
 
 /**
@@ -24,6 +27,20 @@ type EventDetailFieldsProps = {
 const ROW_CLASS = "event-card-divider flex items-center gap-2 px-3 py-2";
 const PLAIN_INPUT_CLASS =
   "min-w-0 flex-1 border-0 bg-transparent p-0 text-product-body text-ink outline-none placeholder:text-text-muted focus-visible:outline-none";
+
+function recurrencePreset(form: EventFormState): string {
+  const weekly = weeklyRruleForDate(form.startsDate);
+  if (
+    form.rrule === null ||
+    form.rrule === "FREQ=DAILY" ||
+    form.rrule === weekly ||
+    form.rrule === "FREQ=MONTHLY" ||
+    form.rrule === "FREQ=YEARLY"
+  ) {
+    return form.rrule ?? "";
+  }
+  return "custom";
+}
 
 /** A native date or time input dressed as a pill — keyboard entry intact, OS glyph gone. */
 function DateTimePill({
@@ -183,6 +200,54 @@ export function EventDetailFields({
         <p className="px-3 pb-2 pl-[4.5rem] text-product-meta text-text-muted">
           {durationLabel}
         </p>
+      ) : null}
+
+      <div className={ROW_CLASS}>
+        <Repeat aria-hidden="true" className="size-3.5 shrink-0 text-text-muted" />
+        <select
+          aria-label="Repeats"
+          value={recurrencePreset(form)}
+          onChange={(changeEvent) => {
+            const value = changeEvent.target.value;
+            onFormChange({
+              rrule:
+                value === ""
+                  ? null
+                  : value === "custom"
+                    ? `FREQ=WEEKLY;INTERVAL=2;BYDAY=${weeklyRruleForDate(
+                        form.startsDate,
+                      ).replace("FREQ=WEEKLY;BYDAY=", "")}`
+                    : value,
+            });
+          }}
+          className={PLAIN_INPUT_CLASS}
+        >
+          <option value="">Does not repeat</option>
+          <option value="FREQ=DAILY">Daily</option>
+          <option value={weeklyRruleForDate(form.startsDate)}>
+            Weekly on this day
+          </option>
+          <option value="FREQ=MONTHLY">Monthly</option>
+          <option value="FREQ=YEARLY">Yearly</option>
+          <option value="custom">Custom RRULE</option>
+        </select>
+      </div>
+
+      {recurrencePreset(form) === "custom" ? (
+        <label className={ROW_CLASS}>
+          <span className="w-14 shrink-0 text-label uppercase text-text-muted">
+            Rule
+          </span>
+          <input
+            value={form.rrule ?? ""}
+            onChange={(changeEvent) =>
+              onFormChange({ rrule: changeEvent.target.value || null })
+            }
+            placeholder="FREQ=WEEKLY;INTERVAL=2"
+            aria-label="Custom recurrence rule"
+            className={PLAIN_INPUT_CLASS}
+          />
+        </label>
       ) : null}
 
       <label className={ROW_CLASS}>

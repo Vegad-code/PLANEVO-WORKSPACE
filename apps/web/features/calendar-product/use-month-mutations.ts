@@ -15,6 +15,7 @@ import type { CalendarQueryPayload } from "@/lib/calendar/fetch-calendar-page-da
 import type { MonthMoveResult } from "@/lib/calendar/month-drag"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import { toast } from "@/components/ui/toast"
+import { resolveEventMutationTarget } from "@/lib/calendar/event-mutation-target"
 
 /**
  * Applies a month drag optimistically, then reconciles with the server.
@@ -28,15 +29,27 @@ export function useMonthMutations({
   scope,
   anchor,
   onSettled,
+  onRecurringEventMove,
 }: {
   scope: CalendarScope
   anchor: Date
   onSettled: () => void
+  onRecurringEventMove: (
+    move: Extract<MonthMoveResult, { kind: "event" }>,
+  ) => void
 }): { applyMonthMove: (move: MonthMoveResult) => void } {
   const queryClient = useQueryClient()
 
   const applyMonthMove = useCallback(
     (move: MonthMoveResult) => {
+      if (
+        move.kind === "event" &&
+        resolveEventMutationTarget(move.event)?.kind !== "standalone"
+      ) {
+        onRecurringEventMove(move)
+        return
+      }
+
       const queryKey = calendarQueryKey(scope, "month", anchor)
       const previous =
         queryClient.getQueryData<CalendarQueryPayload>(queryKey)
@@ -63,7 +76,7 @@ export function useMonthMutations({
         onSettled()
       })()
     },
-    [anchor, onSettled, queryClient, scope],
+    [anchor, onRecurringEventMove, onSettled, queryClient, scope],
   )
 
   return { applyMonthMove }

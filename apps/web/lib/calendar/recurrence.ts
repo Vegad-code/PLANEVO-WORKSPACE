@@ -36,6 +36,21 @@ type IndexedException = {
 }
 
 const INSTANCE_SEPARATOR = "::"
+const MAX_FINITE_OCCURRENCES = 10_000
+
+export type RecurrenceBoundaryResult =
+  | { valid: true; recurrenceEnd: string | null }
+  | { valid: false; recurrenceEnd: null }
+
+export type RecurrenceIdentityMap = {
+  oldRecurrenceId: string
+  newRecurrenceId: string
+}
+
+export type RemapRecurrenceIdentitiesResult = {
+  exceptionRecurrenceIdMap: RecurrenceIdentityMap[]
+  recurrenceEnd: string | null
+}
 
 export function expandRecurrence({
   master,
@@ -67,12 +82,15 @@ export function expandRecurrence({
     return []
   }
 
-  const inclusiveEnd = earliestInstant(recurrenceEnd, builtRule.until)
-  if (inclusiveEnd && inclusiveEnd < windowStart) {
+  const queryLimit = earliestInstant(recurrenceEnd, builtRule.until)
+  if (
+    (recurrenceEnd && recurrenceEnd <= windowStart) ||
+    (builtRule.until && builtRule.until < windowStart)
+  ) {
     return []
   }
 
-  const queryEnd = inclusiveEnd && inclusiveEnd < windowEnd ? inclusiveEnd : windowEnd
+  const queryEnd = queryLimit && queryLimit < windowEnd ? queryLimit : windowEnd
   const localWindowStart = toLocalDateTime({ date: windowStart, timezone })
   const localQueryEnd = toLocalDateTime({ date: queryEnd, timezone })
   if (!localWindowStart || !localQueryEnd) {
@@ -96,7 +114,8 @@ export function expandRecurrence({
           !occurrenceStart ||
           occurrenceStart < windowStart ||
           occurrenceStart >= windowEnd ||
-          (inclusiveEnd && occurrenceStart > inclusiveEnd)
+          (recurrenceEnd && occurrenceStart >= recurrenceEnd) ||
+          (builtRule.until && occurrenceStart > builtRule.until)
         ) {
           return []
         }
@@ -113,7 +132,13 @@ export function expandRecurrence({
             return []
           }
 
-          return [exception.row]
+          return [
+            {
+              ...exception.row,
+              rrule: master.rrule,
+              recurrence_end: master.recurrence_end,
+            },
+          ]
         }
 
         const occurrenceEnd = new Date(
@@ -153,6 +178,310 @@ export function parseInstanceId(id: string): { masterId: string; recurrenceId: s
   }
 
   return { masterId: parts[0], recurrenceId: parts[1] }
+}
+
+export function localDateTimeToInstant(
+  value: string,
+  timezone: string,
+): string | null {
+  const local = parseLocalDateTime(value)
+  if (!local || !timezone) return null
+  const instant = fromFloatingDate({
+    floatingDate: toFloatingDate(local),
+    timezone,
+  })
+  return instant?.toISOString() ?? null
+}
+
+export function instantToLocalDateTime(
+  value: string,
+  timezone: string,
+): string | null {
+  const instant = parseInstant(value)
+  if (!instant || !timezone) return null
+  return formatLocalDateTime({ date: instant, timezone })
+}
+
+/**
+ * Persists a cheap SQL-query boundary for finite RFC rules. The extra
+ * millisecond keeps recurrence_end exclusive while retaining the rule's last
+ * inclusive COUNT/UNTIL occurrence.
+ */
+export function deriveRecurrenceBoundary(input: {
+  rrule: string
+  startsAtLocal: string
+  timezone: string
+}): RecurrenceBoundaryResult {
+  const localStart = parseLocalDateTime(input.startsAtLocal)
+  if (!localStart || !input.timezone) {
+    return { valid: false, recurrenceEnd: null }
+  }
+
+  const floatingStart = toFloatingDate(localStart)
+  const builtRule = buildRule({
+    rrule: input.rrule,
+    dtstart: floatingStart,
+  })
+  if (!builtRule) {
+    return { valid: false, recurrenceEnd: null }
+  }
+  if (!datesEqual(builtRule.rule.after(floatingStart, true), floatingStart)) {
+    return { valid: false, recurrenceEnd: null }
+  }
+
+  const count = builtRule.rule.options.count
+  if (
+    count != null &&
+    (!Number.isSafeInteger(count) || count <= 0 || count > MAX_FINITE_OCCURRENCES)
+  ) {
+    return { valid: false, recurrenceEnd: null }
+  }
+  if (count == null && builtRule.until === null) {
+    return { valid: true, recurrenceEnd: null }
+  }
+
+  const localUntil = builtRule.until
+    ? toLocalDateTime({ date: builtRule.until, timezone: input.timezone })
+    : null
+  if (builtRule.until && !localUntil) {
+    return { valid: false, recurrenceEnd: null }
+  }
+  const floatingUntil = localUntil ? toFloatingDate(localUntil) : null
+  const floatingOccurrences = builtRule.rule.all((occurrence, index) => {
+    return (
+      index < MAX_FINITE_OCCURRENCES &&
+      (!floatingUntil || occurrence <= floatingUntil)
+    )
+  })
+  const lastFloating = floatingOccurrences.at(-1)
+  if (!lastFloating) {
+    return { valid: false, recurrenceEnd: null }
+  }
+
+  const nextFloating = builtRule.rule.after(lastFloating, false)
+  if (nextFloating && (!floatingUntil || nextFloating <= floatingUntil)) {
+    return { valid: false, recurrenceEnd: null }
+  }
+
+  const lastInstant = fromFloatingDate({
+    floatingDate: lastFloating,
+    timezone: input.timezone,
+  })
+  if (!lastInstant) {
+    return { valid: false, recurrenceEnd: null }
+  }
+
+  return {
+    valid: true,
+    recurrenceEnd: new Date(lastInstant.getTime() + 1).toISOString(),
+  }
+}
+
+/**
+ * Maps exception identities by occurrence ordinal when a series is split.
+ * A date delta is insufficient when the future rule changes frequency or day.
+ */
+export function remapRecurrenceIdentitiesForSplit(input: {
+  master: CalendarEventRow
+  splitRecurrenceId: string
+  newStartsAtLocal: string
+  newTimezone: string
+  newRrule: string
+  exceptionRecurrenceIds: string[]
+}): RemapRecurrenceIdentitiesResult | null {
+  const oldLocalStart = parseLocalDateTime(input.master.starts_at_local)
+  const newLocalStart = parseLocalDateTime(input.newStartsAtLocal)
+  const oldTimezone = input.master.timezone
+  const oldRrule = input.master.rrule
+  if (!oldLocalStart || !newLocalStart || !oldTimezone || !oldRrule) {
+    return null
+  }
+
+  const oldRule = buildRule({
+    rrule: oldRrule,
+    dtstart: toFloatingDate(oldLocalStart),
+  })
+  const newRule = buildRule({
+    rrule: input.newRrule,
+    dtstart: toFloatingDate(newLocalStart),
+  })
+  const splitLocal = instantToLocalDateTime(
+    input.splitRecurrenceId,
+    oldTimezone,
+  )
+  const splitLocalParts = splitLocal ? parseLocalDateTime(splitLocal) : null
+  if (!oldRule || !newRule || !splitLocalParts) {
+    return null
+  }
+
+  const splitFloating = toFloatingDate(splitLocalParts)
+  const newStartFloating = toFloatingDate(newLocalStart)
+  if (
+    !datesEqual(oldRule.rule.after(splitFloating, true), splitFloating) ||
+    !datesEqual(newRule.rule.after(newStartFloating, true), newStartFloating)
+  ) {
+    return null
+  }
+
+  const mapped: RecurrenceIdentityMap[] = []
+  const seenOld = new Set<string>()
+  const seenNew = new Set<string>()
+  for (const oldRecurrenceId of input.exceptionRecurrenceIds) {
+    if (seenOld.has(oldRecurrenceId)) return null
+    seenOld.add(oldRecurrenceId)
+
+    const oldLocal = instantToLocalDateTime(oldRecurrenceId, oldTimezone)
+    const oldLocalParts = oldLocal ? parseLocalDateTime(oldLocal) : null
+    if (!oldLocalParts) return null
+
+    const ordinal = recurrenceOrdinal({
+      rule: oldRule.rule,
+      first: splitFloating,
+      target: toFloatingDate(oldLocalParts),
+    })
+    if (ordinal === null) return null
+
+    const newFloating = occurrenceAtOrdinal({
+      rule: newRule.rule,
+      first: newStartFloating,
+      ordinal,
+    })
+    if (!newFloating) return null
+    const newInstant = fromFloatingDate({
+      floatingDate: newFloating,
+      timezone: input.newTimezone,
+    })
+    const newRecurrenceId = newInstant?.toISOString()
+    if (!newRecurrenceId || seenNew.has(newRecurrenceId)) return null
+    seenNew.add(newRecurrenceId)
+    mapped.push({ oldRecurrenceId, newRecurrenceId })
+  }
+
+  const newNativeBoundary = deriveRecurrenceBoundary({
+    rrule: input.newRrule,
+    startsAtLocal: input.newStartsAtLocal,
+    timezone: input.newTimezone,
+  })
+  if (!newNativeBoundary.valid) return null
+
+  let recurrenceEnd = newNativeBoundary.recurrenceEnd
+  const oldNativeBoundary = deriveRecurrenceBoundary({
+    rrule: oldRrule,
+    startsAtLocal: input.master.starts_at_local!,
+    timezone: oldTimezone,
+  })
+  const persistedBoundaryMatchesNative =
+    input.master.recurrence_end !== null &&
+    oldNativeBoundary.valid &&
+    oldNativeBoundary.recurrenceEnd !== null &&
+    instantStringsEqual(
+      oldNativeBoundary.recurrenceEnd,
+      input.master.recurrence_end,
+    )
+  const preservesCountRule =
+    /(^|;)COUNT=/i.test(oldRrule) &&
+    input.newRrule.trim().toUpperCase() === oldRrule.trim().toUpperCase() &&
+    persistedBoundaryMatchesNative
+  const hasExplicitControllerBoundary =
+    input.master.recurrence_end !== null &&
+    !persistedBoundaryMatchesNative
+
+  if (hasExplicitControllerBoundary || preservesCountRule) {
+    const oldBoundaryInstant = preservesCountRule
+      ? new Date(
+          new Date(input.master.recurrence_end!).getTime() - 1,
+        ).toISOString()
+      : input.master.recurrence_end!
+    const oldBoundaryLocal = instantToLocalDateTime(
+      oldBoundaryInstant,
+      oldTimezone,
+    )
+    const oldBoundaryParts = oldBoundaryLocal
+      ? parseLocalDateTime(oldBoundaryLocal)
+      : null
+    if (!oldBoundaryParts) return null
+
+    const boundaryOrdinal = recurrenceOrdinal({
+      rule: oldRule.rule,
+      first: splitFloating,
+      target: toFloatingDate(oldBoundaryParts),
+    })
+    if (boundaryOrdinal === null) return null
+    const newBoundaryFloating = occurrenceAtOrdinal({
+      rule: newRule.rule,
+      first: newStartFloating,
+      ordinal: boundaryOrdinal,
+    })
+    if (!newBoundaryFloating) return null
+    const mappedBoundary = fromFloatingDate({
+      floatingDate: newBoundaryFloating,
+      timezone: input.newTimezone,
+    })
+    const mappedBoundaryIso = mappedBoundary
+      ? new Date(
+          mappedBoundary.getTime() + (preservesCountRule ? 1 : 0),
+        ).toISOString()
+      : null
+    if (!mappedBoundaryIso) return null
+    if (!recurrenceEnd || mappedBoundaryIso < recurrenceEnd) {
+      recurrenceEnd = mappedBoundaryIso
+    }
+  }
+
+  return {
+    exceptionRecurrenceIdMap: mapped,
+    recurrenceEnd,
+  }
+}
+
+function recurrenceOrdinal(input: {
+  rule: InstanceType<typeof RRule>
+  first: Date
+  target: Date
+}): number | null {
+  if (input.target < input.first) return null
+  const occurrences = input.rule.between(input.first, input.target, true)
+  if (
+    occurrences.length === 0 ||
+    occurrences.length > MAX_FINITE_OCCURRENCES ||
+    !datesEqual(occurrences[0] ?? null, input.first) ||
+    !datesEqual(occurrences.at(-1) ?? null, input.target)
+  ) {
+    return null
+  }
+  return occurrences.length - 1
+}
+
+function occurrenceAtOrdinal(input: {
+  rule: InstanceType<typeof RRule>
+  first: Date
+  ordinal: number
+}): Date | null {
+  if (
+    !Number.isSafeInteger(input.ordinal) ||
+    input.ordinal < 0 ||
+    input.ordinal >= MAX_FINITE_OCCURRENCES
+  ) {
+    return null
+  }
+
+  let occurrence = input.first
+  for (let index = 0; index < input.ordinal; index += 1) {
+    const next = input.rule.after(occurrence, false)
+    if (!next) return null
+    occurrence = next
+  }
+  return occurrence
+}
+
+function datesEqual(left: Date | null, right: Date | null): boolean {
+  return left?.getTime() === right?.getTime()
+}
+
+function instantStringsEqual(left: string, right: string): boolean {
+  const leftInstant = parseInstant(left)
+  const rightInstant = parseInstant(right)
+  return datesEqual(leftInstant, rightInstant)
 }
 
 function buildRule({

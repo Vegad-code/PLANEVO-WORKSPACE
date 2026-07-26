@@ -29,7 +29,7 @@ export type CalendarPageData =
       initialView: CalendarToolbarView
       todayTasks: TodayColumnTask[]
       workspaceId: string | null
-    } & CalendarWeekData)
+    } & Pick<CalendarWeekData, "calendars" | "events" | "taskDues">)
 
 /**
  * Server loader for the Calendar product. Event window follows `view` + `date`

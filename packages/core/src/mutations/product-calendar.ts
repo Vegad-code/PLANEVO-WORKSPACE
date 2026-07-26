@@ -14,6 +14,12 @@ export type CreateCalendarEventInput = {
   title: string;
   startsAt: string;
   endsAt: string;
+  startsAtLocal?: string | null;
+  endsAtLocal?: string | null;
+  timezone?: string | null;
+  durationMinutes?: number | null;
+  rrule?: string | null;
+  recurrenceEnd?: string | null;
   allDay?: boolean;
   location?: string | null;
   description?: Record<string, unknown>;
@@ -34,6 +40,12 @@ export async function createCalendarEvent(
       title: input.title,
       starts_at: input.startsAt,
       ends_at: input.endsAt,
+      starts_at_local: input.startsAtLocal ?? null,
+      ends_at_local: input.endsAtLocal ?? null,
+      timezone: input.timezone ?? null,
+      duration_minutes: input.durationMinutes ?? null,
+      rrule: input.rrule ?? null,
+      recurrence_end: input.recurrenceEnd ?? null,
       all_day: input.allDay ?? false,
       location: input.location ?? null,
       description_json: (input.description ?? {}) as Json,
@@ -49,6 +61,12 @@ export type UpdateCalendarEventInput = {
   title?: string;
   startsAt?: string;
   endsAt?: string;
+  startsAtLocal?: string | null;
+  endsAtLocal?: string | null;
+  timezone?: string | null;
+  durationMinutes?: number | null;
+  rrule?: string | null;
+  recurrenceEnd?: string | null;
   calendarId?: string;
   location?: string | null;
   description?: Record<string, unknown>;
@@ -68,6 +86,20 @@ export async function updateCalendarEvent(
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.startsAt !== undefined ? { starts_at: input.startsAt } : {}),
       ...(input.endsAt !== undefined ? { ends_at: input.endsAt } : {}),
+      ...(input.startsAtLocal !== undefined
+        ? { starts_at_local: input.startsAtLocal }
+        : {}),
+      ...(input.endsAtLocal !== undefined
+        ? { ends_at_local: input.endsAtLocal }
+        : {}),
+      ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+      ...(input.durationMinutes !== undefined
+        ? { duration_minutes: input.durationMinutes }
+        : {}),
+      ...(input.rrule !== undefined ? { rrule: input.rrule } : {}),
+      ...(input.recurrenceEnd !== undefined
+        ? { recurrence_end: input.recurrenceEnd }
+        : {}),
       ...(input.calendarId !== undefined ? { calendar_id: input.calendarId } : {}),
       ...(input.location !== undefined ? { location: input.location } : {}),
       ...(input.description !== undefined
@@ -78,6 +110,148 @@ export async function updateCalendarEvent(
     })
     .eq("id", eventId)
     .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Event not found.");
+}
+
+export type RecurrenceOccurrenceWrite = {
+  operationKey: string;
+  masterEventId: string;
+  calendarId: string;
+  recurrenceId: string;
+  isCancelled: boolean;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  timezone: string;
+  durationMinutes: number;
+  allDay: boolean;
+  location: string | null;
+  description: Record<string, unknown>;
+  color: string | null;
+  conferenceUrl: string | null;
+};
+
+export async function upsertCalendarEventException(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: RecurrenceOccurrenceWrite,
+): Promise<CalendarEventRow> {
+  const { data, error } = await client.rpc(
+    "upsert_calendar_event_exception",
+    {
+      p_owner_id: userId,
+      p_master_event_id: input.masterEventId,
+      p_calendar_id: input.calendarId,
+      p_recurrence_id: input.recurrenceId,
+      p_operation_key: input.operationKey,
+      p_is_cancelled: input.isCancelled,
+      p_title: input.title,
+      p_starts_at: input.startsAt,
+      p_ends_at: input.endsAt,
+      p_starts_at_local: input.startsAtLocal,
+      p_ends_at_local: input.endsAtLocal,
+      p_timezone: input.timezone,
+      p_duration_minutes: input.durationMinutes,
+      p_all_day: input.allDay,
+      p_location: input.location,
+      p_description_json: input.description as Json,
+      p_color: input.color,
+      p_conference_url: input.conferenceUrl,
+    },
+  );
+  if (error) throw error;
+  return data as unknown as CalendarEventRow;
+}
+
+export async function truncateCalendarEventSeries(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: { masterEventId: string; recurrenceId: string },
+): Promise<CalendarEventRow> {
+  const { data, error } = await client.rpc(
+    "truncate_calendar_event_series",
+    {
+      p_owner_id: userId,
+      p_master_event_id: input.masterEventId,
+      p_recurrence_id: input.recurrenceId,
+    },
+  );
+  if (error) throw error;
+  return data as unknown as CalendarEventRow;
+}
+
+export type SplitCalendarEventSeriesInput = {
+  operationKey: string;
+  masterEventId: string;
+  splitRecurrenceId: string;
+  calendarId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  timezone: string;
+  durationMinutes: number;
+  rrule: string;
+  recurrenceEnd: string | null;
+  allDay: boolean;
+  location: string | null;
+  description: Record<string, unknown>;
+  color: string | null;
+  conferenceUrl: string | null;
+  exceptionRecurrenceIdMap: Array<{
+    oldRecurrenceId: string;
+    newRecurrenceId: string;
+  }>;
+};
+
+export async function splitCalendarEventSeries(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: SplitCalendarEventSeriesInput,
+): Promise<Json> {
+  const { data, error } = await client.rpc("split_calendar_event_series", {
+    p_owner_id: userId,
+    p_master_event_id: input.masterEventId,
+    p_split_recurrence_id: input.splitRecurrenceId,
+    p_operation_key: input.operationKey,
+    p_new_calendar_id: input.calendarId,
+    p_new_title: input.title,
+    p_new_starts_at: input.startsAt,
+    p_new_ends_at: input.endsAt,
+    p_new_starts_at_local: input.startsAtLocal,
+    p_new_ends_at_local: input.endsAtLocal,
+    p_new_timezone: input.timezone,
+    p_new_duration_minutes: input.durationMinutes,
+    p_new_rrule: input.rrule,
+    p_new_recurrence_end: input.recurrenceEnd,
+    p_new_all_day: input.allDay,
+    p_new_location: input.location,
+    p_new_description_json: input.description as Json,
+    p_new_color: input.color,
+    p_new_conference_url: input.conferenceUrl,
+    p_exception_recurrence_id_map: input.exceptionRecurrenceIdMap,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function softDeleteCalendarEvent(
+  client: SupabaseClient<Database>,
+  userId: string,
+  eventId: string,
+): Promise<void> {
+  const { data, error } = await client
+    .from("calendar_events")
+    .update({ deleted_at: nowIso(), updated_at: nowIso() })
+    .eq("id", eventId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
     .select("id")
     .maybeSingle();
   if (error) throw error;

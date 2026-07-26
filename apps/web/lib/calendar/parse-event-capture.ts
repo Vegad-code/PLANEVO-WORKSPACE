@@ -21,8 +21,8 @@ export type EventCapture = {
   /** "parsed" = the line named a time. "assumed" = we kept the clicked slot's time. */
   timeSource: "parsed" | "assumed"
   durationMinutes: number
-  /** A "every Tuesday" phrase was read and dropped — we only create one event. */
-  recurrenceDetected: boolean
+  /** Canonical RFC 5545 rule when the line names a supported repeat phrase. */
+  rrule: string | null
 }
 
 export type EventCaptureOptions = {
@@ -34,12 +34,20 @@ export type EventCaptureOptions = {
 }
 
 /**
- * `every <weekday>` — matched so the word "every" never leaks into the title and
- * so the UI can say recurrence isn't supported yet. Mirrors the phrase the
- * command bar's quick capture already recognises (`natural-capture.ts`).
+ * `every <weekday>` — matched independently of chrono so the phrase becomes an
+ * RRULE and never leaks into the title.
  */
 const RECURRENCE_PATTERN =
-  /\bevery\s+(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i
+  /\bevery\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i
+const RRULE_WEEKDAYS: Record<string, string> = {
+  sunday: "SU",
+  monday: "MO",
+  tuesday: "TU",
+  wednesday: "WE",
+  thursday: "TH",
+  friday: "FR",
+  saturday: "SA",
+}
 
 /**
  * A bare `3/4` or `7.20`. chrono reads these as month/day, so "Ticket 3/4 done"
@@ -177,13 +185,17 @@ export function parseEventCapture(
     dateSource: "fallback",
     timeSource: "assumed",
     durationMinutes: fallbackDuration,
-    recurrenceDetected: false,
+    rrule: null,
     ...overrides,
   })
 
   if (!line.trim()) return fallbackCapture({ title: "" })
 
   const recurrenceMatch = RECURRENCE_PATTERN.exec(line)
+  const recurrenceWeekday = recurrenceMatch?.[1]?.toLowerCase()
+  const rrule = recurrenceWeekday
+    ? `FREQ=WEEKLY;BYDAY=${RRULE_WEEKDAYS[recurrenceWeekday]}`
+    : null
   const recurrenceRange: [number, number][] = recurrenceMatch
     ? [[recurrenceMatch.index, recurrenceMatch.index + recurrenceMatch[0].length]]
     : []
@@ -197,7 +209,7 @@ export function parseEventCapture(
     return fallbackCapture({
       title: titleWithoutRanges(line, consumedRanges),
       consumedRanges,
-      recurrenceDetected: recurrenceMatch !== null,
+      rrule,
     })
   }
 
@@ -237,6 +249,6 @@ export function parseEventCapture(
     dateSource: dateStated ? "parsed" : "fallback",
     timeSource: timeStated ? "parsed" : "assumed",
     durationMinutes,
-    recurrenceDetected: recurrenceMatch !== null,
+    rrule,
   }
 }

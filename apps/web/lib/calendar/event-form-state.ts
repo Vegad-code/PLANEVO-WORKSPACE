@@ -18,15 +18,26 @@ export type EventFormState = {
   startsTime: string
   endsDate: string
   endsTime: string
+  timezone: string
+  rrule: string | null
   location: string
   description: string
 }
 
 export type EventFormTimes =
-  | { ok: true; startsAt: string; endsAt: string; durationMinutes: number }
+  | {
+      ok: true
+      startsAt: string
+      endsAt: string
+      startsAtLocal: string
+      endsAtLocal: string
+      timezone: string
+      durationMinutes: number
+    }
   | { ok: false; error: string }
 
 const DEFAULT_DURATION_MS = 60 * 60 * 1000
+const RRULE_DAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const
 
 function eventDescriptionText(event: CalendarEventRow): string {
   const text = event.description_json.text
@@ -47,6 +58,8 @@ export function buildEventFormState(input: {
       startsTime: toTimeInputValue(input.event.starts_at),
       endsDate: toDateInputValue(input.event.ends_at),
       endsTime: toTimeInputValue(input.event.ends_at),
+      timezone: input.event.timezone ?? localTimezone(),
+      rrule: input.event.rrule,
       location: input.event.location ?? "",
       description: eventDescriptionText(input.event),
     }
@@ -64,6 +77,8 @@ export function buildEventFormState(input: {
     startsTime: toTimeInputValue(startsAt),
     endsDate: toDateInputValue(endsAt),
     endsTime: toTimeInputValue(endsAt),
+    timezone: localTimezone(),
+    rrule: null,
     location: "",
     description: "",
   }
@@ -80,6 +95,8 @@ export function eventFormStatesEqual(
     a.startsTime === b.startsTime &&
     a.endsDate === b.endsDate &&
     a.endsTime === b.endsTime &&
+    a.timezone === b.timezone &&
+    a.rrule === b.rrule &&
     a.location === b.location &&
     a.description === b.description
   )
@@ -107,8 +124,15 @@ export function resolveEventFormTimes(form: EventFormState): EventFormTimes {
     ok: true,
     startsAt,
     endsAt,
+    startsAtLocal: `${form.startsDate}T${form.startsTime}:00`,
+    endsAtLocal: `${form.endsDate}T${form.endsTime}:00`,
+    timezone: form.timezone,
     durationMinutes: Math.round(durationMs / 60_000),
   }
+}
+
+function localTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
 }
 
 /** Human duration for the card ("1h 30m"). Null while the times are unusable. */
@@ -139,6 +163,7 @@ export function applyCaptureToForm(
     startsTime: toTimeInputValue(capture.startsAt),
     endsDate: toDateInputValue(capture.endsAt),
     endsTime: toTimeInputValue(capture.endsAt),
+    rrule: capture.rrule,
   }
 }
 
@@ -150,9 +175,13 @@ export function applyFormPatch(
   form: EventFormState,
   patch: Partial<EventFormState>,
 ): EventFormState {
-  const next = { ...form, ...patch }
+  let next = { ...form, ...patch }
   if (patch.startsDate === undefined || patch.startsDate === form.startsDate) {
     return next
+  }
+
+  if (/^FREQ=WEEKLY;BYDAY=(?:SU|MO|TU|WE|TH|FR|SA)$/.test(form.rrule ?? "")) {
+    next = { ...next, rrule: weeklyRruleForDate(next.startsDate) }
   }
 
   const previousStart = new Date(`${form.startsDate}T00:00`)
@@ -170,4 +199,10 @@ export function applyFormPatch(
     previousEnd.getTime() + (nextStart.getTime() - previousStart.getTime()),
   )
   return { ...next, endsDate: toDateInputValue(shiftedEnd.toISOString()) }
+}
+
+export function weeklyRruleForDate(dateValue: string): string {
+  const date = new Date(`${dateValue}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return "FREQ=WEEKLY"
+  return `FREQ=WEEKLY;BYDAY=${RRULE_DAY_CODES[date.getDay()]}`
 }

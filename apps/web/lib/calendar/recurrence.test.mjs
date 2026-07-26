@@ -1,6 +1,13 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { expandRecurrence, parseInstanceId } from "./recurrence.ts"
+import {
+  deriveRecurrenceBoundary,
+  expandRecurrence,
+  instantToLocalDateTime,
+  localDateTimeToInstant,
+  parseInstanceId,
+  remapRecurrenceIdentitiesForSplit,
+} from "./recurrence.ts"
 
 function event(overrides = {}) {
   return {
@@ -161,14 +168,12 @@ test("excludes an occurrence exactly at the controller window end", () => {
   assert.deepEqual(instances, [])
 })
 
-test("includes an occurrence exactly at recurrence_end", () => {
+test("treats recurrence_end as an exclusive series cutoff", () => {
   const instances = expand({
     master: event({ recurrence_end: "2026-03-09T16:00:00.000Z" }),
   })
 
-  assert.deepEqual(instances.map(({ starts_at }) => starts_at), [
-    "2026-03-09T16:00:00.000Z",
-  ])
+  assert.deepEqual(instances, [])
 })
 
 test("fails closed when supplied exception rows are malformed", () => {
@@ -254,4 +259,157 @@ test("round-trips a synthetic instance id without treating real ids as synthetic
     masterId: "master-1",
     recurrenceId: "2026-03-09T16:00:00.000Z",
   })
+})
+
+test("round-trips authored wall time through an IANA timezone", () => {
+  const instant = localDateTimeToInstant(
+    "2026-03-08T09:00:00",
+    "America/Los_Angeles",
+  )
+
+  assert.equal(instant, "2026-03-08T16:00:00.000Z")
+  assert.equal(
+    instantToLocalDateTime(instant, "America/Los_Angeles"),
+    "2026-03-08T09:00:00",
+  )
+  assert.equal(localDateTimeToInstant("bad", "America/Los_Angeles"), null)
+  assert.equal(instantToLocalDateTime("bad", "America/Los_Angeles"), null)
+})
+
+test("derives an exclusive query boundary for COUNT and UNTIL rules", () => {
+  assert.deepEqual(
+    deriveRecurrenceBoundary({
+      rrule: "FREQ=WEEKLY;BYDAY=MO;COUNT=3",
+      startsAtLocal: "2026-03-02T09:00:00",
+      timezone: "America/Los_Angeles",
+    }),
+    {
+      valid: true,
+      recurrenceEnd: "2026-03-16T16:00:00.001Z",
+    },
+  )
+  assert.deepEqual(
+    deriveRecurrenceBoundary({
+      rrule: "FREQ=WEEKLY;BYDAY=MO;UNTIL=20260316T160000Z",
+      startsAtLocal: "2026-03-02T09:00:00",
+      timezone: "America/Los_Angeles",
+    }),
+    {
+      valid: true,
+      recurrenceEnd: "2026-03-16T16:00:00.001Z",
+    },
+  )
+  assert.deepEqual(
+    deriveRecurrenceBoundary({
+      rrule: "FREQ=WEEKLY;BYDAY=MO",
+      startsAtLocal: "2026-03-02T09:00:00",
+      timezone: "America/Los_Angeles",
+    }),
+    { valid: true, recurrenceEnd: null },
+  )
+})
+
+test("rejects finite recurrence rules that exceed the expansion safety cap", () => {
+  assert.deepEqual(
+    deriveRecurrenceBoundary({
+      rrule: "FREQ=DAILY;COUNT=10001",
+      startsAtLocal: "2026-03-02T09:00:00",
+      timezone: "America/Los_Angeles",
+    }),
+    { valid: false, recurrenceEnd: null },
+  )
+})
+
+test("rejects a custom rule that omits the event's authored start", () => {
+  assert.deepEqual(
+    deriveRecurrenceBoundary({
+      rrule: "FREQ=WEEKLY;BYDAY=TU",
+      startsAtLocal: "2026-03-02T09:00:00",
+      timezone: "America/Los_Angeles",
+    }),
+    { valid: false, recurrenceEnd: null },
+  )
+})
+
+test("remaps split exceptions by ordinal when the future frequency changes", () => {
+  const result = remapRecurrenceIdentitiesForSplit({
+    master: event(),
+    splitRecurrenceId: "2026-03-09T16:00:00.000Z",
+    newStartsAtLocal: "2026-03-09T10:00:00",
+    newTimezone: "America/Los_Angeles",
+    newRrule: "FREQ=MONTHLY;BYMONTHDAY=9",
+    exceptionRecurrenceIds: [
+      "2026-03-16T16:00:00.000Z",
+      "2026-03-23T16:00:00.000Z",
+    ],
+  })
+
+  assert.deepEqual(result, {
+    exceptionRecurrenceIdMap: [
+      {
+        oldRecurrenceId: "2026-03-16T16:00:00.000Z",
+        newRecurrenceId: "2026-04-09T17:00:00.000Z",
+      },
+      {
+        oldRecurrenceId: "2026-03-23T16:00:00.000Z",
+        newRecurrenceId: "2026-05-09T17:00:00.000Z",
+      },
+    ],
+    recurrenceEnd: null,
+  })
+})
+
+test("maps an explicit controller cutoff but replaces a native finite boundary", () => {
+  const explicit = remapRecurrenceIdentitiesForSplit({
+    master: event({ recurrence_end: "2026-03-23T16:00:00.000Z" }),
+    splitRecurrenceId: "2026-03-09T16:00:00.000Z",
+    newStartsAtLocal: "2026-03-09T10:00:00",
+    newTimezone: "America/Los_Angeles",
+    newRrule: "FREQ=WEEKLY;BYDAY=MO",
+    exceptionRecurrenceIds: [],
+  })
+  assert.equal(explicit?.recurrenceEnd, "2026-03-23T17:00:00.000Z")
+
+  const finite = remapRecurrenceIdentitiesForSplit({
+    master: event({
+      rrule: "FREQ=WEEKLY;BYDAY=MO;COUNT=3",
+      recurrence_end: "2026-03-16T16:00:00.001+00:00",
+    }),
+    splitRecurrenceId: "2026-03-09T16:00:00.000Z",
+    newStartsAtLocal: "2026-03-09T10:00:00",
+    newTimezone: "America/Los_Angeles",
+    newRrule: "FREQ=WEEKLY;BYDAY=MO;COUNT=2",
+    exceptionRecurrenceIds: [],
+  })
+  assert.equal(finite?.recurrenceEnd, "2026-03-16T17:00:00.001Z")
+})
+
+test("keeps only the remaining occurrences when an unchanged COUNT series splits", () => {
+  const result = remapRecurrenceIdentitiesForSplit({
+    master: event({
+      rrule: "FREQ=WEEKLY;BYDAY=MO;COUNT=3",
+      recurrence_end: "2026-03-16T16:00:00.001Z",
+    }),
+    splitRecurrenceId: "2026-03-09T16:00:00.000Z",
+    newStartsAtLocal: "2026-03-09T10:00:00",
+    newTimezone: "America/Los_Angeles",
+    newRrule: "FREQ=WEEKLY;BYDAY=MO;COUNT=3",
+    exceptionRecurrenceIds: [],
+  })
+
+  assert.equal(result?.recurrenceEnd, "2026-03-16T17:00:00.001Z")
+})
+
+test("fails closed when a custom split rule does not include its new DTSTART", () => {
+  assert.equal(
+    remapRecurrenceIdentitiesForSplit({
+      master: event(),
+      splitRecurrenceId: "2026-03-09T16:00:00.000Z",
+      newStartsAtLocal: "2026-03-09T10:00:00",
+      newTimezone: "America/Los_Angeles",
+      newRrule: "FREQ=WEEKLY;BYDAY=TU",
+      exceptionRecurrenceIds: [],
+    }),
+    null,
+  )
 })

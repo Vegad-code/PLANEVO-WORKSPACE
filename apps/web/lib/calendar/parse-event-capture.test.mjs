@@ -143,7 +143,7 @@ test("parseEventCapture does not read a bare year as a date", () => {
 test("parseEventCapture reports a recurrence phrase rather than dropping it silently", () => {
   const result = capture("Retro every Tuesday 9am")
 
-  assert.equal(result.recurrenceDetected, true)
+  assert.equal(result.rrule, "FREQ=WEEKLY;BYDAY=TU")
   assert.equal(result.title, "Retro")
   assert.deepEqual(local(result.startsAt), {
     year: 2026,
@@ -157,8 +157,12 @@ test("parseEventCapture reports a recurrence phrase rather than dropping it sile
 test("parseEventCapture reports recurrence even when no date survives the parse", () => {
   const result = capture("Water plants every monday")
 
-  assert.equal(result.recurrenceDetected, true)
+  assert.equal(result.rrule, "FREQ=WEEKLY;BYDAY=MO")
   assert.equal(result.title, "Water plants")
+})
+
+test("parseEventCapture emits no recurrence rule when the line is one-off", () => {
+  assert.equal(capture("Design review tomorrow 3pm").rrule, null)
 })
 
 test("parseEventCapture returns an empty title for a blank line", () => {

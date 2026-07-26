@@ -32,6 +32,11 @@ export type EventPanelSavePayload = {
   title: string;
   startsAt: string;
   endsAt: string;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  timezone: string;
+  durationMinutes: number;
+  rrule: string | null;
   location: string | null;
   description: string;
 };
@@ -43,7 +48,9 @@ type EventDetailPanelProps = {
   initialRange?: { startsAt: string; endsAt: string };
   onClose: (options?: { force?: boolean }) => void;
   onSave: (payload: EventPanelSavePayload) => void;
-  onDelete?: (eventId: string) => Promise<{ ok: boolean; error?: string } | void>;
+  onDelete?: (
+    event: CalendarEventRow,
+  ) => Promise<{ ok: boolean; error?: string } | void>;
   onOpenCrossLink?: (panel: EventCrossLinkPanel) => void;
   isPending?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
@@ -187,6 +194,11 @@ export function EventDetailPanel({
       title: trimmedTitle,
       startsAt: resolvedTimes.startsAt,
       endsAt: resolvedTimes.endsAt,
+      startsAtLocal: resolvedTimes.startsAtLocal,
+      endsAtLocal: resolvedTimes.endsAtLocal,
+      timezone: resolvedTimes.timezone,
+      durationMinutes: resolvedTimes.durationMinutes,
+      rrule: form.rrule,
       location: form.location.trim() || null,
       description: form.description.trim(),
     });
@@ -313,7 +325,7 @@ export function EventDetailPanel({
           description="This removes the event from your calendar. Linked tasks stay in Tasks."
           confirmLabel="Delete event"
           onConfirm={async () => {
-            const result = await onDelete(event.id);
+            const result = await onDelete(event);
             if (result && !result.ok) {
               return {
                 ok: false as const,

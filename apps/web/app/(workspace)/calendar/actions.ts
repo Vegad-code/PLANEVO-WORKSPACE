@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import rrule from "rrule";
 import { z } from "zod";
 import { attachFileToEvent } from "@planevo/core/mutations/file-cross-links";
 import {
@@ -9,8 +10,12 @@ import {
   createCalendarEvent,
   deleteCalendarEvent,
   scheduleTaskFromDrag,
+  softDeleteCalendarEvent,
+  splitCalendarEventSeries,
+  truncateCalendarEventSeries,
   updateCalendarEvent,
   updateCalendarVisibility,
+  upsertCalendarEventException,
 } from "@planevo/core/mutations/product-calendar";
 import {
   createTask,
@@ -19,6 +24,7 @@ import {
 } from "@planevo/core/mutations/product-tasks";
 import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
 import { CALENDAR_COLORS } from "@planevo/core/types/calendar";
+import type { CalendarEventRow } from "@planevo/core/types/calendar";
 import type { DataAccess } from "@/lib/data/access";
 import { requireMutationDataAccess } from "@/lib/data/access";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
@@ -26,7 +32,15 @@ import {
   taskCrossLinkOptions,
   type TaskCrossLinkOptions,
 } from "@/lib/tasks/task-cross-link-contracts";
+import {
+  deriveRecurrenceBoundary,
+  instantToLocalDateTime,
+  localDateTimeToInstant,
+  remapRecurrenceIdentitiesForSplit,
+} from "@/lib/calendar/recurrence";
 import { createCalendarDatabaseWithViews, createWorkspace } from "../actions";
+
+const { RRule } = rrule;
 
 export type EventTaskOption = {
   id: string;
@@ -91,6 +105,30 @@ async function requireOwnedCalendar(
 }
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
+const localDateTimeSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+const timezoneSchema = z.string().min(1).max(120).refine((value) => {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}, "Choose a valid timezone.");
+const rruleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1000)
+  .refine((value) => {
+    try {
+      new RRule(RRule.parseString(value));
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Check the recurrence rule.");
 
 const createCalendarEventSchema = z
   .object({
@@ -98,6 +136,11 @@ const createCalendarEventSchema = z
     title: z.string().trim().min(1).max(500),
     startsAt: isoDateTimeSchema,
     endsAt: isoDateTimeSchema,
+    startsAtLocal: localDateTimeSchema,
+    endsAtLocal: localDateTimeSchema,
+    timezone: timezoneSchema,
+    durationMinutes: z.number().int().positive().max(525_600),
+    rrule: rruleSchema.nullable(),
     location: z.string().trim().max(500).nullable().optional(),
     description: z.string().trim().max(5000).optional(),
   })
@@ -111,6 +154,11 @@ export async function createCalendarEventAction(input: {
   title: string;
   startsAt: string;
   endsAt: string;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  timezone: string;
+  durationMinutes: number;
+  rrule: string | null;
   location?: string | null;
   description?: string;
 }): Promise<CalendarActionResult<{ eventId: string }>> {
@@ -125,11 +173,30 @@ export async function createCalendarEventAction(input: {
       };
     }
     await requireOwnedCalendar(access, parsed.data.calendarId);
+    const recurrenceBoundary = parsed.data.rrule
+      ? deriveRecurrenceBoundary({
+          rrule: parsed.data.rrule,
+          startsAtLocal: parsed.data.startsAtLocal,
+          timezone: parsed.data.timezone,
+        })
+      : { valid: true as const, recurrenceEnd: null };
+    if (!recurrenceBoundary.valid) {
+      return {
+        ok: false,
+        error: "This repeat pattern is too large or does not match its start.",
+      };
+    }
     const event = await createCalendarEvent(access.client, access.ownerId, {
       calendarId: parsed.data.calendarId,
       title: parsed.data.title,
       startsAt: parsed.data.startsAt,
       endsAt: parsed.data.endsAt,
+      startsAtLocal: parsed.data.startsAtLocal,
+      endsAtLocal: parsed.data.endsAtLocal,
+      timezone: parsed.data.timezone,
+      durationMinutes: parsed.data.durationMinutes,
+      rrule: parsed.data.rrule,
+      recurrenceEnd: recurrenceBoundary.recurrenceEnd,
       location: parsed.data.location ?? null,
       description: parsed.data.description
         ? { text: parsed.data.description }
@@ -365,6 +432,11 @@ const updateCalendarEventSchema = z
     title: z.string().trim().min(1).max(500).optional(),
     startsAt: isoDateTimeSchema.optional(),
     endsAt: isoDateTimeSchema.optional(),
+    startsAtLocal: localDateTimeSchema.optional(),
+    endsAtLocal: localDateTimeSchema.optional(),
+    timezone: timezoneSchema.optional(),
+    durationMinutes: z.number().int().positive().max(525_600).optional(),
+    rrule: rruleSchema.nullable().optional(),
     calendarId: z.string().uuid().optional(),
     location: z.string().trim().max(500).nullable().optional(),
     description: z.string().trim().max(5000).optional(),
@@ -383,6 +455,11 @@ export async function updateCalendarEventAction(input: {
   title?: string;
   startsAt?: string;
   endsAt?: string;
+  startsAtLocal?: string;
+  endsAtLocal?: string;
+  timezone?: string;
+  durationMinutes?: number;
+  rrule?: string | null;
   calendarId?: string;
   location?: string | null;
   description?: string;
@@ -401,10 +478,44 @@ export async function updateCalendarEventAction(input: {
     if (parsed.data.calendarId) {
       await requireOwnedCalendar(access, parsed.data.calendarId);
     }
+    const recurrenceBoundary =
+      parsed.data.rrule === undefined
+        ? null
+        : parsed.data.rrule === null
+          ? { valid: true as const, recurrenceEnd: null }
+          : parsed.data.startsAtLocal && parsed.data.timezone
+            ? deriveRecurrenceBoundary({
+                rrule: parsed.data.rrule,
+                startsAtLocal: parsed.data.startsAtLocal,
+                timezone: parsed.data.timezone,
+              })
+            : { valid: false as const, recurrenceEnd: null };
+    if (recurrenceBoundary && !recurrenceBoundary.valid) {
+      return {
+        ok: false,
+        error: "A repeating event needs a valid local start and timezone.",
+      };
+    }
     await updateCalendarEvent(access.client, access.ownerId, parsed.data.eventId, {
       ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
       ...(parsed.data.startsAt !== undefined ? { startsAt: parsed.data.startsAt } : {}),
       ...(parsed.data.endsAt !== undefined ? { endsAt: parsed.data.endsAt } : {}),
+      ...(parsed.data.startsAtLocal !== undefined
+        ? { startsAtLocal: parsed.data.startsAtLocal }
+        : {}),
+      ...(parsed.data.endsAtLocal !== undefined
+        ? { endsAtLocal: parsed.data.endsAtLocal }
+        : {}),
+      ...(parsed.data.timezone !== undefined
+        ? { timezone: parsed.data.timezone }
+        : {}),
+      ...(parsed.data.durationMinutes !== undefined
+        ? { durationMinutes: parsed.data.durationMinutes }
+        : {}),
+      ...(parsed.data.rrule !== undefined ? { rrule: parsed.data.rrule } : {}),
+      ...(recurrenceBoundary
+        ? { recurrenceEnd: recurrenceBoundary.recurrenceEnd }
+        : {}),
       ...(parsed.data.calendarId !== undefined
         ? { calendarId: parsed.data.calendarId }
         : {}),
@@ -417,6 +528,377 @@ export async function updateCalendarEventAction(input: {
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not update the event.");
+  }
+}
+
+export type RecurrenceMutationScope = "this" | "following" | "all";
+
+const recurrenceMutationSchema = z
+  .object({
+    masterId: z.string().uuid(),
+    recurrenceId: isoDateTimeSchema,
+    operationKey: z.string().uuid(),
+    scope: z.enum(["this", "following", "all"]),
+    calendarId: z.string().uuid(),
+    title: z.string().trim().min(1).max(500),
+    startsAt: isoDateTimeSchema,
+    endsAt: isoDateTimeSchema,
+    startsAtLocal: localDateTimeSchema,
+    endsAtLocal: localDateTimeSchema,
+    timezone: timezoneSchema,
+    durationMinutes: z.number().int().positive().max(525_600),
+    rrule: rruleSchema.nullable(),
+    location: z.string().trim().max(500).nullable(),
+    description: z.string().trim().max(5000),
+  })
+  .refine(
+    (input) =>
+      new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
+    { message: "The event must end after it starts." },
+  );
+
+const recurringDeleteSchema = z.object({
+  masterId: z.string().uuid(),
+  recurrenceId: isoDateTimeSchema,
+  operationKey: z.string().uuid(),
+  scope: z.enum(["this", "following", "all"]),
+});
+
+async function loadOwnedRecurringMaster(
+  access: DataAccess,
+  masterId: string,
+): Promise<CalendarEventRow> {
+  const { data, error } = await access.client
+    .from("calendar_events")
+    .select("*")
+    .eq("id", masterId)
+    .eq("user_id", access.ownerId)
+    .is("parent_event_id", null)
+    .not("rrule", "is", null)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Event not found.");
+  return data as unknown as CalendarEventRow;
+}
+
+function descriptionJson(description: string): Record<string, unknown> {
+  return description ? { text: description } : {};
+}
+
+function localTimestampMs(value: string): number {
+  return new Date(`${value}Z`).getTime();
+}
+
+function shiftLocalTimestamp(value: string, deltaMs: number): string | null {
+  const timestamp = localTimestampMs(value);
+  if (Number.isNaN(timestamp)) return null;
+  return new Date(timestamp + deltaMs).toISOString().slice(0, 19);
+}
+
+function shiftedSeriesStart(input: {
+  master: CalendarEventRow;
+  recurrenceId: string;
+  desiredStartsAtLocal: string;
+  timezone: string;
+  durationMinutes: number;
+}): {
+  startsAt: string;
+  endsAt: string;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  localDeltaMs: number;
+} | null {
+  if (!input.master.timezone || !input.master.starts_at_local) return null;
+  const originalOccurrenceLocal = instantToLocalDateTime(
+    input.recurrenceId,
+    input.master.timezone,
+  );
+  if (!originalOccurrenceLocal) return null;
+
+  const localDeltaMs =
+    localTimestampMs(input.desiredStartsAtLocal) -
+    localTimestampMs(originalOccurrenceLocal);
+  const startsAtLocal = shiftLocalTimestamp(
+    input.master.starts_at_local,
+    localDeltaMs,
+  );
+  if (!startsAtLocal) return null;
+  const startsAt = localDateTimeToInstant(startsAtLocal, input.timezone);
+  if (!startsAt) return null;
+  const endsAt = new Date(
+    new Date(startsAt).getTime() + input.durationMinutes * 60_000,
+  ).toISOString();
+  const endsAtLocal = instantToLocalDateTime(endsAt, input.timezone);
+  if (!endsAtLocal) return null;
+
+  return {
+    startsAt,
+    endsAt,
+    startsAtLocal,
+    endsAtLocal,
+    localDeltaMs,
+  };
+}
+
+/** Applies one recurrence scope without ever sending a synthetic id to SQL. */
+export async function updateRecurringEventAction(input: {
+  masterId: string;
+  recurrenceId: string;
+  operationKey: string;
+  scope: RecurrenceMutationScope;
+  calendarId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  timezone: string;
+  durationMinutes: number;
+  rrule: string | null;
+  location: string | null;
+  description: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = recurrenceMutationSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error:
+          parsed.error.issues[0]?.message ??
+          "Check the recurring event and try again.",
+      };
+    }
+    const master = await loadOwnedRecurringMaster(access, parsed.data.masterId);
+    await requireOwnedCalendar(access, parsed.data.calendarId);
+
+    if (parsed.data.scope === "this") {
+      await upsertCalendarEventException(access.client, access.ownerId, {
+        operationKey: parsed.data.operationKey,
+        masterEventId: master.id,
+        calendarId: parsed.data.calendarId,
+        recurrenceId: parsed.data.recurrenceId,
+        isCancelled: false,
+        title: parsed.data.title,
+        startsAt: parsed.data.startsAt,
+        endsAt: parsed.data.endsAt,
+        startsAtLocal: parsed.data.startsAtLocal,
+        endsAtLocal: parsed.data.endsAtLocal,
+        timezone: parsed.data.timezone,
+        durationMinutes: parsed.data.durationMinutes,
+        allDay: master.all_day,
+        location: parsed.data.location,
+        description: descriptionJson(parsed.data.description),
+        color: master.color,
+        conferenceUrl: master.conference_url,
+      });
+    } else {
+      if (!parsed.data.rrule) {
+        return {
+          ok: false,
+          error: "Choose a repeat pattern for a series-wide edit.",
+        };
+      }
+      const shifted = shiftedSeriesStart({
+        master,
+        recurrenceId: parsed.data.recurrenceId,
+        desiredStartsAtLocal: parsed.data.startsAtLocal,
+        timezone: parsed.data.timezone,
+        durationMinutes: parsed.data.durationMinutes,
+      });
+      if (!shifted) {
+        return {
+          ok: false,
+          error: "Could not preserve the series wall-clock time.",
+        };
+      }
+
+      if (parsed.data.scope === "all") {
+        const changesOccurrenceIdentity =
+          shifted.localDeltaMs !== 0 ||
+          parsed.data.timezone !== master.timezone ||
+          parsed.data.rrule !== master.rrule;
+        const changesExceptionCalendar =
+          parsed.data.calendarId !== master.calendar_id;
+        if (changesOccurrenceIdentity || changesExceptionCalendar) {
+          const { data: existingException, error } = await access.client
+            .from("calendar_events")
+            .select("id")
+            .eq("user_id", access.ownerId)
+            .eq("parent_event_id", master.id)
+            .is("deleted_at", null)
+            .limit(1)
+            .maybeSingle();
+          if (error) throw error;
+          if (existingException) {
+            return {
+              ok: false,
+              error:
+                "This series has edited occurrences. Use This and following to change its schedule or calendar safely.",
+            };
+          }
+        }
+        const remappedSeries = remapRecurrenceIdentitiesForSplit({
+          master,
+          splitRecurrenceId: master.starts_at,
+          newStartsAtLocal: shifted.startsAtLocal,
+          newTimezone: parsed.data.timezone,
+          newRrule: parsed.data.rrule,
+          exceptionRecurrenceIds: [],
+        });
+        if (!remappedSeries) {
+          return {
+            ok: false,
+            error:
+              "This repeat pattern cannot preserve the series boundaries.",
+          };
+        }
+        await updateCalendarEvent(access.client, access.ownerId, master.id, {
+          calendarId: parsed.data.calendarId,
+          title: parsed.data.title,
+          startsAt: shifted.startsAt,
+          endsAt: shifted.endsAt,
+          startsAtLocal: shifted.startsAtLocal,
+          endsAtLocal: shifted.endsAtLocal,
+          timezone: parsed.data.timezone,
+          durationMinutes: parsed.data.durationMinutes,
+          rrule: parsed.data.rrule,
+          recurrenceEnd: remappedSeries.recurrenceEnd,
+          location: parsed.data.location,
+          description: descriptionJson(parsed.data.description),
+        });
+      } else {
+        const { data: futureExceptions, error } = await access.client
+          .from("calendar_events")
+          .select("recurrence_id")
+          .eq("user_id", access.ownerId)
+          .eq("parent_event_id", master.id)
+          .is("deleted_at", null)
+          .gte("recurrence_id", parsed.data.recurrenceId);
+        if (error) throw error;
+
+        const remappedSeries = remapRecurrenceIdentitiesForSplit({
+          master,
+          splitRecurrenceId: parsed.data.recurrenceId,
+          newStartsAtLocal: parsed.data.startsAtLocal,
+          newTimezone: parsed.data.timezone,
+          newRrule: parsed.data.rrule,
+          exceptionRecurrenceIds: (futureExceptions ?? []).map(
+            ({ recurrence_id }) => recurrence_id as string,
+          ),
+        });
+        if (!remappedSeries) {
+          return {
+            ok: false,
+            error:
+              "Could not preserve edited occurrences with this repeat pattern.",
+          };
+        }
+
+        await splitCalendarEventSeries(access.client, access.ownerId, {
+          operationKey: parsed.data.operationKey,
+          masterEventId: master.id,
+          splitRecurrenceId: parsed.data.recurrenceId,
+          calendarId: parsed.data.calendarId,
+          title: parsed.data.title,
+          startsAt: parsed.data.startsAt,
+          endsAt: parsed.data.endsAt,
+          startsAtLocal: parsed.data.startsAtLocal,
+          endsAtLocal: parsed.data.endsAtLocal,
+          timezone: parsed.data.timezone,
+          durationMinutes: parsed.data.durationMinutes,
+          rrule: parsed.data.rrule,
+          recurrenceEnd: remappedSeries.recurrenceEnd,
+          allDay: master.all_day,
+          location: parsed.data.location,
+          description: descriptionJson(parsed.data.description),
+          color: master.color,
+          conferenceUrl: master.conference_url,
+          exceptionRecurrenceIdMap:
+            remappedSeries.exceptionRecurrenceIdMap,
+        });
+      }
+    }
+
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the recurring event.");
+  }
+}
+
+export async function deleteRecurringEventAction(input: {
+  masterId: string;
+  recurrenceId: string;
+  operationKey: string;
+  scope: RecurrenceMutationScope;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = recurringDeleteSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid recurring event." };
+    const master = await loadOwnedRecurringMaster(access, parsed.data.masterId);
+
+    if (parsed.data.scope === "all") {
+      await softDeleteCalendarEvent(
+        access.client,
+        access.ownerId,
+        master.id,
+      );
+    } else if (parsed.data.scope === "following") {
+      await truncateCalendarEventSeries(access.client, access.ownerId, {
+        masterEventId: master.id,
+        recurrenceId: parsed.data.recurrenceId,
+      });
+    } else {
+      if (
+        !master.timezone ||
+        !master.duration_minutes ||
+        !master.starts_at_local
+      ) {
+        return { ok: false, error: "This series has incomplete time data." };
+      }
+      const startsAtLocal = instantToLocalDateTime(
+        parsed.data.recurrenceId,
+        master.timezone,
+      );
+      if (!startsAtLocal) {
+        return { ok: false, error: "Invalid occurrence time." };
+      }
+      const endsAt = new Date(
+        new Date(parsed.data.recurrenceId).getTime() +
+          master.duration_minutes * 60_000,
+      ).toISOString();
+      const endsAtLocal = instantToLocalDateTime(endsAt, master.timezone);
+      if (!endsAtLocal) {
+        return { ok: false, error: "Invalid occurrence time." };
+      }
+      await upsertCalendarEventException(access.client, access.ownerId, {
+        operationKey: parsed.data.operationKey,
+        masterEventId: master.id,
+        calendarId: master.calendar_id,
+        recurrenceId: parsed.data.recurrenceId,
+        isCancelled: true,
+        title: master.title,
+        startsAt: parsed.data.recurrenceId,
+        endsAt,
+        startsAtLocal,
+        endsAtLocal,
+        timezone: master.timezone,
+        durationMinutes: master.duration_minutes,
+        allDay: master.all_day,
+        location: master.location,
+        description: master.description_json,
+        color: master.color,
+        conferenceUrl: master.conference_url,
+      });
+    }
+
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not delete the recurring event.");
   }
 }
 

@@ -3,7 +3,11 @@ import { test } from "node:test";
 import {
   createCalendarEvent,
   scheduleTaskFromDrag,
+  splitCalendarEventSeries,
+  truncateCalendarEventSeries,
+  updateCalendarEvent,
   updateCalendarVisibility,
+  upsertCalendarEventException,
 } from "./product-calendar.ts";
 
 test("createCalendarEvent inserts an owned row with defaults applied", async () => {
@@ -28,6 +32,12 @@ test("createCalendarEvent inserts an owned row with defaults applied", async () 
     title: "Design review",
     startsAt: "2026-07-14T13:00:00.000Z",
     endsAt: "2026-07-14T14:00:00.000Z",
+    startsAtLocal: "2026-07-14T09:00:00",
+    endsAtLocal: "2026-07-14T10:00:00",
+    timezone: "America/New_York",
+    durationMinutes: 60,
+    rrule: "FREQ=WEEKLY;BYDAY=TU",
+    recurrenceEnd: "2026-08-01T13:00:00.001Z",
   });
   assert.equal(event.id, "e1");
   assert.equal(inserted.user_id, "u1");
@@ -35,7 +45,175 @@ test("createCalendarEvent inserts an owned row with defaults applied", async () 
   assert.equal(inserted.all_day, false);
   assert.equal(inserted.location, null);
   assert.equal(inserted.task_id, null);
+  assert.equal(inserted.starts_at_local, "2026-07-14T09:00:00");
+  assert.equal(inserted.ends_at_local, "2026-07-14T10:00:00");
+  assert.equal(inserted.timezone, "America/New_York");
+  assert.equal(inserted.duration_minutes, 60);
+  assert.equal(inserted.rrule, "FREQ=WEEKLY;BYDAY=TU");
+  assert.equal(inserted.recurrence_end, "2026-08-01T13:00:00.001Z");
   assert.deepEqual(inserted.description_json, {});
+});
+
+test("updateCalendarEvent patches authored recurrence fields behind ownership filters", async () => {
+  let updated = null;
+  const filters = {};
+  const result = { id: "event-1" };
+  const chain = {
+    eq(column, value) {
+      filters[column] = value;
+      return chain;
+    },
+    select() {
+      return chain;
+    },
+    async maybeSingle() {
+      return { data: result, error: null };
+    },
+  };
+  const client = {
+    from(table) {
+      assert.equal(table, "calendar_events");
+      return {
+        update(patch) {
+          updated = patch;
+          return chain;
+        },
+      };
+    },
+  };
+
+  await updateCalendarEvent(client, "user-1", "event-1", {
+    startsAt: "2026-07-21T13:00:00.000Z",
+    endsAt: "2026-07-21T14:00:00.000Z",
+    startsAtLocal: "2026-07-21T09:00:00",
+    endsAtLocal: "2026-07-21T10:00:00",
+    timezone: "America/New_York",
+    durationMinutes: 60,
+    rrule: "FREQ=WEEKLY;BYDAY=TU",
+    recurrenceEnd: "2026-08-01T13:00:00.001Z",
+  });
+
+  assert.equal(filters.id, "event-1");
+  assert.equal(filters.user_id, "user-1");
+  assert.equal(updated.starts_at_local, "2026-07-21T09:00:00");
+  assert.equal(updated.ends_at_local, "2026-07-21T10:00:00");
+  assert.equal(updated.timezone, "America/New_York");
+  assert.equal(updated.duration_minutes, 60);
+  assert.equal(updated.rrule, "FREQ=WEEKLY;BYDAY=TU");
+  assert.equal(updated.recurrence_end, "2026-08-01T13:00:00.001Z");
+});
+
+test("upsertCalendarEventException sends persisted master identity separately from occurrence identity", async () => {
+  let rpcArgs = null;
+  const client = {
+    async rpc(name, args) {
+      assert.equal(name, "upsert_calendar_event_exception");
+      rpcArgs = args;
+      return { data: { id: "exception-1" }, error: null };
+    },
+  };
+
+  const result = await upsertCalendarEventException(client, "user-1", {
+    operationKey: "operation-1",
+    masterEventId: "master-1",
+    calendarId: "calendar-2",
+    recurrenceId: "2026-07-14T13:00:00.000Z",
+    isCancelled: false,
+    title: "Moved planning",
+    startsAt: "2026-07-14T14:00:00.000Z",
+    endsAt: "2026-07-14T15:00:00.000Z",
+    startsAtLocal: "2026-07-14T10:00:00",
+    endsAtLocal: "2026-07-14T11:00:00",
+    timezone: "America/New_York",
+    durationMinutes: 60,
+    allDay: false,
+    location: null,
+    description: {},
+    color: null,
+    conferenceUrl: null,
+  });
+
+  assert.equal(result.id, "exception-1");
+  assert.equal(rpcArgs.p_master_event_id, "master-1");
+  assert.equal(rpcArgs.p_calendar_id, "calendar-2");
+  assert.equal(rpcArgs.p_recurrence_id, "2026-07-14T13:00:00.000Z");
+  assert.equal(rpcArgs.p_starts_at, "2026-07-14T14:00:00.000Z");
+});
+
+test("truncateCalendarEventSeries sends an exclusive cutoff to one atomic RPC", async () => {
+  let rpcArgs = null;
+  const client = {
+    async rpc(name, args) {
+      assert.equal(name, "truncate_calendar_event_series");
+      rpcArgs = args;
+      return { data: { id: "master-1" }, error: null };
+    },
+  };
+
+  await truncateCalendarEventSeries(client, "user-1", {
+    masterEventId: "master-1",
+    recurrenceId: "2026-07-14T13:00:00.000Z",
+  });
+
+  assert.deepEqual(rpcArgs, {
+    p_owner_id: "user-1",
+    p_master_event_id: "master-1",
+    p_recurrence_id: "2026-07-14T13:00:00.000Z",
+  });
+});
+
+test("splitCalendarEventSeries sends the new master and exception mapping atomically", async () => {
+  let rpcArgs = null;
+  const client = {
+    async rpc(name, args) {
+      assert.equal(name, "split_calendar_event_series");
+      rpcArgs = args;
+      return {
+        data: { oldMasterId: "master-1", newMasterId: "master-2" },
+        error: null,
+      };
+    },
+  };
+
+  const result = await splitCalendarEventSeries(client, "user-1", {
+    operationKey: "operation-1",
+    masterEventId: "master-1",
+    splitRecurrenceId: "2026-07-14T13:00:00.000Z",
+    calendarId: "calendar-1",
+    title: "Planning",
+    startsAt: "2026-07-14T14:00:00.000Z",
+    endsAt: "2026-07-14T15:00:00.000Z",
+    startsAtLocal: "2026-07-14T10:00:00",
+    endsAtLocal: "2026-07-14T11:00:00",
+    timezone: "America/New_York",
+    durationMinutes: 60,
+    rrule: "FREQ=WEEKLY;BYDAY=TU",
+    recurrenceEnd: null,
+    allDay: false,
+    location: null,
+    description: {},
+    color: null,
+    conferenceUrl: null,
+    exceptionRecurrenceIdMap: [
+      {
+        oldRecurrenceId: "2026-07-21T13:00:00.000Z",
+        newRecurrenceId: "2026-07-21T14:00:00.000Z",
+      },
+    ],
+  });
+
+  assert.deepEqual(result, {
+    oldMasterId: "master-1",
+    newMasterId: "master-2",
+  });
+  assert.equal(rpcArgs.p_master_event_id, "master-1");
+  assert.equal(rpcArgs.p_new_starts_at, "2026-07-14T14:00:00.000Z");
+  assert.deepEqual(rpcArgs.p_exception_recurrence_id_map, [
+    {
+      oldRecurrenceId: "2026-07-21T13:00:00.000Z",
+      newRecurrenceId: "2026-07-21T14:00:00.000Z",
+    },
+  ]);
 });
 
 test("updateCalendarVisibility scopes by calendar id and user id", async () => {

@@ -91,7 +91,7 @@ type CalendarGridEngineProps = {
   draftCreateEvent?: DraftCreateEventState | null
   onEventSelect: (event: CalendarEventRow, anchorRect: DOMRect) => void
   onEventTimesChange: (input: {
-    eventId: string
+    event: CalendarEventRow
     startsAt: string
     endsAt: string
   }) => void
@@ -294,13 +294,15 @@ export function CalendarGridEngine({
   const handleEventTimes = useCallback(
     ({ event, start, end }: RbcInteractionInfo) => {
       if (!start || !end) return
+      const row = eventsById.get(getPlanevoEventId(event))
+      if (!row) return
       onEventTimesChange({
-        eventId: getPlanevoEventId(event),
+        event: row,
         startsAt: start.toISOString(),
         endsAt: end.toISOString(),
       })
     },
-    [onEventTimesChange],
+    [eventsById, onEventTimesChange],
   )
 
   const eventPropGetter = useCallback(

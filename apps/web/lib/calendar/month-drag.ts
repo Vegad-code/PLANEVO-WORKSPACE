@@ -3,7 +3,13 @@ import { lastOccupiedMoment } from "./month-items.ts"
 import { addLocalDays, localDayDiff, parseLocalDateKey } from "./month-day-index.ts"
 
 export type MonthMoveResult =
-  | { kind: "event"; eventId: string; startsAt: string; endsAt: string }
+  | {
+      kind: "event"
+      eventId: string
+      event: MonthEventItem["event"]
+      startsAt: string
+      endsAt: string
+    }
   | { kind: "task"; taskId: string; dueAt: string }
 
 /** What a dragged month chip, bar, or resize handle carries. */
@@ -61,6 +67,7 @@ export function moveItemToDay(
   return {
     kind: "event",
     eventId: item.eventId,
+    event: item.event,
     startsAt: addLocalDays(item.start, deltaDays).toISOString(),
     endsAt: addLocalDays(item.end, deltaDays).toISOString(),
   }
@@ -91,6 +98,7 @@ export function resizeBarEdge(
     return {
       kind: "event",
       eventId: item.eventId,
+      event: item.event,
       startsAt: addLocalDays(item.start, deltaDays).toISOString(),
       endsAt: item.end.toISOString(),
     }
@@ -103,6 +111,7 @@ export function resizeBarEdge(
   return {
     kind: "event",
     eventId: item.eventId,
+    event: item.event,
     startsAt: item.start.toISOString(),
     endsAt: addLocalDays(item.end, deltaDays).toISOString(),
   }
