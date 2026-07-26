@@ -17,6 +17,7 @@ import { EventQuickCaptureField } from "@/features/calendar-product/event-quick-
 import { EventDetailPopover } from "@/features/calendar-product/event-detail-popover";
 import type { TodayColumnTask } from "@/features/calendar-product/today-task-row";
 import { CALENDAR_P0_SHORTCUTS } from "@/lib/calendar/calendar-shortcut-map";
+import { PRESET_CONFIGS } from "@/lib/calendar/view-config";
 
 /** Fixed clock so preview states do not drift day to day. */
 const DESIGN_NOW = new Date(2026, 6, 15, 13, 0);
@@ -677,6 +678,36 @@ export function CalendarProductPreview() {
               calendars={DESIGN_CALENDARS}
               events={DESIGN_EVENTS}
               taskDues={[]}
+              now={DESIGN_DAY_NOW}
+              onSlotSelect={noop}
+              onEventSelect={noop}
+              onEventTimesChange={noop}
+              onToggleTask={noop}
+              onOpenDay={noop}
+              onNavigateMonth={noop}
+            />
+          </div>
+        </figure>
+      ))}
+
+      {(
+        [
+          ["Planner", PRESET_CONFIGS.planner],
+          ["Flow", PRESET_CONFIGS.flow],
+        ] as const
+      ).map(([label, viewConfig]) => (
+        <figure key={label} className="w-full">
+          <figcaption className="mb-2 text-label uppercase text-text-muted">
+            {label} — one-day timeline · {viewConfig.timeAxis.rowHeight}
+          </figcaption>
+          <div className="h-[36rem] overflow-hidden rounded-xl bg-calendar-chrome p-2">
+            <CalendarGridEngine
+              view="day"
+              viewConfig={viewConfig}
+              anchor={DESIGN_DAY_ANCHOR}
+              calendars={DESIGN_CALENDARS}
+              events={DESIGN_MONTH_EVENTS}
+              taskDues={DESIGN_MONTH_TASK_DUES}
               now={DESIGN_DAY_NOW}
               onSlotSelect={noop}
               onEventSelect={noop}

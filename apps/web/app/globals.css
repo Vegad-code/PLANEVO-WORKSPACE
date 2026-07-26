@@ -189,6 +189,15 @@
   --color-calendar-month-drag-ghost-border: var(--color-ocean);
   --radius-calendar-month-bar-continuation: 0px;
 
+  /* Timeline renderer — Planner uses fixed rows; Flow sizes cards by duration. */
+  --size-calendar-timeline-slot-row: 3rem;
+  --size-calendar-timeline-gutter: 4rem;
+  --size-calendar-timeline-fixed-card: 3rem;
+  --size-calendar-timeline-min-card: 2.5rem;
+  --size-calendar-timeline-all-day-card: 3rem;
+  --spacing-calendar-timeline-card-gap: 0.25rem;
+  --spacing-calendar-timeline-empty-inset: 1rem;
+
   /* Layout */
   --spacing-sidebar: 210px;
   --sidebar-width: var(--spacing-sidebar);
@@ -1729,6 +1738,67 @@ body {
   text-decoration: underline;
 }
 
+/* Planner + Flow share this semantic shell. Runtime percentages remain inline
+   because they are interval math, while every stable dimension stays tokenized. */
+.calendar-timeline-grid {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-calendar-grid);
+}
+
+.calendar-timeline-header {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.calendar-timeline-all-day-item {
+  min-height: var(--size-calendar-timeline-all-day-card);
+}
+
+.calendar-timeline-slot {
+  display: flex;
+  height: var(--size-calendar-timeline-slot-row);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.calendar-timeline-gutter {
+  flex: 0 0 var(--size-calendar-timeline-gutter);
+  width: var(--size-calendar-timeline-gutter);
+}
+
+.calendar-timeline-event-layer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--size-calendar-timeline-gutter);
+  inset-inline-end: 0;
+  pointer-events: none;
+}
+
+.calendar-timeline-event {
+  position: absolute;
+  min-height: var(--size-calendar-timeline-min-card);
+  padding-inline-end: var(--spacing-calendar-timeline-card-gap);
+  padding-block-end: var(--spacing-calendar-timeline-card-gap);
+  pointer-events: auto;
+}
+
+.calendar-timeline-event--fixed {
+  height: var(--size-calendar-timeline-fixed-card);
+}
+
+.calendar-timeline-empty {
+  position: absolute;
+  inset-inline-start: var(--size-calendar-timeline-gutter);
+  inset-inline-end: 0;
+  top: var(--spacing-calendar-timeline-empty-inset);
+  pointer-events: none;
+  text-align: center;
+}
+
 .planevo-rbc .rbc-time-content {
   border-top: none;
   overflow-x: visible;
@@ -1744,4 +1814,3 @@ body {
   border-right: 1px solid var(--color-border);
   background-color: var(--color-calendar-grid);
 }
-

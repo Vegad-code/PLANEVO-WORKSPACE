@@ -31,6 +31,7 @@ import { startOfWeekSunday } from "@/lib/calendar/calendar-navigation"
 import { isCalendarToday } from "@/lib/calendar/day-header-model"
 import { defaultMonthCreateRange } from "@/lib/calendar/month-day-create"
 import { toMonthItems, type MonthItem } from "@/lib/calendar/month-items"
+import { toTimelineItems } from "@/lib/calendar/timeline-items"
 import {
   configForLegacyView,
   resolveRenderer,
@@ -43,6 +44,7 @@ import {
 } from "@/lib/calendar/event-popover-anchor"
 import { MonthDayAgendaPopover } from "./month-day-agenda-popover"
 import { MonthGrid } from "./month-grid"
+import { TimelineGrid } from "./timeline-grid"
 import { CalendarNowIndicator } from "./calendar-now-indicator"
 import { RbcDayHeader } from "./rbc-day-header"
 import { RbcNowIndicatorWrapper } from "./rbc-now-indicator-wrapper"
@@ -162,11 +164,16 @@ export function CalendarGridEngine({
   // View goes through the registry rather than branching on the string directly,
   // so a saved view's config picks the renderer by the same path the legacy
   // toolbar does.
-  const renderer = useMemo(
-    () => resolveRenderer(viewConfig ?? configForLegacyView(view)),
+  const effectiveViewConfig = useMemo(
+    () => viewConfig ?? configForLegacyView(view),
     [view, viewConfig],
   )
+  const renderer = useMemo(
+    () => resolveRenderer(effectiveViewConfig),
+    [effectiveViewConfig],
+  )
   const isMonthView = renderer.id === "month-grid"
+  const isTimelineView = renderer.id === "timeline"
   const rbcView: View = renderer.navigationUnit === "day" ? "day" : "week"
 
   const displayEvents = useMemo<CalendarDisplayEvent[]>(
@@ -197,6 +204,10 @@ export function CalendarGridEngine({
     () => toMonthItems(displayEvents, taskDues, calendars),
     [displayEvents, taskDues, calendars],
   )
+  const timelineItems = useMemo(
+    () => toTimelineItems(displayEvents, taskDues, calendars, anchor),
+    [anchor, calendars, displayEvents, taskDues],
+  )
   const eventsById = useMemo(() => {
     const map = new Map<string, CalendarEventRow>()
     for (const event of events) map.set(event.id, event)
@@ -226,11 +237,11 @@ export function CalendarGridEngine({
   }, [anchor, now, view])
 
   const showNowIndicator = useMemo(() => {
-    if (isMonthView || !todayInVisibleRange) return false
+    if (isMonthView || isTimelineView || !todayInVisibleRange) return false
 
     const nowHour = now.getHours()
     return nowHour >= DAY_START_HOUR && nowHour < DAY_START_HOUR + VISIBLE_HOURS
-  }, [isMonthView, now, todayInVisibleRange])
+  }, [isMonthView, isTimelineView, now, todayInVisibleRange])
 
   const timeGridComponents = useMemo(
     () => ({
@@ -382,11 +393,18 @@ export function CalendarGridEngine({
           "planevo-calendar-grid min-h-0 h-full w-full overflow-hidden border border-border bg-calendar-grid",
           isMonthView
             ? "planevo-calendar-grid-shell"
-            : "planevo-rbc planevo-calendar-grid-shell",
-          !hasAllDayEvents && !isMonthView && "planevo-rbc--no-allday",
+            : isTimelineView
+              ? "planevo-calendar-grid-shell"
+              : "planevo-rbc planevo-calendar-grid-shell",
+          !hasAllDayEvents &&
+            !isMonthView &&
+            !isTimelineView &&
+            "planevo-rbc--no-allday",
           className,
         )}
-        data-calendar-grid={isMonthView ? "month" : "rbc"}
+        data-calendar-grid={
+          isMonthView ? "month" : isTimelineView ? "timeline" : "rbc"
+        }
         aria-label="Calendar grid"
       >
         {isMonthView ? (
@@ -399,6 +417,26 @@ export function CalendarGridEngine({
             onSelectItem={handleSelectMonthItem}
             onToggleTask={onToggleTask}
             onNavigateMonth={onNavigateMonth}
+          />
+        ) : isTimelineView ? (
+          <TimelineGrid
+            day={anchor}
+            items={timelineItems}
+            config={effectiveViewConfig}
+            now={now}
+            onSelectEvent={(event, anchorElement) =>
+              onEventSelect(event, elementToAnchorRect(anchorElement))
+            }
+            onCreateRange={({ startsAt, endsAt }, anchorElement) =>
+              onSlotSelect(
+                {
+                  startsAt: new Date(startsAt),
+                  endsAt: new Date(endsAt),
+                },
+                elementToAnchorRect(anchorElement),
+              )
+            }
+            onToggleTask={onToggleTask}
           />
         ) : (
           <div ref={gridRef} className="h-full min-h-0">

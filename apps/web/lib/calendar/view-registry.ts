@@ -16,7 +16,7 @@ import {
  * calendar.
  */
 
-export type RendererId = "rbc-time-grid" | "month-grid"
+export type RendererId = "rbc-time-grid" | "month-grid" | "timeline"
 
 export type RendererDescriptor = {
   id: RendererId
@@ -42,11 +42,17 @@ const MONTH_GRID: RendererDescriptor = {
   supportsNowIndicator: false,
 }
 
+const TIMELINE: RendererDescriptor = {
+  id: "timeline",
+  navigationUnit: "day",
+  supportsNowIndicator: false,
+}
+
 const REGISTRY: Record<ViewLayout, RendererDescriptor | null> = {
   "grid-columns": RBC_TIME_GRID,
   "month-cells": MONTH_GRID,
-  // Phase B onward.
-  "single-timeline": null,
+  "single-timeline": TIMELINE,
+  // Later paradigms fall back to Classic until their renderer lands.
   "kanban-columns": null,
   "list-agenda": null,
 }

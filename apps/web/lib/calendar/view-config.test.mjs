@@ -46,9 +46,10 @@ test("registry picks the renderer, and day-count 1 pages by day", () => {
   )
 })
 
-test("an unbuilt layout falls back rather than rendering nothing", () => {
-  // Arrange / Act / Assert — Planner/Flow resolve until their renderer lands.
-  assert.equal(isLayoutImplemented("single-timeline"), false)
+test("Planner and Flow resolve through the registered timeline renderer", () => {
+  // Arrange / Act / Assert
+  assert.equal(isLayoutImplemented("single-timeline"), true)
   assert.equal(isLayoutImplemented("grid-columns"), true)
-  assert.equal(resolveRenderer(PRESET_CONFIGS.flow).id, "rbc-time-grid")
+  assert.equal(resolveRenderer(PRESET_CONFIGS.flow).id, "timeline")
+  assert.equal(resolveRenderer(PRESET_CONFIGS.planner).navigationUnit, "day")
 })
