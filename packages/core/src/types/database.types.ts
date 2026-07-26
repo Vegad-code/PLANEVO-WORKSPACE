@@ -671,6 +671,20 @@ export interface Database {
         Args: { p_owner_id: string; p_event_id: string };
         Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
       };
+      restore_calendar_event_undo: {
+        Args: { p_owner_id: string; p_event_id: string };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      restore_calendar_series_undo: {
+        Args: {
+          p_owner_id: string;
+          p_master_event_id: string;
+          p_guard_event_id: string;
+          p_new_master_event_id: string | null;
+          p_event_rows: Json;
+        };
+        Returns: boolean;
+      };
       link_task_to_event: {
         Args: {
           p_owner_id: string;

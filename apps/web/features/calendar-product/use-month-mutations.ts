@@ -30,11 +30,15 @@ export function useMonthMutations({
   anchor,
   onSettled,
   onRecurringEventMove,
+  onEventMoveCommitted,
 }: {
   scope: CalendarScope
   anchor: Date
   onSettled: () => void
   onRecurringEventMove: (
+    move: Extract<MonthMoveResult, { kind: "event" }>,
+  ) => void
+  onEventMoveCommitted: (
     move: Extract<MonthMoveResult, { kind: "event" }>,
   ) => void
 }): { applyMonthMove: (move: MonthMoveResult) => void } {
@@ -72,11 +76,20 @@ export function useMonthMutations({
         if (!result.ok) {
           if (previous) queryClient.setQueryData(queryKey, previous)
           toast(result.error, { tone: "error" })
+        } else if (move.kind === "event") {
+          onEventMoveCommitted(move)
         }
         onSettled()
       })()
     },
-    [anchor, onRecurringEventMove, onSettled, queryClient, scope],
+    [
+      anchor,
+      onEventMoveCommitted,
+      onRecurringEventMove,
+      onSettled,
+      queryClient,
+      scope,
+    ],
   )
 
   return { applyMonthMove }

@@ -416,6 +416,7 @@ export async function loadFileLinkTargetsAction(input: {
         .from("calendar_events")
         .select("id,title,starts_at")
         .eq("user_id", access.ownerId)
+        .is("deleted_at", null)
         .order("starts_at", { ascending: false })
         .limit(50),
     ]);

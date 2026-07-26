@@ -110,6 +110,7 @@ export async function updateCalendarEvent(
     })
     .eq("id", eventId)
     .eq("user_id", userId)
+    .is("deleted_at", null)
     .select("id")
     .maybeSingle();
   if (error) throw error;
@@ -263,12 +264,7 @@ export async function deleteCalendarEvent(
   userId: string,
   eventId: string,
 ): Promise<void> {
-  const { error } = await client
-    .from("calendar_events")
-    .delete()
-    .eq("id", eventId)
-    .eq("user_id", userId);
-  if (error) throw error;
+  await softDeleteCalendarEvent(client, userId, eventId);
 }
 
 export type CreateCalendarInput = {

@@ -6,6 +6,10 @@ import * as RRulePackage from "rrule";
 import { z } from "zod";
 import { attachFileToEvent } from "@planevo/core/mutations/file-cross-links";
 import {
+  restoreCalendarEventUndo,
+  restoreCalendarSeriesUndo,
+} from "@planevo/core/mutations/calendar-undo";
+import {
   createCalendar,
   createCalendarEvent,
   deleteCalendarEvent,
@@ -17,10 +21,7 @@ import {
   updateCalendarVisibility,
   upsertCalendarEventException,
 } from "@planevo/core/mutations/product-calendar";
-import {
-  createTask,
-  updateTask,
-} from "@planevo/core/mutations/product-tasks";
+import { createTask, updateTask } from "@planevo/core/mutations/product-tasks";
 import {
   completeTaskLinkedEvent,
   linkTaskToEvent,
@@ -82,7 +83,10 @@ function actionError(
         correlationId,
       };
     }
-    if (cause.message === "Event not found." || cause.message === "Task not found.") {
+    if (
+      cause.message === "Event not found." ||
+      cause.message === "Task not found."
+    ) {
       return {
         ok: false,
         code: "CALENDAR_NOT_FOUND",
@@ -118,14 +122,18 @@ const isoDateTimeSchema = z.string().datetime({ offset: true });
 const localDateTimeSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
-const timezoneSchema = z.string().min(1).max(120).refine((value) => {
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
-}, "Choose a valid timezone.");
+const timezoneSchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .refine((value) => {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: value });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Choose a valid timezone.");
 const rruleSchema = z
   .string()
   .trim()
@@ -155,7 +163,8 @@ const createCalendarEventSchema = z
     description: z.string().trim().max(5000).optional(),
   })
   .refine(
-    (input) => new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
+    (input) =>
+      new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
     { message: "The event must end after it starts." },
   );
 
@@ -179,7 +188,8 @@ export async function createCalendarEventAction(input: {
       return {
         ok: false,
         error:
-          parsed.error.issues[0]?.message ?? "Check the event details and try again.",
+          parsed.error.issues[0]?.message ??
+          "Check the event details and try again.",
       };
     }
     await requireOwnedCalendar(access, parsed.data.calendarId);
@@ -234,7 +244,11 @@ export async function createCalendarAction(input: {
     if (!parsed.success) {
       return { ok: false, error: "Give the calendar a name and a color." };
     }
-    const calendar = await createCalendar(access.client, access.ownerId, parsed.data);
+    const calendar = await createCalendar(
+      access.client,
+      access.ownerId,
+      parsed.data,
+    );
     revalidatePath("/calendar");
     return { ok: true, data: { calendarId: calendar.id } };
   } catch (cause) {
@@ -302,9 +316,8 @@ export async function scheduleTaskFromDragAction(input: {
       title: task.title,
       startsAt: parsed.data.startsAt,
       durationMinutes:
-        taskEstimateMinutes(
-          task.description_json as Record<string, unknown>,
-        ) ?? 60,
+        taskEstimateMinutes(task.description_json as Record<string, unknown>) ??
+        60,
     });
     revalidatePath("/calendar");
     revalidatePath("/tasks");
@@ -406,13 +419,17 @@ async function requireOwnedEvent(
   access: DataAccess,
   eventId: string,
 ): Promise<
-  Pick<CalendarEventRow, "id" | "task_id" | "starts_at" | "ends_at">
+  Pick<
+    CalendarEventRow,
+    "id" | "task_id" | "starts_at" | "ends_at" | "timezone"
+  >
 > {
   const { data, error } = await access.client
     .from("calendar_events")
-    .select("id,task_id,starts_at,ends_at")
+    .select("id,task_id,starts_at,ends_at,timezone")
     .eq("id", eventId)
     .eq("user_id", access.ownerId)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Event not found.");
@@ -428,7 +445,23 @@ const updateEventTimesSchema = z
     endsAt: isoDateTimeSchema,
   })
   .refine(
-    (input) => new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
+    (input) =>
+      new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
+    { message: "The event must end after it starts." },
+  );
+
+const restoreEventTimesSchema = z
+  .object({
+    eventId: z.string().uuid(),
+    startsAt: isoDateTimeSchema,
+    endsAt: isoDateTimeSchema,
+    startsAtLocal: localDateTimeSchema.nullable(),
+    endsAtLocal: localDateTimeSchema.nullable(),
+    durationMinutes: z.number().int().positive().max(525_600).nullable(),
+  })
+  .refine(
+    (input) =>
+      new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
     { message: "The event must end after it starts." },
   );
 
@@ -450,7 +483,9 @@ const updateCalendarEventSchema = z
   .refine(
     (input) => {
       if (!input.startsAt || !input.endsAt) return true;
-      return new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime();
+      return (
+        new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime()
+      );
     },
     { message: "The event must end after it starts." },
   );
@@ -477,7 +512,8 @@ export async function updateCalendarEventAction(input: {
       return {
         ok: false,
         error:
-          parsed.error.issues[0]?.message ?? "Check the event details and try again.",
+          parsed.error.issues[0]?.message ??
+          "Check the event details and try again.",
       };
     }
     const ownedEvent = await requireOwnedEvent(access, parsed.data.eventId);
@@ -524,38 +560,49 @@ export async function updateCalendarEventAction(input: {
       });
     }
 
-    await updateCalendarEvent(access.client, access.ownerId, parsed.data.eventId, {
-      ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
-      ...(!syncTaskDueTime && parsed.data.startsAt !== undefined
-        ? { startsAt: parsed.data.startsAt }
-        : {}),
-      ...(!syncTaskDueTime && parsed.data.endsAt !== undefined
-        ? { endsAt: parsed.data.endsAt }
-        : {}),
-      ...(parsed.data.startsAtLocal !== undefined
-        ? { startsAtLocal: parsed.data.startsAtLocal }
-        : {}),
-      ...(parsed.data.endsAtLocal !== undefined
-        ? { endsAtLocal: parsed.data.endsAtLocal }
-        : {}),
-      ...(parsed.data.timezone !== undefined
-        ? { timezone: parsed.data.timezone }
-        : {}),
-      ...(parsed.data.durationMinutes !== undefined
-        ? { durationMinutes: parsed.data.durationMinutes }
-        : {}),
-      ...(parsed.data.rrule !== undefined ? { rrule: parsed.data.rrule } : {}),
-      ...(recurrenceBoundary
-        ? { recurrenceEnd: recurrenceBoundary.recurrenceEnd }
-        : {}),
-      ...(parsed.data.calendarId !== undefined
-        ? { calendarId: parsed.data.calendarId }
-        : {}),
-      ...(parsed.data.location !== undefined ? { location: parsed.data.location } : {}),
-      ...(parsed.data.description !== undefined
-        ? { description: { text: parsed.data.description } }
-        : {}),
-    });
+    await updateCalendarEvent(
+      access.client,
+      access.ownerId,
+      parsed.data.eventId,
+      {
+        ...(parsed.data.title !== undefined
+          ? { title: parsed.data.title }
+          : {}),
+        ...(!syncTaskDueTime && parsed.data.startsAt !== undefined
+          ? { startsAt: parsed.data.startsAt }
+          : {}),
+        ...(!syncTaskDueTime && parsed.data.endsAt !== undefined
+          ? { endsAt: parsed.data.endsAt }
+          : {}),
+        ...(parsed.data.startsAtLocal !== undefined
+          ? { startsAtLocal: parsed.data.startsAtLocal }
+          : {}),
+        ...(parsed.data.endsAtLocal !== undefined
+          ? { endsAtLocal: parsed.data.endsAtLocal }
+          : {}),
+        ...(parsed.data.timezone !== undefined
+          ? { timezone: parsed.data.timezone }
+          : {}),
+        ...(parsed.data.durationMinutes !== undefined
+          ? { durationMinutes: parsed.data.durationMinutes }
+          : {}),
+        ...(parsed.data.rrule !== undefined
+          ? { rrule: parsed.data.rrule }
+          : {}),
+        ...(recurrenceBoundary
+          ? { recurrenceEnd: recurrenceBoundary.recurrenceEnd }
+          : {}),
+        ...(parsed.data.calendarId !== undefined
+          ? { calendarId: parsed.data.calendarId }
+          : {}),
+        ...(parsed.data.location !== undefined
+          ? { location: parsed.data.location }
+          : {}),
+        ...(parsed.data.description !== undefined
+          ? { description: { text: parsed.data.description } }
+          : {}),
+      },
+    );
     revalidatePath("/calendar");
     if (ownedEvent.task_id) revalidatePath("/tasks");
     return { ok: true, data: undefined };
@@ -565,6 +612,13 @@ export async function updateCalendarEventAction(input: {
 }
 
 export type RecurrenceMutationScope = "this" | "following" | "all";
+
+export type RecurringCalendarUndo = {
+  masterEventId: string;
+  guardEventId: string;
+  newMasterEventId: string | null;
+  eventRows: CalendarEventRow[];
+};
 
 const recurrenceMutationSchema = z
   .object({
@@ -597,6 +651,26 @@ const recurringDeleteSchema = z.object({
   scope: z.enum(["this", "following", "all"]),
 });
 
+const recurringUndoSchema = z.object({
+  masterEventId: z.string().uuid(),
+  guardEventId: z.string().uuid(),
+  newMasterEventId: z.string().uuid().nullable(),
+  eventRows: z
+    .array(
+      z
+        .object({
+          id: z.string().uuid(),
+          user_id: z.string().uuid(),
+          calendar_id: z.string().uuid(),
+          parent_event_id: z.string().uuid().nullable(),
+          deleted_at: isoDateTimeSchema.nullable(),
+        })
+        .passthrough(),
+    )
+    .min(1)
+    .max(10_000),
+});
+
 async function loadOwnedRecurringMaster(
   access: DataAccess,
   masterId: string,
@@ -613,6 +687,31 @@ async function loadOwnedRecurringMaster(
   if (error) throw error;
   if (!data) throw new Error("Event not found.");
   return data as unknown as CalendarEventRow;
+}
+
+async function loadOwnedRecurringFamily(
+  access: DataAccess,
+  masterId: string,
+): Promise<CalendarEventRow[]> {
+  const { data, error } = await access.client
+    .from("calendar_events")
+    .select("*")
+    .eq("user_id", access.ownerId)
+    .or(`id.eq.${masterId},parent_event_id.eq.${masterId}`)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as CalendarEventRow[];
+  if (!rows.some((row) => row.id === masterId)) {
+    throw new Error("Recurring event not found.");
+  }
+  return rows;
+}
+
+function newMasterIdFromSplit(result: unknown): string {
+  const parsed = z.object({ newMasterId: z.string().uuid() }).safeParse(result);
+  if (!parsed.success) throw new Error("Invalid recurring split response.");
+  return parsed.data.newMasterId;
 }
 
 function descriptionJson(description: string): Record<string, unknown> {
@@ -691,7 +790,7 @@ export async function updateRecurringEventAction(input: {
   rrule: string | null;
   location: string | null;
   description: string;
-}): Promise<CalendarActionResult> {
+}): Promise<CalendarActionResult<{ undo: RecurringCalendarUndo }>> {
   try {
     const access = await requireMutationDataAccess();
     const parsed = recurrenceMutationSchema.safeParse(input);
@@ -705,27 +804,35 @@ export async function updateRecurringEventAction(input: {
     }
     const master = await loadOwnedRecurringMaster(access, parsed.data.masterId);
     await requireOwnedCalendar(access, parsed.data.calendarId);
+    const eventRows = await loadOwnedRecurringFamily(access, master.id);
+    let guardEventId = master.id;
+    let newMasterEventId: string | null = null;
 
     if (parsed.data.scope === "this") {
-      await upsertCalendarEventException(access.client, access.ownerId, {
-        operationKey: parsed.data.operationKey,
-        masterEventId: master.id,
-        calendarId: parsed.data.calendarId,
-        recurrenceId: parsed.data.recurrenceId,
-        isCancelled: false,
-        title: parsed.data.title,
-        startsAt: parsed.data.startsAt,
-        endsAt: parsed.data.endsAt,
-        startsAtLocal: parsed.data.startsAtLocal,
-        endsAtLocal: parsed.data.endsAtLocal,
-        timezone: parsed.data.timezone,
-        durationMinutes: parsed.data.durationMinutes,
-        allDay: master.all_day,
-        location: parsed.data.location,
-        description: descriptionJson(parsed.data.description),
-        color: master.color,
-        conferenceUrl: master.conference_url,
-      });
+      const exception = await upsertCalendarEventException(
+        access.client,
+        access.ownerId,
+        {
+          operationKey: parsed.data.operationKey,
+          masterEventId: master.id,
+          calendarId: parsed.data.calendarId,
+          recurrenceId: parsed.data.recurrenceId,
+          isCancelled: false,
+          title: parsed.data.title,
+          startsAt: parsed.data.startsAt,
+          endsAt: parsed.data.endsAt,
+          startsAtLocal: parsed.data.startsAtLocal,
+          endsAtLocal: parsed.data.endsAtLocal,
+          timezone: parsed.data.timezone,
+          durationMinutes: parsed.data.durationMinutes,
+          allDay: master.all_day,
+          location: parsed.data.location,
+          description: descriptionJson(parsed.data.description),
+          color: master.color,
+          conferenceUrl: master.conference_url,
+        },
+      );
+      guardEventId = exception.id;
     } else {
       if (!parsed.data.rrule) {
         return {
@@ -783,8 +890,7 @@ export async function updateRecurringEventAction(input: {
         if (!remappedSeries) {
           return {
             ok: false,
-            error:
-              "This repeat pattern cannot preserve the series boundaries.",
+            error: "This repeat pattern cannot preserve the series boundaries.",
           };
         }
         await updateCalendarEvent(access.client, access.ownerId, master.id, {
@@ -829,33 +935,48 @@ export async function updateRecurringEventAction(input: {
           };
         }
 
-        await splitCalendarEventSeries(access.client, access.ownerId, {
-          operationKey: parsed.data.operationKey,
-          masterEventId: master.id,
-          splitRecurrenceId: parsed.data.recurrenceId,
-          calendarId: parsed.data.calendarId,
-          title: parsed.data.title,
-          startsAt: parsed.data.startsAt,
-          endsAt: parsed.data.endsAt,
-          startsAtLocal: parsed.data.startsAtLocal,
-          endsAtLocal: parsed.data.endsAtLocal,
-          timezone: parsed.data.timezone,
-          durationMinutes: parsed.data.durationMinutes,
-          rrule: parsed.data.rrule,
-          recurrenceEnd: remappedSeries.recurrenceEnd,
-          allDay: master.all_day,
-          location: parsed.data.location,
-          description: descriptionJson(parsed.data.description),
-          color: master.color,
-          conferenceUrl: master.conference_url,
-          exceptionRecurrenceIdMap:
-            remappedSeries.exceptionRecurrenceIdMap,
-        });
+        const splitResult = await splitCalendarEventSeries(
+          access.client,
+          access.ownerId,
+          {
+            operationKey: parsed.data.operationKey,
+            masterEventId: master.id,
+            splitRecurrenceId: parsed.data.recurrenceId,
+            calendarId: parsed.data.calendarId,
+            title: parsed.data.title,
+            startsAt: parsed.data.startsAt,
+            endsAt: parsed.data.endsAt,
+            startsAtLocal: parsed.data.startsAtLocal,
+            endsAtLocal: parsed.data.endsAtLocal,
+            timezone: parsed.data.timezone,
+            durationMinutes: parsed.data.durationMinutes,
+            rrule: parsed.data.rrule,
+            recurrenceEnd: remappedSeries.recurrenceEnd,
+            allDay: master.all_day,
+            location: parsed.data.location,
+            description: descriptionJson(parsed.data.description),
+            color: master.color,
+            conferenceUrl: master.conference_url,
+            exceptionRecurrenceIdMap: remappedSeries.exceptionRecurrenceIdMap,
+          },
+        );
+        newMasterEventId = newMasterIdFromSplit(splitResult);
+        guardEventId = newMasterEventId;
       }
     }
 
     revalidatePath("/calendar");
-    return { ok: true, data: undefined };
+    return {
+      ok: true,
+      data: {
+        undo: {
+          masterEventId: master.id,
+          guardEventId,
+          newMasterEventId,
+          eventRows,
+        },
+      },
+    };
   } catch (cause) {
     return actionError(cause, "Could not update the recurring event.");
   }
@@ -866,24 +987,28 @@ export async function deleteRecurringEventAction(input: {
   recurrenceId: string;
   operationKey: string;
   scope: RecurrenceMutationScope;
-}): Promise<CalendarActionResult> {
+}): Promise<CalendarActionResult<{ undo: RecurringCalendarUndo }>> {
   try {
     const access = await requireMutationDataAccess();
     const parsed = recurringDeleteSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: "Invalid recurring event." };
+    if (!parsed.success)
+      return { ok: false, error: "Invalid recurring event." };
     const master = await loadOwnedRecurringMaster(access, parsed.data.masterId);
+    const eventRows = await loadOwnedRecurringFamily(access, master.id);
+    let guardEventId = master.id;
 
     if (parsed.data.scope === "all") {
-      await softDeleteCalendarEvent(
+      await softDeleteCalendarEvent(access.client, access.ownerId, master.id);
+    } else if (parsed.data.scope === "following") {
+      const truncated = await truncateCalendarEventSeries(
         access.client,
         access.ownerId,
-        master.id,
+        {
+          masterEventId: master.id,
+          recurrenceId: parsed.data.recurrenceId,
+        },
       );
-    } else if (parsed.data.scope === "following") {
-      await truncateCalendarEventSeries(access.client, access.ownerId, {
-        masterEventId: master.id,
-        recurrenceId: parsed.data.recurrenceId,
-      });
+      guardEventId = truncated.id;
     } else {
       if (
         !master.timezone ||
@@ -907,35 +1032,74 @@ export async function deleteRecurringEventAction(input: {
       if (!endsAtLocal) {
         return { ok: false, error: "Invalid occurrence time." };
       }
-      await upsertCalendarEventException(access.client, access.ownerId, {
-        operationKey: parsed.data.operationKey,
-        masterEventId: master.id,
-        calendarId: master.calendar_id,
-        recurrenceId: parsed.data.recurrenceId,
-        isCancelled: true,
-        title: master.title,
-        startsAt: parsed.data.recurrenceId,
-        endsAt,
-        startsAtLocal,
-        endsAtLocal,
-        timezone: master.timezone,
-        durationMinutes: master.duration_minutes,
-        allDay: master.all_day,
-        location: master.location,
-        description: master.description_json,
-        color: master.color,
-        conferenceUrl: master.conference_url,
-      });
+      const exception = await upsertCalendarEventException(
+        access.client,
+        access.ownerId,
+        {
+          operationKey: parsed.data.operationKey,
+          masterEventId: master.id,
+          calendarId: master.calendar_id,
+          recurrenceId: parsed.data.recurrenceId,
+          isCancelled: true,
+          title: master.title,
+          startsAt: parsed.data.recurrenceId,
+          endsAt,
+          startsAtLocal,
+          endsAtLocal,
+          timezone: master.timezone,
+          durationMinutes: master.duration_minutes,
+          allDay: master.all_day,
+          location: master.location,
+          description: master.description_json,
+          color: master.color,
+          conferenceUrl: master.conference_url,
+        },
+      );
+      guardEventId = exception.id;
     }
 
     revalidatePath("/calendar");
-    return { ok: true, data: undefined };
+    return {
+      ok: true,
+      data: {
+        undo: {
+          masterEventId: master.id,
+          guardEventId,
+          newMasterEventId: null,
+          eventRows,
+        },
+      },
+    };
   } catch (cause) {
     return actionError(cause, "Could not delete the recurring event.");
   }
 }
 
-/** Permanently delete an event from the calendar. */
+/** Restore a recurring family snapshot within the database-enforced window. */
+export async function restoreRecurringCalendarMutationAction(
+  input: RecurringCalendarUndo,
+): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = recurringUndoSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "This recurring undo is invalid." };
+    }
+
+    await restoreCalendarSeriesUndo(access.client, access.ownerId, {
+      masterEventId: parsed.data.masterEventId,
+      guardEventId: parsed.data.guardEventId,
+      newMasterEventId: parsed.data.newMasterEventId,
+      eventRows: parsed.data.eventRows as unknown as CalendarEventRow[],
+    });
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not undo the recurring calendar change.");
+  }
+}
+
+/** Soft-delete an event so the shared calendar chrome can offer Undo. */
 export async function deleteCalendarEventAction(input: {
   eventId: string;
 }): Promise<CalendarActionResult> {
@@ -954,7 +1118,11 @@ export async function deleteCalendarEventAction(input: {
       revalidatePath("/tasks");
       return { ok: true, data: undefined };
     }
-    await deleteCalendarEvent(access.client, access.ownerId, parsed.data.eventId);
+    await deleteCalendarEvent(
+      access.client,
+      access.ownerId,
+      parsed.data.eventId,
+    );
     revalidatePath("/calendar");
     return { ok: true, data: undefined };
   } catch (cause) {
@@ -1012,6 +1180,28 @@ export async function unscheduleTaskLinkedEventAction(input: {
   }
 }
 
+/** Restore a soft-deleted event and any linked task schedule during Undo. */
+export async function restoreCalendarEventAction(input: {
+  eventId: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = eventIdSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid event." };
+
+    const event = await restoreCalendarEventUndo(
+      access.client,
+      access.ownerId,
+      parsed.data.eventId,
+    );
+    revalidatePath("/calendar");
+    if (event.task_id) revalidatePath("/tasks");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not restore the event.");
+  }
+}
+
 /** Move or resize an event on the grid (react-big-calendar drop/resize). */
 export async function updateEventTimesAction(input: {
   eventId: string;
@@ -1026,16 +1216,80 @@ export async function updateEventTimesAction(input: {
     if (event.task_id) {
       await moveTaskLinkedEvent(access.client, access.ownerId, parsed.data);
     } else {
-      await updateCalendarEvent(access.client, access.ownerId, parsed.data.eventId, {
-        startsAt: parsed.data.startsAt,
-        endsAt: parsed.data.endsAt,
-      });
+      const startsAtLocal = event.timezone
+        ? instantToLocalDateTime(parsed.data.startsAt, event.timezone)
+        : null;
+      const endsAtLocal = event.timezone
+        ? instantToLocalDateTime(parsed.data.endsAt, event.timezone)
+        : null;
+      if (event.timezone && (!startsAtLocal || !endsAtLocal)) {
+        return { ok: false, error: "Choose a valid time." };
+      }
+      await updateCalendarEvent(
+        access.client,
+        access.ownerId,
+        parsed.data.eventId,
+        {
+          startsAt: parsed.data.startsAt,
+          endsAt: parsed.data.endsAt,
+          startsAtLocal,
+          endsAtLocal,
+          durationMinutes: Math.max(
+            1,
+            Math.round(
+              (new Date(parsed.data.endsAt).getTime() -
+                new Date(parsed.data.startsAt).getTime()) /
+                60_000,
+            ),
+          ),
+        },
+      );
     }
     revalidatePath("/calendar");
     if (event.task_id) revalidatePath("/tasks");
     return { ok: true, data: undefined };
   } catch (cause) {
     return actionError(cause, "Could not update the event.");
+  }
+}
+
+/** Restore the exact authored time fields captured before a move or resize. */
+export async function restoreCalendarEventTimesAction(input: {
+  eventId: string;
+  startsAt: string;
+  endsAt: string;
+  startsAtLocal: string | null;
+  endsAtLocal: string | null;
+  durationMinutes: number | null;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = restoreEventTimesSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Choose a valid time." };
+
+    const event = await requireOwnedEvent(access, parsed.data.eventId);
+    if (event.task_id) {
+      await moveTaskLinkedEvent(access.client, access.ownerId, parsed.data);
+    } else {
+      await updateCalendarEvent(
+        access.client,
+        access.ownerId,
+        parsed.data.eventId,
+        {
+          startsAt: parsed.data.startsAt,
+          endsAt: parsed.data.endsAt,
+          startsAtLocal: parsed.data.startsAtLocal,
+          endsAtLocal: parsed.data.endsAtLocal,
+          durationMinutes: parsed.data.durationMinutes,
+        },
+      );
+    }
+
+    revalidatePath("/calendar");
+    if (event.task_id) revalidatePath("/tasks");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not undo the calendar change.");
   }
 }
 
@@ -1119,7 +1373,9 @@ export async function loadEventCrossLinkOptionsAction(input: {
       ),
       workspaces: workspaces.data ?? [],
       currentWorkspaceId:
-        current?.access.ownerId === access.ownerId ? current.workspace.id : null,
+        current?.access.ownerId === access.ownerId
+          ? current.workspace.id
+          : null,
       linkedWorkspaceIds: (linkedWorkspaces.data ?? []).map(
         (link) => link.workspace_id,
       ),
@@ -1198,7 +1454,8 @@ export async function linkEventToWorkspaceAction(input: {
   try {
     const access = await requireMutationDataAccess();
     const parsed = linkEventToWorkspaceSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: "Choose a valid workspace." };
+    if (!parsed.success)
+      return { ok: false, error: "Choose a valid workspace." };
     await requireOwnedEvent(access, parsed.data.eventId);
     const { data: workspace, error } = await access.client
       .from("workspaces")

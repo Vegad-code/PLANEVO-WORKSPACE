@@ -5,6 +5,7 @@ import { addLocalDays, localDayDiff, parseLocalDateKey } from "./month-day-index
 export type MonthMoveResult =
   | {
       kind: "event"
+      operation: "move" | "resize"
       eventId: string
       event: MonthEventItem["event"]
       startsAt: string
@@ -66,6 +67,7 @@ export function moveItemToDay(
 
   return {
     kind: "event",
+    operation: "move",
     eventId: item.eventId,
     event: item.event,
     startsAt: addLocalDays(item.start, deltaDays).toISOString(),
@@ -97,6 +99,7 @@ export function resizeBarEdge(
     if (deltaDays === 0) return null
     return {
       kind: "event",
+      operation: "resize",
       eventId: item.eventId,
       event: item.event,
       startsAt: addLocalDays(item.start, deltaDays).toISOString(),
@@ -110,6 +113,7 @@ export function resizeBarEdge(
   if (deltaDays === 0) return null
   return {
     kind: "event",
+    operation: "resize",
     eventId: item.eventId,
     event: item.event,
     startsAt: item.start.toISOString(),

@@ -98,6 +98,7 @@ type CalendarGridEngineProps = {
   draftCreateEvent?: DraftCreateEventState | null
   onEventSelect: (event: CalendarEventRow, anchorRect: DOMRect) => void
   onEventTimesChange: (input: {
+    operation: "move" | "resize"
     event: CalendarEventRow
     startsAt: string
     endsAt: string
@@ -311,11 +312,15 @@ export function CalendarGridEngine({
   )
 
   const handleEventTimes = useCallback(
-    ({ event, start, end }: RbcInteractionInfo) => {
+    (
+      { event, start, end }: RbcInteractionInfo,
+      operation: "move" | "resize",
+    ) => {
       if (!start || !end) return
       const row = eventsById.get(getPlanevoEventId(event))
       if (!row) return
       onEventTimesChange({
+        operation,
         event: row,
         startsAt: start.toISOString(),
         endsAt: end.toISOString(),
@@ -435,8 +440,8 @@ export function CalendarGridEngine({
               onSelecting={handleSelecting}
               onSelectSlot={handleSelectSlot}
               onSelectEvent={handleSelectEvent}
-              onEventDrop={handleEventTimes}
-              onEventResize={handleEventTimes}
+              onEventDrop={(info) => handleEventTimes(info, "move")}
+              onEventResize={(info) => handleEventTimes(info, "resize")}
               onDragStart={({ event, action }) => {
                 activeRbcTaskDragRef.current =
                   action === "move" && event.linkedTask ? event : null

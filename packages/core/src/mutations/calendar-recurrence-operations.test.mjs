@@ -23,6 +23,19 @@ test("recurrence exception writes validate the requested owned calendar", () => 
   assert.match(sql, /calendar_id = excluded\.calendar_id/);
 });
 
+test("recurrence master reads exclude deleted masters and moved exceptions", () => {
+  const sql = migrationSql();
+
+  assert.match(
+    sql,
+    /from public\.calendar_events exception[\s\S]*?exception\.deleted_at is null/,
+  );
+  assert.match(
+    sql,
+    /from public\.calendar_events master[\s\S]*?master\.deleted_at is null/,
+  );
+});
+
 test("split copies future exceptions before retiring old identities", () => {
   const sql = migrationSql();
 

@@ -53,6 +53,7 @@ export async function GET() {
         .from("calendar_events")
         .select("id,title,starts_at,updated_at")
         .eq("user_id", userId)
+        .is("deleted_at", null)
         .order("starts_at", { ascending: false })
         .limit(PRODUCT_LIMIT),
     ]);

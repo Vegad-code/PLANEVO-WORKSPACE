@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createCalendarEvent,
+  deleteCalendarEvent,
   scheduleTaskFromDrag,
+  softDeleteCalendarEvent,
   splitCalendarEventSeries,
   truncateCalendarEventSeries,
   updateCalendarEvent,
@@ -63,6 +65,10 @@ test("updateCalendarEvent patches authored recurrence fields behind ownership fi
       filters[column] = value;
       return chain;
     },
+    is(column, value) {
+      filters[column] = value;
+      return chain;
+    },
     select() {
       return chain;
     },
@@ -95,12 +101,84 @@ test("updateCalendarEvent patches authored recurrence fields behind ownership fi
 
   assert.equal(filters.id, "event-1");
   assert.equal(filters.user_id, "user-1");
+  assert.equal(filters.deleted_at, null);
   assert.equal(updated.starts_at_local, "2026-07-21T09:00:00");
   assert.equal(updated.ends_at_local, "2026-07-21T10:00:00");
   assert.equal(updated.timezone, "America/New_York");
   assert.equal(updated.duration_minutes, 60);
   assert.equal(updated.rrule, "FREQ=WEEKLY;BYDAY=TU");
   assert.equal(updated.recurrence_end, "2026-08-01T13:00:00.001Z");
+});
+
+function calendarEventUpdateClient() {
+  const calls = [];
+  const chain = {
+    eq(...args) {
+      calls.push({ method: "eq", args });
+      return chain;
+    },
+    is(...args) {
+      calls.push({ method: "is", args });
+      return chain;
+    },
+    select(...args) {
+      calls.push({ method: "select", args });
+      return chain;
+    },
+    async maybeSingle() {
+      return { data: { id: "event-1" }, error: null };
+    },
+  };
+  return {
+    calls,
+    client: {
+      from(table) {
+        assert.equal(table, "calendar_events");
+        return {
+          update(patch) {
+            calls.push({ method: "update", args: [patch] });
+            return chain;
+          },
+          delete() {
+            assert.fail("calendar event deletion must never issue a hard delete");
+          },
+        };
+      },
+    },
+  };
+}
+
+test("calendar event deletion only marks a live owned row as deleted", async () => {
+  for (const remove of [softDeleteCalendarEvent, deleteCalendarEvent]) {
+    const { client, calls } = calendarEventUpdateClient();
+
+    await remove(client, "user-1", "event-1");
+
+    const patch = calls.find(({ method }) => method === "update")?.args[0];
+    assert.match(patch.deleted_at, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(patch.updated_at, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(
+      calls.some(
+        ({ method, args }) =>
+          method === "eq" && args[0] === "id" && args[1] === "event-1",
+      ),
+      true,
+    );
+    assert.equal(
+      calls.some(
+        ({ method, args }) =>
+          method === "eq" && args[0] === "user_id" && args[1] === "user-1",
+      ),
+      true,
+    );
+    assert.equal(
+      calls.some(
+        ({ method, args }) =>
+          method === "is" && args[0] === "deleted_at" && args[1] === null,
+      ),
+      true,
+    );
+  }
 });
 
 test("upsertCalendarEventException sends persisted master identity separately from occurrence identity", async () => {

@@ -53,6 +53,7 @@ test("keeps the time of day when moving an event across days", () => {
 
   // Assert
   assert.equal(result.kind, "event")
+  assert.equal(result.operation, "move")
   const start = new Date(result.startsAt)
   const end = new Date(result.endsAt)
   assert.equal(start.getDate(), 17)
@@ -167,6 +168,7 @@ test("extends a bar's start edge backwards", () => {
   const result = resizeBarEdge(item, "start", "2026-07-08")
 
   // Assert — start moves, end is untouched.
+  assert.equal(result.operation, "resize")
   assert.equal(new Date(result.startsAt).getDate(), 8)
   assert.equal(new Date(result.endsAt).getDate(), 13)
 })
