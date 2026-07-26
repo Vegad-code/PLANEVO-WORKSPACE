@@ -5,3 +5,6 @@ enabled = true
 
 [db]
 major_version = 15
+
+[functions.file-document-maintenance]
+verify_jwt = false

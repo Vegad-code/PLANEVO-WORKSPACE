@@ -1,8 +1,9 @@
 /**
  * Resolve a drop datetime from a pointer position over the calendar grid.
- * Bridges @dnd-kit task drags when the droppable slot target is not hit directly.
- * Works with react-big-calendar slots (via slotPropGetter data attrs) and the
- * legacy native week-grid markers.
+ *
+ * The time grid registers no dnd-kit droppables — react-big-calendar owns that
+ * DOM — so this is the only path by which a dragged task becomes a time. It
+ * reads the slot data attributes RBC emits via slotPropGetter.
  */
 export function startsAtFromCalendarPoint(
   clientX: number,

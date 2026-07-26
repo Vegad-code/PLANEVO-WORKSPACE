@@ -1,15 +1,10 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
-  getMonthItemInteraction,
   getEventColor,
   getPlanevoEventId,
-  isMonthRbcEvent,
-  toMonthRbcEvents,
   toRbcEvents,
 } from "./rbc-event-adapter.ts"
-import { toMonthItems } from "./month-items.ts"
-import { MONTH_GRID_BEHAVIOR } from "./month-grid-behavior.ts"
 
 const calendars = [
   {
@@ -82,61 +77,4 @@ test("getPlanevoEventId and getEventColor read adapter fields", () => {
   const [event] = toRbcEvents(events, calendars)
   assert.equal(getPlanevoEventId(event), "evt-1")
   assert.equal(getEventColor(event), "ocean")
-})
-
-test("Month adapter includes task dues so overflow uses one event list", () => {
-  const monthItems = toMonthItems(
-    events,
-    [
-      {
-        taskId: "task-1",
-        title: "Send agenda",
-        dueAt: "2026-07-15T14:00:00.000Z",
-        status: "not_started",
-      },
-    ],
-    calendars,
-  )
-  const monthEvents = toMonthRbcEvents(monthItems)
-
-  assert.deepEqual(
-    monthEvents.map((event) => event.id),
-    ["task:task-1", "event:evt-1"],
-  )
-  assert.equal(monthEvents.every(isMonthRbcEvent), true)
-  assert.equal(monthEvents[0].end.getDate(), monthEvents[0].start.getDate() + 1)
-})
-
-test("Month item interactions dispatch event selection and task completion", () => {
-  const [eventItem, taskItem] = toMonthItems(
-    events,
-    [
-      {
-        taskId: "task-1",
-        title: "Send agenda",
-        dueAt: "2026-07-15T14:00:00.000Z",
-        status: "not_started",
-      },
-    ],
-    calendars,
-  ).sort((left, right) => left.kind.localeCompare(right.kind))
-
-  assert.deepEqual(getMonthItemInteraction(eventItem), {
-    kind: "event",
-    event: events[0],
-  })
-  assert.deepEqual(getMonthItemInteraction(taskItem), {
-    kind: "task",
-    taskId: "task-1",
-    nextCompleted: true,
-  })
-})
-
-test("Month preserves the custom agenda and disables drag, resize, and implicit drill-down", () => {
-  assert.deepEqual(MONTH_GRID_BEHAVIOR, {
-    popup: false,
-    doShowMoreDrillDown: false,
-    draggable: false,
-    resizable: false,
-  })
 })

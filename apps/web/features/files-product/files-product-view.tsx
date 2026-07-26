@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { FolderOpen, PanelLeft, Plus, Upload, X } from "lucide-react";
 import {
@@ -14,6 +20,10 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
+import {
+  documentFormatForFile,
+  isEditableDocumentFormat,
+} from "@planevo/core/files/document-descriptor";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/planevo-icon";
 import { toast } from "@/components/ui/toast";
@@ -51,7 +61,16 @@ import {
   FileCrossLinkDialog,
   type FileCrossLinkTarget,
 } from "./file-cross-link-dialog";
+import {
+  detachLocalDocumentStateForDeletion,
+  restoreLocalDocumentStateAfterFailedDeletion,
+  type LocalDocumentDeletionSnapshot,
+} from "./local-file-mirror";
 import { FilePreviewPanel } from "./file-preview-panel";
+import {
+  DocumentEditorPanel,
+  type DocumentEditorMode,
+} from "./document-editor-panel";
 import { FilesBreadcrumbHeader } from "./files-breadcrumb-header";
 import { FilesFolderCards } from "./files-folder-cards";
 import { FilesKnowledgeSidebar } from "./files-knowledge-sidebar";
@@ -95,7 +114,9 @@ function matchesSearch(file: ProductFileItem, search: string): boolean {
 }
 
 function byModifiedDesc(left: ProductFileItem, right: ProductFileItem): number {
-  return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+  return (
+    new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+  );
 }
 
 function tagCounts(files: ProductFileItem[]): TagCount[] {
@@ -105,7 +126,10 @@ function tagCounts(files: ProductFileItem[]): TagCount[] {
   }
   return [...counts.entries()]
     .map(([tag, count]) => ({ tag, count }))
-    .sort((left, right) => right.count - left.count || left.tag.localeCompare(right.tag));
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.tag.localeCompare(right.tag),
+    );
 }
 
 function ScopeFilter({
@@ -117,7 +141,8 @@ function ScopeFilter({
 }) {
   const [open, setOpen] = useState(false);
   const currentLabel =
-    SCOPE_OPTIONS.find((option) => option.value === scope)?.label ?? "All files";
+    SCOPE_OPTIONS.find((option) => option.value === scope)?.label ??
+    "All files";
 
   return (
     <div className="relative">
@@ -169,7 +194,10 @@ function ScopeFilter({
                     <span className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-product-body text-files-text outline-none hover:bg-files-surface-muted peer-focus-visible:outline peer-focus-visible:outline-offset-2 peer-focus-visible:outline-files-cta">
                       {option.label}
                       {isSelected ? (
-                        <Icon name="check" className="size-4 text-files-text-muted" />
+                        <Icon
+                          name="check"
+                          className="size-4 text-files-text-muted"
+                        />
                       ) : null}
                     </span>
                   </label>
@@ -217,7 +245,10 @@ function NamePromptDialog({
       labelledBy="files-name-prompt-title"
       className="m-4 w-[min(100%,24rem)] rounded-files-modal border border-files-border bg-files-surface p-5 text-files-text shadow-lg backdrop:bg-files-text/40 sm:m-auto"
     >
-      <h2 id="files-name-prompt-title" className="text-h3 font-semibold text-files-text">
+      <h2
+        id="files-name-prompt-title"
+        className="text-h3 font-semibold text-files-text"
+      >
         {title}
       </h2>
       <p className="mt-2 text-body text-files-text-muted">{description}</p>
@@ -296,9 +327,11 @@ export function FilesProductView({
   capBytes,
 }: FilesProductViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showRevealChrome } = useSidebarLayout();
   const prefersReducedMotion = usePrefersReducedMotion();
-  const libraryLayoutTransition = getShellLayoutTransition(prefersReducedMotion);
+  const libraryLayoutTransition =
+    getShellLayoutTransition(prefersReducedMotion);
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -311,9 +344,21 @@ export function FilesProductView({
   const [search, setSearch] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
-  const [fileToDelete, setFileToDelete] = useState<ProductFileItem | null>(null);
-  const [folderToDelete, setFolderToDelete] = useState<FolderTreeItem | null>(null);
+  const requestedFileId = searchParams.get("file");
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(() =>
+    requestedFileId && initialFiles.some((file) => file.id === requestedFileId)
+      ? requestedFileId
+      : null,
+  );
+  const [editorMode, setEditorMode] = useState<DocumentEditorMode>(() =>
+    searchParams.get("editor") === "full" ? "full" : "panel",
+  );
+  const [fileToDelete, setFileToDelete] = useState<ProductFileItem | null>(
+    null,
+  );
+  const [folderToDelete, setFolderToDelete] = useState<FolderTreeItem | null>(
+    null,
+  );
   const [crossLink, setCrossLink] = useState<{
     file: ProductFileItem;
     target: FileCrossLinkTarget;
@@ -331,8 +376,25 @@ export function FilesProductView({
       setFilesScope("all");
       return;
     }
-    router.replace(storedScope === "workspace" ? "/files?scope=workspace" : "/files");
-  }, [initialScope, router, workspaceId]);
+    const next = new URLSearchParams(searchParams.toString());
+    if (storedScope === "workspace") next.set("scope", "workspace");
+    else next.delete("scope");
+    const query = next.toString();
+    router.replace(query ? `/files?${query}` : "/files", { scroll: false });
+  }, [initialScope, router, searchParams, workspaceId]);
+
+  useEffect(() => {
+    const syncTimer = window.setTimeout(() => {
+      const nextFileId = searchParams.get("file");
+      setSelectedFileId(
+        nextFileId && initialFiles.some((file) => file.id === nextFileId)
+          ? nextFileId
+          : null,
+      );
+      setEditorMode(searchParams.get("editor") === "full" ? "full" : "panel");
+    }, 0);
+    return () => window.clearTimeout(syncTimer);
+  }, [initialFiles, searchParams]);
 
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
@@ -360,8 +422,61 @@ export function FilesProductView({
   }, [activeSideTab, initialFiles, search, selectedFolderId, selectedTag]);
 
   const selectedFile = selectedFileId
-    ? initialFiles.find((file) => file.id === selectedFileId) ?? null
+    ? (initialFiles.find((file) => file.id === selectedFileId) ?? null)
     : null;
+
+  const selectedFormat = selectedFile
+    ? documentFormatForFile({
+        name: selectedFile.name,
+        mimeType: selectedFile.mime_type,
+        pageId: selectedFile.page_id,
+      })
+    : null;
+
+  function replaceFilesUrl(update: {
+    fileId?: string | null;
+    editor?: DocumentEditorMode | null;
+    scope?: FilesScope;
+  }) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (update.scope) {
+      if (update.scope === "workspace") next.set("scope", "workspace");
+      else next.delete("scope");
+    }
+    if (update.fileId !== undefined) {
+      if (update.fileId) next.set("file", update.fileId);
+      else next.delete("file");
+    }
+    if (update.editor !== undefined) {
+      if (update.editor) next.set("editor", update.editor);
+      else next.delete("editor");
+    }
+    const query = next.toString();
+    router.replace(query ? `/files?${query}` : "/files", { scroll: false });
+  }
+
+  function openFile(file: ProductFileItem) {
+    if (file.id === selectedFileId) {
+      setSelectedFileId(null);
+      setEditorMode("panel");
+      replaceFilesUrl({ fileId: null, editor: null });
+      return;
+    }
+    setSelectedFileId(file.id);
+    setEditorMode("panel");
+    replaceFilesUrl({ fileId: file.id, editor: "panel" });
+  }
+
+  function closeFile() {
+    setSelectedFileId(null);
+    setEditorMode("panel");
+    replaceFilesUrl({ fileId: null, editor: null });
+  }
+
+  function changeEditorMode(mode: DocumentEditorMode) {
+    setEditorMode(mode);
+    replaceFilesUrl({ fileId: selectedFileId, editor: mode });
+  }
 
   function changeScope(scope: FilesScope) {
     if (scope === "workspace" && !workspaceId) {
@@ -369,7 +484,7 @@ export function FilesProductView({
       return;
     }
     setFilesScope(scope);
-    router.push(scope === "workspace" ? "/files?scope=workspace" : "/files");
+    replaceFilesUrl({ scope });
   }
 
   function handleSelectFolder(folderId: string | null) {
@@ -388,11 +503,17 @@ export function FilesProductView({
     setIsUploading(true);
     try {
       const uploadedCount = await uploadProductFiles(files);
-      toast(uploadedCount === 1 ? "File uploaded" : `${uploadedCount} files uploaded`);
+      toast(
+        uploadedCount === 1
+          ? "File uploaded"
+          : `${uploadedCount} files uploaded`,
+      );
       handleUploadComplete();
     } catch (cause) {
       setIsUploading(false);
-      toast(cause instanceof Error ? cause.message : "Upload failed.", { tone: "error" });
+      toast(cause instanceof Error ? cause.message : "Upload failed.", {
+        tone: "error",
+      });
     }
   }
 
@@ -442,7 +563,10 @@ export function FilesProductView({
     const file = initialFiles.find((candidate) => candidate.id === fileId);
     if (file && (file.folder_id ?? null) === folderId) return;
     startTransition(async () => {
-      const result = await moveFileToFolderAction({ fileIds: [fileId], folderId });
+      const result = await moveFileToFolderAction({
+        fileIds: [fileId],
+        folderId,
+      });
       if (!result.ok) {
         toast(result.error, { tone: "error" });
         return;
@@ -455,7 +579,10 @@ export function FilesProductView({
   const handleRenameFile = useCallback(
     async (name: string): Promise<boolean> => {
       if (!selectedFileId) return false;
-      const result = await renameFileAction({ fileSourceId: selectedFileId, name });
+      const result = await renameFileAction({
+        fileSourceId: selectedFileId,
+        name,
+      });
       if (!result.ok) {
         toast(result.error, { tone: "error" });
         return false;
@@ -484,13 +611,31 @@ export function FilesProductView({
     const file = fileToDelete;
     if (!file) return;
     startTransition(async () => {
+      let localState: LocalDocumentDeletionSnapshot;
+      try {
+        localState = await detachLocalDocumentStateForDeletion(file.id);
+      } catch {
+        toast(
+          "Could not clear this file from browser recovery storage. The file was not deleted.",
+          { tone: "error" },
+        );
+        return;
+      }
       const result = await deleteProductFileAction({ fileSourceId: file.id });
       setFileToDelete(null);
       if (!result.ok) {
+        try {
+          await restoreLocalDocumentStateAfterFailedDeletion(localState);
+        } catch {
+          toast(
+            "The file is still in Planevo, but its browser recovery state could not be restored.",
+            { tone: "error" },
+          );
+        }
         toast(result.error, { tone: "error" });
         return;
       }
-      if (selectedFileId === file.id) setSelectedFileId(null);
+      if (selectedFileId === file.id) closeFile();
       toast("File deleted");
       router.refresh();
     });
@@ -505,6 +650,12 @@ export function FilesProductView({
       }
       setCreateDocumentOpen(false);
       toast("Document created");
+      setSelectedFileId(result.data.fileSourceId);
+      setEditorMode("panel");
+      replaceFilesUrl({
+        fileId: result.data.fileSourceId,
+        editor: "panel",
+      });
       router.refresh();
     });
   }
@@ -583,7 +734,9 @@ export function FilesProductView({
                   capBytes={capBytes}
                   files={initialFiles}
                   onDeleteFile={(file) => {
-                    const match = initialFiles.find((candidate) => candidate.id === file.id);
+                    const match = initialFiles.find(
+                      (candidate) => candidate.id === file.id,
+                    );
                     if (match) setFileToDelete(match);
                   }}
                 />
@@ -600,7 +753,12 @@ export function FilesProductView({
         </motion.aside>
 
         <div className="flex min-w-0 flex-1 overflow-hidden">
-          <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-files-bg">
+          <div
+            className={cn(
+              "min-w-0 flex-1 flex-col overflow-y-auto bg-files-bg",
+              selectedFile && editorMode === "full" ? "hidden" : "flex",
+            )}
+          >
             <div className="sticky top-0 z-10 bg-files-bg/95 px-6 pt-4 pb-3 backdrop-blur-sm lg:px-8">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -658,7 +816,10 @@ export function FilesProductView({
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <ScopeFilter scope={initialScope} onScopeChange={changeScope} />
+                  <ScopeFilter
+                    scope={initialScope}
+                    onScopeChange={changeScope}
+                  />
                   <button
                     type="button"
                     onClick={() => setCreateDocumentOpen(true)}
@@ -680,7 +841,10 @@ export function FilesProductView({
               </div>
             </div>
 
-            <FilesUploadDropzone onUploadFiles={handleDroppedFiles} isUploading={isUploading}>
+            <FilesUploadDropzone
+              onUploadFiles={handleDroppedFiles}
+              isUploading={isUploading}
+            >
               <div className="px-6 pb-16 pt-2 lg:px-8">
                 {activeSideTab === "folders" ? (
                   <FilesFolderCards
@@ -692,10 +856,14 @@ export function FilesProductView({
                 ) : null}
 
                 <section className="mt-10" aria-label="Files">
-                  <h2 className="text-product-body font-medium text-files-text-muted">Files</h2>
+                  <h2 className="text-product-body font-medium text-files-text-muted">
+                    Files
+                  </h2>
                   <div className="mt-3">
                     {initialFiles.length === 0 ? (
-                      <FilesEmptyState onUpload={() => setUploadModalOpen(true)} />
+                      <FilesEmptyState
+                        onUpload={() => setUploadModalOpen(true)}
+                      />
                     ) : visibleFiles.length === 0 ? (
                       <p className="py-10 text-center text-product-body text-files-text-muted">
                         No files match this view.
@@ -706,12 +874,14 @@ export function FilesProductView({
                         owner={owner}
                         folders={folders}
                         selectedFileId={selectedFileId}
-                        onSelectFile={(file) =>
-                          setSelectedFileId(file.id === selectedFileId ? null : file.id)
-                        }
+                        onSelectFile={openFile}
                         onDeleteFile={setFileToDelete}
-                        onAttachToTask={(file) => setCrossLink({ file, target: "task" })}
-                        onLinkToEvent={(file) => setCrossLink({ file, target: "event" })}
+                        onAttachToTask={(file) =>
+                          setCrossLink({ file, target: "task" })
+                        }
+                        onLinkToEvent={(file) =>
+                          setCrossLink({ file, target: "event" })
+                        }
                         onMoveFileToFolder={handleMoveFileToFolder}
                       />
                     )}
@@ -721,12 +891,36 @@ export function FilesProductView({
             </FilesUploadDropzone>
           </div>
 
-          {selectedFile ? (
+          {selectedFile &&
+          selectedFormat &&
+          (isEditableDocumentFormat(selectedFormat) ||
+            selectedFormat === "pdf" ||
+            selectedFormat === "docx") ? (
+            <DocumentEditorPanel
+              key={selectedFile.id}
+              file={selectedFile}
+              mode={editorMode}
+              onModeChange={changeEditorMode}
+              onClose={closeFile}
+              onUpdateTags={(nextTags) =>
+                handleUpdateTags(selectedFile, nextTags)
+              }
+              onRenameFile={handleRenameFile}
+              onImportedDocument={(fileSourceId) => {
+                setSelectedFileId(fileSourceId);
+                setEditorMode("panel");
+                replaceFilesUrl({ fileId: fileSourceId, editor: "panel" });
+                router.refresh();
+              }}
+            />
+          ) : selectedFile ? (
             <FilePreviewPanel
               key={selectedFile.id}
               file={selectedFile}
-              onClose={() => setSelectedFileId(null)}
-              onUpdateTags={(nextTags) => handleUpdateTags(selectedFile, nextTags)}
+              onClose={closeFile}
+              onUpdateTags={(nextTags) =>
+                handleUpdateTags(selectedFile, nextTags)
+              }
               onRenameFile={handleRenameFile}
             />
           ) : null}
@@ -771,12 +965,15 @@ export function FilesProductView({
             labelledBy="delete-file-title"
             className="m-4 w-[min(100%,24rem)] rounded-files-modal border border-files-border bg-files-surface p-5 text-files-text shadow-lg backdrop:bg-files-text/40 sm:m-auto"
           >
-            <h2 id="delete-file-title" className="text-h3 font-semibold text-files-text">
+            <h2
+              id="delete-file-title"
+              className="text-h3 font-semibold text-files-text"
+            >
               Delete “{fileToDelete.name}”?
             </h2>
             <p className="mt-2 text-body text-files-text-muted">
-              This permanently removes the file from storage and any tasks or events it is
-              attached to. This can&apos;t be undone.
+              This permanently removes the file from storage and any tasks or
+              events it is attached to. This can&apos;t be undone.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -805,12 +1002,15 @@ export function FilesProductView({
             labelledBy="delete-folder-title"
             className="m-4 w-[min(100%,24rem)] rounded-files-modal border border-files-border bg-files-surface p-5 text-files-text shadow-lg backdrop:bg-files-text/40 sm:m-auto"
           >
-            <h2 id="delete-folder-title" className="text-h3 font-semibold text-files-text">
+            <h2
+              id="delete-folder-title"
+              className="text-h3 font-semibold text-files-text"
+            >
               Delete “{folderToDelete.name}”?
             </h2>
             <p className="mt-2 text-body text-files-text-muted">
-              This removes the folder and any subfolders. Files inside are kept — they just
-              become unfiled. This can&apos;t be undone.
+              This removes the folder and any subfolders. Files inside are kept
+              — they just become unfiled. This can&apos;t be undone.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button

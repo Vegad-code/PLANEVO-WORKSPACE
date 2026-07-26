@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getDataAccess, type DataAccess } from "@/lib/data/access";
+import { ensureDevWorkspace } from "@/lib/data/ensure-dev-workspace";
 import type { WorkspaceRow } from "@planevo/core/types/database.types";
 
 export const WORKSPACE_COOKIE = "planevo_workspace";
@@ -45,6 +46,9 @@ export const getCurrentWorkspace = cache(
       .limit(1)
       .maybeSingle();
     if (error) throw error;
-    return data ? { access, workspace: data } : null;
+    if (data) return { access, workspace: data };
+
+    const bootstrapped = await ensureDevWorkspace(access);
+    return bootstrapped ? { access, workspace: bootstrapped } : null;
   },
 );

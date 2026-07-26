@@ -8,6 +8,7 @@ import { FilesFolderCards } from "@/features/files-product/files-folder-cards";
 import { FilesKnowledgeSidebar } from "@/features/files-product/files-knowledge-sidebar";
 import { FilesTable, type ProductFileItem } from "@/features/files-product/files-table";
 import { StorageMeter } from "@/features/files-product/storage-meter";
+import { SaveIndicator } from "@/features/editor/toolbar/save-indicator";
 import type {
   FolderTreeItem,
   OwnerDisplay,
@@ -117,12 +118,10 @@ export function FilesProductPreview() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   return (
-    <div
-      data-product="files"
-      className="files-product-ui overflow-hidden rounded-card border border-border"
-    >
-      <DndContext id="files-design-preview">
-        <div className="flex h-[38rem] w-full overflow-hidden">
+    <div data-product="files" className="files-product-ui">
+      <div className="overflow-hidden rounded-card border border-border">
+        <DndContext id="files-design-preview">
+          <div className="flex h-[38rem] w-full overflow-hidden">
           <aside className="relative hidden w-72 shrink-0 flex-col border-r border-files-border bg-files-surface lg:flex">
             <div className="min-h-0 flex-1 overflow-y-auto">
               <FilesKnowledgeSidebar
@@ -201,8 +200,74 @@ export function FilesProductPreview() {
               onRenameFile={asyncTrue}
             />
           </div>
+          </div>
+        </DndContext>
+      </div>
+      <section className="mt-6" aria-label="Document editor states">
+        <h3 className="text-h3 font-semibold text-files-text">
+          Document editor states
+        </h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-files-card border border-files-border bg-files-surface p-4">
+            <p className="text-product-body font-medium text-files-text">
+              Canonical save
+            </p>
+            <div className="mt-3 flex min-h-8 items-center justify-between gap-3">
+              <span className="text-product-meta text-files-text-muted">
+                Markdown · live preview
+              </span>
+              <SaveIndicator
+                state="saving"
+                savingLabel="Saving to Planevo…"
+              />
+            </div>
+          </div>
+          <div className="rounded-files-card border border-meadow bg-meadow-tint p-4">
+            <p className="text-product-body font-medium text-meadow">
+              Recovery available
+            </p>
+            <p className="mt-2 text-product-meta text-meadow">
+              Recovered unsaved changes from this browser.
+            </p>
+          </div>
+          <div className="rounded-files-card border border-brick bg-brick-tint p-4">
+            <p className="text-product-body font-medium text-brick">
+              Persistent save failure
+            </p>
+            <p className="mt-2 text-product-meta text-brick">
+              Saved to Planevo. The computer file needs permission.
+            </p>
+            <button
+              type="button"
+              className="mt-3 text-product-meta font-medium text-brick underline underline-offset-2"
+            >
+              Reconnect file
+            </button>
+          </div>
+          <div className="rounded-files-card border border-brick bg-brick-tint p-4">
+            <p className="text-product-body font-medium text-brick">
+              Version conflict
+            </p>
+            <p className="mt-2 text-product-meta text-brick">
+              This document changed somewhere else.
+            </p>
+            <div className="mt-3 flex gap-3">
+              <button
+                type="button"
+                className="text-product-meta font-medium text-brick underline underline-offset-2"
+              >
+                Use Planevo version
+              </button>
+              <button
+                type="button"
+                className="text-product-meta font-medium text-brick underline underline-offset-2"
+              >
+                Save my copy
+              </button>
+            </div>
+          </div>
         </div>
-      </DndContext>
+      </section>
     </div>
   );
 }

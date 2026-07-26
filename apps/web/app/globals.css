@@ -127,34 +127,67 @@
   --radius-calendar-shell: 24px;
   --radius-calendar-control: 999px;
   --radius-calendar-event: 8px;
-  --size-calendar-today-disc: 2.25rem;
-  --text-calendar-day-weekday: 11px;
-  --text-calendar-day-weekday--line-height: 16px;
+  --size-calendar-today-disc: 2rem;
+  --size-calendar-day-header-row: 2.875rem;
+  --size-calendar-allday-band: 1.25rem;
+  --size-calendar-time-gutter: 4.5rem;
+  --size-calendar-now-line: 2px;
+  --radius-calendar-now-badge: 6px;
+  --spacing-calendar-now-badge-x: 0.5rem;
+  --spacing-calendar-now-badge-y: 0.125rem;
+  --text-calendar-now-badge: 11px;
+  --text-calendar-now-badge--line-height: 14px;
+  --text-calendar-now-badge--font-weight: 500;
+  --z-calendar-now: 20;
+  --text-calendar-day-weekday: 12px;
+  --text-calendar-day-weekday--line-height: 14px;
   --text-calendar-day-weekday--letter-spacing: 0.05em;
   --text-calendar-day-weekday--font-weight: 500;
   --text-calendar-day-number: 22px;
-  --text-calendar-day-number--line-height: 28px;
+  --text-calendar-day-number--line-height: 24px;
   --text-calendar-day-number--font-weight: 400;
-  --spacing-calendar-day-header-gap: 0.25rem;
+  --spacing-calendar-day-header-gap: 0.0625rem;
   --color-calendar-today-disc: #6495ed;
   --color-calendar-today-disc-foreground: #ffffff;
   --color-calendar-today-label: #6495ed;
-  --color-calendar-grid: var(--color-paper);
+  /*
+   * Calendar elevation (light + dark): page/chrome stays paper; the day/week/
+   * month grid is the shaded raised panel (surface-raised). Day view is a
+   * single large field — without a raised grid token it reads as page bg.
+   */
+  --color-calendar-chrome: var(--color-paper);
+  --color-calendar-grid: var(--color-surface-raised);
   --text-calendar-month-date: 12px;
   --text-calendar-month-date--line-height: 16px;
   --text-calendar-month-date--font-weight: 500;
   --color-calendar-month-divider: var(--color-border);
   --color-calendar-month-outside-surface: color-mix(in srgb, var(--color-ink) 2%, var(--color-calendar-grid));
   --size-calendar-month-weekday-header: 2.5rem;
-  --size-calendar-month-row-min: 6rem;
   --size-calendar-month-event-row: 1.25rem;
   --size-calendar-month-event-dot: 0.375rem;
   --size-calendar-month-task-checkbox: 1rem;
   --spacing-calendar-month-cell-padding: 0.5rem;
-  --spacing-calendar-month-row-gap: 0.125rem;
   --size-calendar-month-agenda-width: 18rem;
   --size-calendar-month-agenda-narrow-max-height: 20rem;
   --spacing-calendar-month-agenda-inset: 0.75rem;
+
+  /* Month grid — CSS Grid engine. Ocean is the only chrome accent here. */
+  --size-calendar-month-date-header: 1.5rem;
+  --size-calendar-month-bar-edge: 2px;
+  --size-calendar-month-bar-grip: 0.375rem;
+  --spacing-calendar-month-bar-inset: 0.125rem;
+  --spacing-calendar-month-chip-inline: 0.375rem;
+  --spacing-calendar-month-chip-gap: 0.25rem;
+  --text-calendar-month-overflow-link: 12px;
+  --text-calendar-month-overflow-link--line-height: 16px;
+  --text-calendar-month-overflow-link--font-weight: 500;
+  --color-calendar-month-past-surface: color-mix(in srgb, var(--color-ink) 1.5%, var(--color-calendar-grid));
+  /* Three tiers of recession: future ink, past secondary, outside muted. */
+  --color-calendar-month-past-date-text: var(--color-text-secondary);
+  --color-calendar-month-today-ring: var(--color-ocean);
+  --color-calendar-month-drop-target: color-mix(in srgb, var(--color-ocean) 10%, transparent);
+  --color-calendar-month-drag-ghost-border: var(--color-ocean);
+  --radius-calendar-month-bar-continuation: 0px;
 
   /* Layout */
   --spacing-sidebar: 210px;
@@ -184,6 +217,21 @@
   /* Fuzzy match — Notion blue callout (light) */
   --color-spotlight-match: #e9f3f7;
   --color-spotlight-match-foreground: #487ca5;
+
+  /* Event card — one solid slab of glass, not a translucent wash. A faint
+     surface floating on the popover's own glass read as two mushy layers; this
+     is a single dish with real thickness: bright top sheen, defined edge,
+     hairline dividers inside. Parsed/assumed carry the quick-capture language —
+     ocean means "the calendar read this", muted means "we filled it in". */
+  --color-event-card-surface: rgba(255, 255, 255, 0.95);
+  --color-event-card-border: rgba(255, 255, 255, 0.78);
+  --color-event-card-sheen: rgba(255, 255, 255, 0.85);
+  --color-event-card-divider: rgba(55, 53, 47, 0.1);
+  --color-event-card-control: rgba(255, 255, 255, 0.86);
+  --color-event-capture-parsed: #e9f3f7;
+  --color-event-capture-parsed-foreground: #0b6e99;
+  --color-event-capture-assumed: rgba(55, 53, 47, 0.05);
+  --color-event-capture-assumed-foreground: #787774;
 }
 
 /* Minimal light: desaturate accents toward Notion gray on white canvas.
@@ -231,6 +279,20 @@
   --color-calendar-today-disc-foreground: #0c2d5c;
   --color-calendar-today-label: #7eb0f5;
 
+  /*
+   * Dark calendar elevation: canvas/chrome stays paper (#191919); the day/week/
+   * month grid is the elevated charcoal panel (surface-raised). Without this
+   * flip, day view reads as the same shade as the app background.
+   */
+  --color-calendar-chrome: var(--color-paper);
+  --color-calendar-grid: var(--color-surface-raised);
+
+  /* Month grid — dark needs more lift than a 1.5% wash to read as recessed. */
+  --color-calendar-month-past-surface: color-mix(in srgb, #ffffff 3%, var(--color-calendar-grid));
+  --color-calendar-month-today-ring: #7eb0f5;
+  --color-calendar-month-drop-target: color-mix(in srgb, #7eb0f5 16%, transparent);
+  --color-calendar-month-drag-ghost-border: #7eb0f5;
+
   /* Files product — same Notion tiers, scoped via [data-product="files"] */
   --color-files-bg: #191919;
   --color-files-surface: #252525;
@@ -255,6 +317,17 @@
   /* Fuzzy match — Notion yellow callout (dark): warm bg + gold text */
   --color-spotlight-match: #372e20;
   --color-spotlight-match-foreground: #ffdc49;
+
+  /* Event card (dark) — a lit slab, not a 4%-white film on the shell. */
+  --color-event-card-surface: rgba(58, 58, 62, 0.94);
+  --color-event-card-border: rgba(255, 255, 255, 0.18);
+  --color-event-card-sheen: rgba(255, 255, 255, 0.22);
+  --color-event-card-divider: rgba(255, 255, 255, 0.09);
+  --color-event-card-control: rgba(255, 255, 255, 0.1);
+  --color-event-capture-parsed: #372e20;
+  --color-event-capture-parsed-foreground: #ffdc49;
+  --color-event-capture-assumed: rgba(255, 255, 255, 0.06);
+  --color-event-capture-assumed-foreground: rgba(255, 255, 255, 0.55);
 }
 
 /* Minimal dark: desaturate accents toward cool gray on #191919 base */
@@ -462,6 +535,162 @@ body {
   border-color: var(--color-border-strong);
 }
 
+/* Event popover — liquid glass shell + directional callout arrow. */
+.event-popover-glass-fallback {
+  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
+  border: 1px solid var(--color-border-strong);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  backdrop-filter: blur(28px) saturate(160%);
+}
+
+/* Event card interior — one solid dish of liquid glass. The popover shell around
+   it already does the blurring; a second backdrop-filter nested inside that one
+   only washes both out, which is what made the card read as mush. So the dish is
+   a near-solid body with a lit top edge and a real drop shadow: thickness from
+   fill and light, glass from the shell it sits in. */
+.event-card-surface {
+  background: var(--color-event-card-surface);
+  border: 1px solid var(--color-event-card-border);
+  box-shadow:
+    inset 0 1px 0 var(--color-event-card-sheen),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.32);
+}
+
+.event-card-divider {
+  border-top: 1px solid var(--color-event-card-divider);
+}
+
+/* Date and time pills. Native inputs, so the OS keeps keyboard entry and its
+   own picker — only the default calendar/clock glyph is dropped. */
+.event-card-control {
+  background: var(--color-event-card-control);
+  border: 1px solid var(--color-event-card-border);
+  box-shadow: inset 0 1px 0 var(--color-event-card-sheen);
+}
+
+.event-card-control:focus-within {
+  border-color: var(--color-border-strong);
+}
+
+/* Drop the OS calendar/clock glyph and let the whole pill open the picker. */
+.event-card-control input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Safari/Chrome pad these pseudo-fields; strip it so the pill sizes to the text. */
+.event-card-control input::-webkit-datetime-edit {
+  padding: 0;
+}
+
+/* The stretch of the quick-capture line that became the date. */
+.event-capture-highlight {
+  border-radius: 3px;
+  background-color: var(--color-event-capture-parsed);
+  color: var(--color-event-capture-parsed-foreground);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Interpretation chips: what the parse read, and how confident it is. */
+.event-capture-chip--parsed {
+  background: var(--color-event-capture-parsed);
+  color: var(--color-event-capture-parsed-foreground);
+}
+
+.event-capture-chip--assumed {
+  background: var(--color-event-capture-assumed);
+  color: var(--color-event-capture-assumed-foreground);
+}
+
+/*
+  liquid-glass-react containment for side-anchored popovers.
+  The library emits overlay <div>/<span> siblings + a GlassContainer as a
+  Fragment. Those overlays are position:relative with full glass height, so
+  they stack and explode the popover. Pin overlays absolute; let the glass
+  node define height. Kill transform/transition so only the frost UI remains.
+*/
+.event-popover-liquid-host {
+  position: relative;
+  width: 100%;
+  isolation: isolate;
+}
+
+.event-popover-liquid-host > div,
+.event-popover-liquid-host > span {
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  transition: none !important;
+  margin: 0 !important;
+  pointer-events: none;
+}
+
+.event-popover-liquid-host > .event-popover-liquid-glass {
+  position: relative !important;
+  inset: auto !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  transform: none !important;
+  transition: none !important;
+  pointer-events: auto;
+}
+
+.event-popover-liquid-glass .glass {
+  display: flex !important;
+  width: 100%;
+  align-items: stretch;
+  gap: 0 !important;
+  transition: none !important;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.event-popover-liquid-glass .glass > div,
+.event-popover-liquid-content {
+  width: 100%;
+  color: var(--color-ink) !important;
+  text-shadow: none !important;
+  font: inherit !important;
+}
+
+.event-popover-callout-arrow {
+  width: 12px;
+  height: 12px;
+  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 2px;
+  box-shadow:
+    -2px 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.event-popover-callout-arrow--points-left {
+  left: -6px;
+}
+
+.event-popover-callout-arrow--points-right {
+  right: -6px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spotlight-panel-list,
   .spotlight-panel-sizer {
@@ -485,10 +714,19 @@ body {
 
   .calendar-rail-glass,
   .calendar-panel-glass,
-  .calendar-event-glass {
+  .calendar-event-glass,
+  .event-popover-glass-fallback,
+  .event-popover-callout-arrow {
     background: var(--color-surface-raised);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+  }
+
+  /* Translucent card surfaces are unreadable once the shell behind them turns
+     opaque — give the interior its own solid step above the shell. */
+  .event-card-surface,
+  .event-card-control {
+    background: var(--color-paper);
   }
 }
 
@@ -795,7 +1033,7 @@ body {
 
 /* Time gutter — clean raised strip; horizontal lines live in day columns only (GCal). */
 .planevo-calendar-grid [data-calendar-time-gutter] {
-  background: var(--color-surface-raised);
+  background: var(--color-calendar-grid);
 }
 
 /* react-big-calendar — week/day grid with DnD move + resize. */
@@ -803,41 +1041,74 @@ body {
   font-family: var(--font-product);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-calendar-grid);
 }
 
 .planevo-rbc .rbc-calendar {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: transparent;
+  background-color: var(--color-calendar-grid);
 }
 
 .planevo-rbc .rbc-time-view {
   flex: 1;
   min-height: 0;
   border: none;
-  background: transparent;
+  background-color: var(--color-calendar-grid);
 }
 
 .planevo-rbc .rbc-time-header {
   border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-calendar-grid);
 }
 
 .planevo-rbc .rbc-time-header-content {
   border-left: none;
+  flex: 1;
+  min-width: 0;
 }
 
 .planevo-rbc .rbc-header {
   padding: 0;
   border: none;
   border-left: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
+  background-color: var(--color-calendar-grid);
   font-weight: inherit;
+  min-height: var(--size-calendar-day-header-row);
+}
+
+.planevo-rbc .rbc-row.rbc-time-header-cell {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+/* RBC hides single-day header rows by default; GCal shows weekday + date in-grid. */
+.planevo-rbc .rbc-row.rbc-time-header-cell-single-day {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: var(--size-calendar-day-header-row);
+}
+
+.planevo-rbc .rbc-row.rbc-time-header-cell .rbc-header {
+  flex: 1;
+  width: 100%;
+}
+
+.planevo-rbc .rbc-row.rbc-time-header-cell-single-day .rbc-header,
+.planevo-rbc .rbc-row.rbc-time-header-cell-single-day .rbc-button-link {
+  text-align: left;
+  justify-content: flex-start;
 }
 
 .planevo-rbc .rbc-time-header-gutter,
 .planevo-rbc .rbc-time-gutter {
-  background: var(--color-surface-raised);
+  background-color: var(--color-calendar-grid);
+  width: var(--size-calendar-time-gutter) !important;
+  min-width: var(--size-calendar-time-gutter) !important;
+  max-width: var(--size-calendar-time-gutter) !important;
+  border-right: 1px solid var(--color-border);
 }
 
 .planevo-rbc .rbc-time-header-gutter {
@@ -861,6 +1132,10 @@ body {
   border: none;
 }
 
+.planevo-rbc .rbc-time-gutter .rbc-timeslot-group {
+  position: relative;
+}
+
 .planevo-rbc .rbc-label {
   padding: 0 0.5rem 0 0.5rem;
   font-size: var(--text-product-meta);
@@ -870,6 +1145,20 @@ body {
   color: var(--color-text-muted);
 }
 
+/* GCal — hour labels sit on the hour grid line, not inside the slot block. */
+.planevo-rbc .rbc-time-gutter .rbc-label {
+  position: absolute;
+  top: 0;
+  right: 0.5rem;
+  padding: 0;
+  transform: translateY(-50%);
+}
+
+.planevo-rbc .rbc-time-gutter .rbc-timeslot-group:first-child .rbc-label {
+  transform: none;
+  top: 0.125rem;
+}
+
 .planevo-rbc .rbc-timeslot-group {
   min-height: 4.5rem;
   border-bottom: 1px solid var(--color-border);
@@ -877,11 +1166,17 @@ body {
 
 .planevo-rbc .rbc-day-slot {
   border-left: 1px solid var(--color-border);
-  background: var(--color-calendar-grid);
+  background-color: var(--color-calendar-grid);
+  overflow: visible;
 }
 
 .planevo-rbc .rbc-day-slot .rbc-time-slot {
   border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+
+.planevo-rbc .rbc-day-slot .rbc-timeslot-group .rbc-time-slot:nth-child(2) {
+  border-top-style: dotted;
+  border-top-color: var(--color-border);
 }
 
 .planevo-rbc .rbc-day-slot .rbc-timeslot-group .rbc-time-slot:first-child {
@@ -889,7 +1184,12 @@ body {
 }
 
 .planevo-rbc .rbc-today {
-  background: color-mix(in srgb, var(--color-ink) 4%, var(--color-calendar-grid));
+  /* Override RBC's hardcoded #eaf6ff so day view keeps the raised panel. */
+  background-color: color-mix(
+    in srgb,
+    var(--color-ink) 4%,
+    var(--color-calendar-grid)
+  );
 }
 
 .planevo-rbc .rbc-event {
@@ -987,27 +1287,74 @@ body {
   overflow: hidden;
 }
 
+/* Hide RBC's built-in indicator — Planevo owns the overlay. */
 .planevo-rbc .rbc-current-time-indicator {
-  height: 2px;
-  background: var(--color-brick);
-  pointer-events: none;
+  display: none;
 }
 
-.planevo-rbc .rbc-current-time-indicator::before {
-  content: "";
+.planevo-rbc-now-indicator {
+  left: 0;
+  right: 0;
+  z-index: var(--z-calendar-now);
+  width: 100%;
+  height: var(--size-calendar-now-line);
+  overflow: visible;
+}
+
+.planevo-rbc-now-indicator--extends-gutter {
+  left: calc(-1 * var(--size-calendar-time-gutter));
+  width: calc(100% + var(--size-calendar-time-gutter));
+}
+
+/* Line spans only today's column (mount parent is `.rbc-day-slot.rbc-today`). */
+.planevo-rbc-now-line {
   position: absolute;
-  left: -0.375rem;
-  top: 50%;
-  width: 0.625rem;
-  height: 0.625rem;
-  margin-top: -0.3125rem;
-  border-radius: 9999px;
-  background: var(--color-brick);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--size-calendar-now-line);
+  background: var(--color-ink);
+}
+
+.planevo-rbc-now-badge {
+  position: absolute;
+  /* Left edge of today → gutter; sit on top of the line, connected at bottom. */
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  width: auto;
+  max-width: var(--size-calendar-time-gutter);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-calendar-now-badge) var(--radius-calendar-now-badge) 0 0;
+  background: var(--color-ink);
+  padding: var(--spacing-calendar-now-badge-y) var(--spacing-calendar-now-badge-x);
+  font-size: var(--text-product-meta);
+  line-height: var(--text-product-meta--line-height);
+  font-weight: var(--text-product-meta--font-weight);
+  letter-spacing: var(--text-product-meta--letter-spacing);
+  color: var(--color-paper);
+  transform: translateY(-100%);
+  white-space: nowrap;
+}
+
+.planevo-rbc-now-indicator--extends-gutter .planevo-rbc-now-badge {
+  transform: translateY(-100%);
 }
 
 .planevo-rbc .rbc-slot-selection {
-  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
-  border: 1px solid var(--color-border-strong);
+  display: none;
+}
+
+.planevo-rbc .planevo-rbc-event--draft {
+  opacity: 0.96;
+  outline: 1px dashed
+    color-mix(in srgb, var(--planevo-rbc-event-accent) 45%, transparent);
+  outline-offset: -1px;
+}
+
+.planevo-rbc .planevo-rbc-event--past {
+  opacity: 0.72;
 }
 
 .planevo-rbc .rbc-addons-dnd-resizable {
@@ -1025,192 +1372,36 @@ body {
   display: none;
 }
 
+/* All-day band — compact when events exist. */
+.planevo-rbc .rbc-allday-cell {
+  height: auto;
+  min-height: var(--size-calendar-allday-band);
+}
+
+.planevo-rbc .rbc-allday-cell .rbc-row {
+  min-height: 1.25rem;
+}
+
+.planevo-rbc .rbc-allday-cell .rbc-row-bg {
+  min-height: var(--size-calendar-allday-band);
+}
+
+/*
+ * Empty all-day: RBC hardcodes minRows:2 (~40px phantom rows). Collapse fully
+ * so the day header sits on the timed grid (GCal density).
+ */
 .planevo-rbc--no-allday .rbc-allday-cell {
   display: none;
   min-height: 0;
+  height: 0;
+  overflow: hidden;
+  border: none;
+  margin: 0;
+  padding: 0;
 }
 
-/* react-big-calendar — month view */
 .planevo-calendar-grid-shell {
   border-radius: var(--radius-calendar-shell) var(--radius-calendar-shell) 0 0;
-}
-
-.planevo-rbc--month .rbc-month-view {
-  display: flex;
-  flex-direction: column;
-  border: none;
-  background: var(--color-calendar-grid);
-}
-
-.planevo-rbc--month .rbc-month-header .rbc-header {
-  padding: 0;
-  min-height: 0;
-  border: 0;
-  border-bottom: 1px solid var(--color-calendar-month-divider);
-  font-size: var(--text-calendar-day-weekday);
-  line-height: var(--text-calendar-day-weekday--line-height);
-  letter-spacing: var(--text-calendar-day-weekday--letter-spacing);
-  font-weight: var(--text-calendar-day-weekday--font-weight);
-  text-transform: uppercase;
-  color: var(--text-secondary, var(--color-text-secondary));
-  background: var(--color-calendar-grid);
-}
-
-.planevo-rbc--month .rbc-month-header .rbc-header + .rbc-header {
-  border-left: 1px solid var(--color-calendar-month-divider);
-}
-
-.planevo-rbc--month .rbc-month-row {
-  flex: 1 0 0;
-  min-height: var(--size-calendar-month-row-min);
-  border: 0;
-}
-
-.planevo-rbc--month .rbc-month-row + .rbc-month-row {
-  border-top: 1px solid var(--color-calendar-month-divider);
-}
-
-.planevo-rbc--month .rbc-row-content {
-  min-height: 0;
-}
-
-.planevo-rbc--month .rbc-date-cell {
-  padding: 0;
-  text-align: center;
-}
-
-.planevo-rbc--month .rbc-day-bg {
-  border: 0;
-}
-
-.planevo-rbc--month .rbc-day-bg + .rbc-day-bg {
-  border-left: 1px solid var(--color-calendar-month-divider);
-}
-
-.planevo-rbc--month .rbc-off-range-bg {
-  background: var(--color-calendar-month-outside-surface);
-}
-
-.planevo-rbc--month .rbc-today,
-.planevo-rbc--month .rbc-day-bg.rbc-today {
-  background: var(--color-calendar-grid);
-}
-
-.planevo-rbc--month .rbc-row-segment {
-  padding: 0 var(--spacing-calendar-month-row-gap);
-}
-
-.planevo-rbc--month .rbc-event {
-  border-radius: var(--radius-calendar-event);
-  padding: 0;
-  margin: 0;
-  font-size: var(--text-product-meta, 0.75rem);
-}
-
-.planevo-rbc--month .planevo-rbc-event {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--spacing-calendar-month-row-gap);
-  min-height: auto;
-  height: var(--size-calendar-month-event-row);
-  padding: 0 0.375rem;
-}
-
-.calendar-month-weekday-header {
-  display: flex;
-  min-height: var(--size-calendar-month-weekday-header);
-  align-items: center;
-  justify-content: center;
-}
-
-.calendar-month-date-cell {
-  display: flex;
-  justify-content: center;
-  padding: var(--spacing-calendar-month-cell-padding) var(--spacing-calendar-month-cell-padding) 0;
-}
-
-/* Month item semantics: transparent timed rows, filled spanning bars, neutral tasks. */
-.planevo-rbc--month .planevo-rbc-event--month-timed {
-  border-left-width: 0;
-  background: transparent;
-}
-
-.planevo-rbc--month .calendar-month-event-dot {
-  width: var(--size-calendar-month-event-dot);
-  height: var(--size-calendar-month-event-dot);
-  flex: 0 0 var(--size-calendar-month-event-dot);
-  border-radius: var(--radius-calendar-control);
-  background: var(--planevo-rbc-event-accent);
-}
-
-.planevo-rbc--month .planevo-rbc-event--month-bar {
-  background: var(--planevo-rbc-event-bg);
-  border-left-color: var(--planevo-rbc-event-accent);
-}
-
-.planevo-rbc--month .planevo-rbc-event--month-task {
-  border-left-width: 0;
-  background: transparent;
-}
-
-.planevo-rbc--month .planevo-rbc-event--month-task-completed {
-  opacity: 0.72;
-}
-
-.calendar-month-task-checkbox {
-  display: flex;
-  width: var(--size-calendar-month-task-checkbox);
-  height: var(--size-calendar-month-task-checkbox);
-  flex: 0 0 var(--size-calendar-month-task-checkbox);
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-calendar-event);
-}
-
-.calendar-month-task-check-icon {
-  width: calc(var(--size-calendar-month-task-checkbox) * 0.625);
-  height: calc(var(--size-calendar-month-task-checkbox) * 0.625);
-}
-
-.planevo-rbc--month .rbc-event-content {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.25rem;
-  overflow: hidden;
-  white-space: nowrap;
-  width: 100%;
-}
-
-.planevo-rbc--month .rbc-show-more {
-  font-size: var(--text-product-meta, 0.75rem);
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  background: transparent;
-  padding: 0 var(--spacing-calendar-month-row-gap);
-  margin-top: var(--spacing-calendar-month-row-gap);
-}
-
-.planevo-rbc--month .rbc-show-more:hover,
-.planevo-rbc--month .rbc-show-more:focus-visible {
-  text-decoration: underline;
-  color: var(--color-ink);
-}
-
-.planevo-rbc--month .rbc-overlay {
-  border-radius: var(--radius-calendar-shell);
-  border: 1px solid var(--color-border);
-  background: var(--color-paper);
-  box-shadow: var(--shadow-spotlight);
-  padding: 0.5rem;
-}
-
-.planevo-rbc--month .rbc-overlay-header {
-  border-bottom: 1px solid var(--color-border);
-  margin: -0.5rem -0.5rem 0.5rem;
-  padding: 0.5rem 0.75rem;
-  font-weight: 500;
-  color: var(--color-ink);
 }
 
 .calendar-month-agenda-panel {
@@ -1226,8 +1417,322 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Month grid — CSS Grid engine.
+
+   The body is a grid of `1fr` week rows. Those tracks cannot sum past the
+   container's height, so the month always fits: it can never scroll the page
+   and can never spill a column past its right edge. How many items each cell
+   shows is measured back out of that geometry by use-month-capacity.
+   --------------------------------------------------------------------------- */
+
+.calendar-month-grid {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-calendar-grid);
+  border-radius: var(--radius-calendar-shell) var(--radius-calendar-shell) 0 0;
+}
+
+.calendar-month-head {
+  flex: 0 0 auto;
+}
+
+.calendar-month-body {
+  display: grid;
+  flex: 1 1 0;
+  min-height: 0;
+  /* grid-template-rows is set inline from the rendered week count (5 or 6). */
+}
+
+.calendar-month-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-month-weekday-row {
+  min-height: var(--size-calendar-month-weekday-header);
+  border-bottom: 1px solid var(--color-calendar-month-divider);
+}
+
+.calendar-month-weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-calendar-day-weekday);
+  line-height: var(--text-calendar-day-weekday--line-height);
+  letter-spacing: var(--text-calendar-day-weekday--letter-spacing);
+  font-weight: var(--text-calendar-day-weekday--font-weight);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.calendar-month-week {
+  position: relative;
+  min-height: 0;
+}
+
+.calendar-month-week + .calendar-month-week {
+  border-top: 1px solid var(--color-calendar-month-divider);
+}
+
+/* Day cell */
+
+.calendar-month-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--spacing-calendar-month-cell-padding);
+  cursor: pointer;
+  outline: none;
+}
+
+.calendar-month-cell + .calendar-month-cell {
+  border-left: 1px solid var(--color-calendar-month-divider);
+}
+
+.calendar-month-cell:focus-visible {
+  outline: 2px solid var(--color-calendar-month-today-ring);
+  outline-offset: -2px;
+}
+
+.calendar-month-cell--outside {
+  background: var(--color-calendar-month-outside-surface);
+}
+
+.calendar-month-cell--past {
+  background: var(--color-calendar-month-past-surface);
+}
+
+.calendar-month-cell-date {
+  display: flex;
+  flex: 0 0 var(--size-calendar-month-date-header);
+  align-items: center;
+  justify-content: center;
+  height: var(--size-calendar-month-date-header);
+}
+
+.calendar-month-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-calendar-month-date-header);
+  height: var(--size-calendar-month-date-header);
+  border-radius: var(--radius-calendar-control);
+  font-size: var(--text-calendar-month-date);
+  line-height: var(--text-calendar-month-date--line-height);
+  font-weight: var(--text-calendar-month-date--font-weight);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-month-date--today {
+  background: var(--color-calendar-today-disc);
+  color: var(--color-calendar-today-disc-foreground);
+}
+
+.calendar-month-date--past {
+  color: var(--color-calendar-month-past-date-text);
+}
+
+.calendar-month-cell-stack {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Blank rows holding the bar overlay's lanes clear of the chip stack. */
+.calendar-month-lane-spacer {
+  flex: 0 0 var(--size-calendar-month-event-row);
+  height: var(--size-calendar-month-event-row);
+}
+
+/* Multi-day bars */
+
+.calendar-month-bar-layer {
+  position: absolute;
+  top: calc(
+    var(--spacing-calendar-month-cell-padding) +
+      var(--size-calendar-month-date-header)
+  );
+  right: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: var(--size-calendar-month-event-row);
+  pointer-events: none;
+}
+
+.calendar-month-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--size-calendar-month-event-row);
+  margin-inline: var(--spacing-calendar-month-bar-inset);
+  border-radius: var(--radius-calendar-event);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.calendar-month-bar-body {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--spacing-calendar-month-chip-gap);
+  min-width: 0;
+  height: 100%;
+  padding-inline: var(--spacing-calendar-month-chip-inline);
+  text-align: left;
+}
+
+/* Edge grips for extending or shortening a run. Deliberately narrow so the
+   bar itself stays the larger target for moving the whole event. */
+.calendar-month-bar-handle {
+  flex: 0 0 var(--size-calendar-month-bar-grip);
+  align-self: stretch;
+  width: var(--size-calendar-month-bar-grip);
+  cursor: ew-resize;
+}
+
+.calendar-month-cell--drop-target {
+  background: var(--color-calendar-month-drop-target);
+  box-shadow: inset 0 0 0 1px var(--color-calendar-month-drag-ghost-border);
+}
+
+/* Source stays put while DragOverlay carries the visible clone. */
+.calendar-month-chip--dragging,
+.calendar-month-bar--dragging {
+  opacity: 0.4;
+}
+
+.calendar-month-drag-ghost {
+  pointer-events: none;
+  box-shadow: var(--shadow-spotlight);
+  border: 1px solid var(--color-calendar-month-drag-ghost-border);
+  border-radius: var(--radius-calendar-event);
+  cursor: grabbing;
+}
+
+.calendar-month-drag-ghost.calendar-month-bar {
+  border-style: solid;
+}
+
+.calendar-month-drag-ghost--resize {
+  opacity: 0.9;
+}
+
+/* A squared edge with no inset reads as "this run carries on past the row". */
+.calendar-month-bar--continues-before {
+  margin-inline-start: 0;
+  border-start-start-radius: var(--radius-calendar-month-bar-continuation);
+  border-end-start-radius: var(--radius-calendar-month-bar-continuation);
+}
+
+.calendar-month-bar--continues-after {
+  margin-inline-end: 0;
+  border-start-end-radius: var(--radius-calendar-month-bar-continuation);
+  border-end-end-radius: var(--radius-calendar-month-bar-continuation);
+}
+
+.calendar-month-bar-edge {
+  flex: 0 0 var(--size-calendar-month-bar-edge);
+  width: var(--size-calendar-month-bar-edge);
+  height: 0.75rem;
+  border-radius: var(--radius-calendar-control);
+}
+
+.calendar-month-bar--continues-before .calendar-month-bar-edge {
+  display: none;
+}
+
+.calendar-month-bar-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-product-meta);
+  font-weight: 500;
+  color: var(--color-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Single-day chips */
+
+.calendar-month-chip {
+  display: flex;
+  flex: 0 0 var(--size-calendar-month-event-row);
+  align-items: center;
+  gap: var(--spacing-calendar-month-chip-gap);
+  width: 100%;
+  min-width: 0;
+  height: var(--size-calendar-month-event-row);
+  padding-inline: var(--spacing-calendar-month-chip-inline);
+  border-radius: var(--radius-calendar-event);
+  background: transparent;
+  text-align: left;
+}
+
+.calendar-month-chip--event:hover,
+.calendar-month-chip--event:focus-visible {
+  background: var(--color-surface-raised);
+}
+
+.calendar-month-chip-dot {
+  flex: 0 0 var(--size-calendar-month-event-dot);
+  width: var(--size-calendar-month-event-dot);
+  height: var(--size-calendar-month-event-dot);
+  border-radius: var(--radius-calendar-control);
+}
+
+.calendar-month-chip-time {
+  flex: 0 0 auto;
+  font-size: var(--text-product-meta);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-month-chip-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-product-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-month-chip-synced {
+  flex: 0 0 auto;
+  font-size: var(--text-product-meta);
+  color: var(--color-text-secondary);
+}
+
+.calendar-month-overflow {
+  flex: 0 0 var(--size-calendar-month-event-row);
+  height: var(--size-calendar-month-event-row);
+  padding-inline: var(--spacing-calendar-month-chip-inline);
+  border-radius: var(--radius-calendar-event);
+  font-size: var(--text-calendar-month-overflow-link);
+  line-height: var(--text-calendar-month-overflow-link--line-height);
+  font-weight: var(--text-calendar-month-overflow-link--font-weight);
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.calendar-month-overflow:hover,
+.calendar-month-overflow:focus-visible {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
 .planevo-rbc .rbc-time-content {
   border-top: none;
+  overflow-x: visible;
+  background-color: var(--color-calendar-grid);
 }
 
 .planevo-rbc .rbc-time-content > * + * > * {
@@ -1237,5 +1742,6 @@ body {
 .planevo-rbc .rbc-time-view-resources .rbc-time-gutter,
 .planevo-rbc .rbc-time-view-resources .rbc-time-header-gutter {
   border-right: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
+  background-color: var(--color-calendar-grid);
 }
+

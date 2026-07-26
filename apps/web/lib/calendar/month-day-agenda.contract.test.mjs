@@ -27,7 +27,7 @@ test("Month cell double-click dispatches the selected day", () => {
 })
 
 test("Month components wire both explicit Day entry points to their dispatch contracts", async () => {
-  const [agendaSource, gridSource] = await Promise.all([
+  const [agendaSource, cellSource] = await Promise.all([
     readFile(
       new URL(
         "../../features/calendar-product/month-day-agenda-popover.tsx",
@@ -37,7 +37,7 @@ test("Month components wire both explicit Day entry points to their dispatch con
     ),
     readFile(
       new URL(
-        "../../features/calendar-product/calendar-grid-engine.tsx",
+        "../../features/calendar-product/month-day-cell.tsx",
         import.meta.url,
       ),
       "utf8",
@@ -45,24 +45,25 @@ test("Month components wire both explicit Day entry points to their dispatch con
   ])
 
   assert.match(agendaSource, /openMonthDayFromAgenda\(date, onOpenDay\)/)
-  assert.match(gridSource, /openMonthDayFromCell\(value, onOpenDay\)/)
+  assert.match(cellSource, /openMonthDayFromCell\(date, onOpenDay\)/)
+  assert.match(cellSource, /onDoubleClick=/)
 })
 
-test("Month overflow restores focus to its containing day cell", async () => {
-  const gridSource = await readFile(
+test("Month overflow anchors the agenda to a real element, never a fallback", async () => {
+  const cellSource = await readFile(
     new URL(
-      "../../features/calendar-product/calendar-grid-engine.tsx",
+      "../../features/calendar-product/month-day-cell.tsx",
       import.meta.url,
     ),
     "utf8",
   )
-  const showMoreSource = gridSource.slice(
-    gridSource.indexOf("const handleShowMore"),
-    gridSource.indexOf("const monthComponents"),
-  )
 
-  assert.match(showMoreSource, /cell instanceof HTMLElement \? cell : document\.body/)
-  assert.doesNotMatch(showMoreSource, /document\.activeElement/)
+  // The overflow trigger and the cell both hand their own element to the
+  // agenda, so focus returns exactly where it left rather than to the body.
+  assert.match(cellSource, /onOpenAgenda\(date, event\.currentTarget\)/)
+  assert.match(cellSource, /aria-label=\{`\$\{overflowCount\} more events`\}/)
+  assert.doesNotMatch(cellSource, /document\.body/)
+  assert.doesNotMatch(cellSource, /document\.activeElement/)
 })
 
 test("desktop agenda clamps against its rendered dimensions", () => {

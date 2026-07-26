@@ -4,10 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createDatabase } from "@planevo/core/mutations/create-database";
-import {
-  deleteFileSource,
-  updateFileTags,
-} from "@planevo/core/mutations/product-files";
+import { updateFileTags } from "@planevo/core/mutations/product-files";
 // core moveFolder exists for folder reparent-by-drag but is intentionally not wired in v1.
 import {
   createFolder,
@@ -16,8 +13,14 @@ import {
   setFileFolder,
 } from "@planevo/core/mutations/file-folders";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
-import { requireDataAccess, requireMutationDataAccess } from "@/lib/data/access";
-import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server";
+import {
+  requireDataAccess,
+  requireMutationDataAccess,
+} from "@/lib/data/access";
+import {
+  enforceRateLimit,
+  RATE_LIMITS,
+} from "@/lib/security/rate-limit.server";
 import { createDocumentPage } from "@/lib/mutations/create-foundations";
 import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
 import {
@@ -25,6 +28,7 @@ import {
   deleteError,
   isVirtualStoragePath,
   removeStorageObject,
+  removeStorageObjects,
   type DeleteResult,
 } from "@/lib/mutations/delete-entities";
 
@@ -53,6 +57,12 @@ const updateTagsSchema = z.object({
 
 const documentTitleSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
+});
+
+const importDocumentSchema = z.object({
+  sourceFileId: z.string().uuid(),
+  title: z.string().trim().min(1).max(200),
+  text: z.string().max(1_000_000),
 });
 
 const createFolderSchema = z.object({
@@ -114,7 +124,12 @@ export async function renameFolderAction(input: {
     if (!parsed.success) {
       return { ok: false, error: "Enter a folder name up to 80 characters." };
     }
-    await renameFolder(access.client, access.ownerId, parsed.data.folderId, parsed.data.name);
+    await renameFolder(
+      access.client,
+      access.ownerId,
+      parsed.data.folderId,
+      parsed.data.name,
+    );
     revalidatePath("/files");
     revalidatePath("/", "layout");
     return { ok: true, data: undefined };
@@ -162,7 +177,12 @@ export async function moveFileToFolderAction(input: {
     if (!parsed.success) {
       return { ok: false, error: "Choose valid files and a folder." };
     }
-    await setFileFolder(access.client, access.ownerId, parsed.data.fileIds, parsed.data.folderId);
+    await setFileFolder(
+      access.client,
+      access.ownerId,
+      parsed.data.fileIds,
+      parsed.data.folderId,
+    );
     revalidatePath("/files");
     return { ok: true, data: undefined };
   } catch (cause) {
@@ -207,12 +227,18 @@ export async function createProductDocumentAction(input?: {
     await enforceRateLimit(access, "files:doc-create", RATE_LIMITS.mutate);
     const current = await getCurrentWorkspace();
     if (!current || current.access.ownerId !== access.ownerId) {
-      return { ok: false, error: "Open a workspace before creating a document." };
+      return {
+        ok: false,
+        error: "Open a workspace before creating a document.",
+      };
     }
 
     const parsed = documentTitleSchema.safeParse(input ?? {});
     if (!parsed.success) {
-      return { ok: false, error: "Enter a document title up to 200 characters." };
+      return {
+        ok: false,
+        error: "Enter a document title up to 200 characters.",
+      };
     }
 
     const title = parsed.data.title?.trim() || "Untitled";
@@ -248,6 +274,94 @@ export async function createProductDocumentAction(input?: {
     return { ok: true, data: { fileSourceId: fileRow.id } };
   } catch (cause) {
     return filesActionError(cause, "Could not create the document.");
+  }
+}
+
+export async function importProductDocumentAction(input: {
+  sourceFileId: string;
+  title: string;
+  text: string;
+}): Promise<FilesActionResult<{ fileSourceId: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "files:doc-import", RATE_LIMITS.mutate);
+    const parsed = importDocumentSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "The document is too large or could not be imported.",
+      };
+    }
+    const { data: source, error: sourceError } = await access.client
+      .from("file_sources")
+      .select("id")
+      .eq("id", parsed.data.sourceFileId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle();
+    if (sourceError) throw sourceError;
+    if (!source) return { ok: false, error: "The source file was not found." };
+
+    const current = await getCurrentWorkspace();
+    if (!current || current.access.ownerId !== access.ownerId) {
+      return {
+        ok: false,
+        error: "Open a workspace before importing a document.",
+      };
+    }
+    const document = await createDocumentPage({
+      workspaceId: current.workspace.id,
+      title: parsed.data.title,
+    });
+    const blocks = parsed.data.text
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .slice(0, 5000)
+      .map((paragraph) => ({
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            text: paragraph,
+            styles: {},
+          },
+        ],
+      }));
+    const { error: contentError } = await access.client
+      .from("pages")
+      .update({ content_json: blocks })
+      .eq("id", document.pageId);
+    if (contentError) throw contentError;
+
+    const { data: fileRow, error } = await access.client
+      .from("file_sources")
+      .insert({
+        workspace_id: current.workspace.id,
+        page_id: document.pageId,
+        created_by: access.ownerId,
+        user_id: access.ownerId,
+        storage_path: `page:${document.pageId}`,
+        name: parsed.data.title,
+        mime_type: "application/x-planevo-page",
+        ingestion_status: "ready",
+        metadata_json: {
+          source_kind: "product-document",
+          imported_from_file_source_id: source.id,
+        },
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    await linkResourceToWorkspace(access.client, access.ownerId, {
+      workspaceId: current.workspace.id,
+      resourceType: "file",
+      resourceId: fileRow.id,
+    });
+    revalidatePath("/files");
+    revalidatePath("/", "layout");
+    return { ok: true, data: { fileSourceId: fileRow.id } };
+  } catch (cause) {
+    return filesActionError(cause, "Could not import the document.");
   }
 }
 
@@ -312,7 +426,9 @@ export async function loadFileLinkTargetsAction(input: {
       ok: true,
       data: {
         tasks: (tasks.data ?? [])
-          .filter((task) => task.status !== "done" && task.status !== "cancelled")
+          .filter(
+            (task) => task.status !== "done" && task.status !== "cancelled",
+          )
           .map((task) => ({ id: task.id, title: task.title })),
         events: (events.data ?? []).map((event) => ({
           id: event.id,
@@ -341,25 +457,37 @@ export async function deleteProductFileAction(input: {
       return { ok: false, error: "Choose a valid file." };
     }
 
-    // Storage first: re-deleting a missing object is a no-op, so a failure
-    // between the two steps stays retryable from the UI.
-    const { data: file, error } = await access.client
-      .from("file_sources")
-      .select("storage_path, workspace_id")
-      .eq("id", parsed.data.fileSourceId)
-      .eq("user_id", access.ownerId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!file) return { ok: false, error: "File not found." };
-
-    await removeStorageObject(access, file.storage_path);
-    await deleteFileSource(access.client, access.ownerId, parsed.data.fileSourceId);
-    // Drop the polymorphic recent_items pointer so no "recent" entry dangles.
-    await clearRecentItems(access, {
-      workspaceId: file.workspace_id,
-      targetType: "file",
-      targetId: parsed.data.fileSourceId,
+    const { data, error } = await access.client.rpc("delete_file_document", {
+      p_owner_id: access.ownerId,
+      p_file_source_id: parsed.data.fileSourceId,
     });
+    if (error) throw error;
+    const deletion = data as {
+      cleanupJobId?: unknown;
+      storagePaths?: unknown;
+    } | null;
+    const cleanupJobId =
+      typeof deletion?.cleanupJobId === "string" ? deletion.cleanupJobId : null;
+    const storagePaths = Array.isArray(deletion?.storagePaths)
+      ? deletion.storagePaths.filter(
+          (path): path is string => typeof path === "string",
+        )
+      : [];
+
+    if (cleanupJobId && storagePaths.length > 0) {
+      try {
+        await removeStorageObjects(access, storagePaths);
+      } catch (cleanupCause) {
+        console.warn("[files:delete] storage cleanup queued", {
+          fileSourceId: parsed.data.fileSourceId,
+          cleanupJobId,
+          message:
+            cleanupCause instanceof Error
+              ? cleanupCause.message
+              : "Unknown storage cleanup error",
+        });
+      }
+    }
     revalidatePath("/files");
     return { ok: true, data: undefined };
   } catch (cause) {

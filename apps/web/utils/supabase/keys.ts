@@ -102,6 +102,18 @@ export function hasSupabaseServerSecretKey(): boolean {
   }
 }
 
+/**
+ * Auth Admin API (`auth.admin.*`) is most reliable with the legacy service_role
+ * JWT. New `sb_secret_*` keys can intermittently return `bad_jwt` under load.
+ */
+export function getSupabaseAuthAdminKey(): string {
+  const serviceRole = trimEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (serviceRole && looksLikeServiceRoleJwt(serviceRole)) {
+    return serviceRole;
+  }
+  return getSupabaseServerSecretKey();
+}
+
 export function getSupabasePublicConfig(): { url: string; key: string } {
   return {
     url: getSupabaseUrl(),

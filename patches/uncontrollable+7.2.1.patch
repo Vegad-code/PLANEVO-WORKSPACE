@@ -1,0 +1,52 @@
+diff --git a/node_modules/uncontrollable/lib/cjs/uncontrollable.js b/node_modules/uncontrollable/lib/cjs/uncontrollable.js
+index 2346bc5..e4bd101 100644
+--- a/node_modules/uncontrollable/lib/cjs/uncontrollable.js
++++ b/node_modules/uncontrollable/lib/cjs/uncontrollable.js
+@@ -21,7 +21,6 @@ var _invariant = _interopRequireDefault(require("invariant"));
+ 
+ var Utils = _interopRequireWildcard(require("./utils"));
+ 
+-var _jsxFileName = "/Users/jquense/src/uncontrollable/src/uncontrollable.js";
+ 
+ function uncontrollable(Component, controlledValues, methods) {
+   if (methods === void 0) {
+@@ -163,12 +162,7 @@ function uncontrollable(Component, controlledValues, methods) {
+   if (_react.default.forwardRef) {
+     WrappedComponent = _react.default.forwardRef(function (props, ref) {
+       return _react.default.createElement(UncontrolledComponent, (0, _extends3.default)({}, props, {
+-        innerRef: ref,
+-        __source: {
+-          fileName: _jsxFileName,
+-          lineNumber: 128
+-        },
+-        __self: this
++        innerRef: ref
+       }));
+     });
+     WrappedComponent.propTypes = UncontrolledComponent.propTypes;
+diff --git a/node_modules/uncontrollable/lib/esm/uncontrollable.js b/node_modules/uncontrollable/lib/esm/uncontrollable.js
+index f5f01ce..013d3a0 100644
+--- a/node_modules/uncontrollable/lib/esm/uncontrollable.js
++++ b/node_modules/uncontrollable/lib/esm/uncontrollable.js
+@@ -1,7 +1,6 @@
+ import _objectWithoutPropertiesLoose from "@babel/runtime/helpers/esm/objectWithoutPropertiesLoose";
+ import _extends from "@babel/runtime/helpers/esm/extends";
+ import _inheritsLoose from "@babel/runtime/helpers/esm/inheritsLoose";
+-var _jsxFileName = "/Users/jquense/src/uncontrollable/src/uncontrollable.js";
+ import React from 'react';
+ import { polyfill } from 'react-lifecycles-compat';
+ import invariant from 'invariant';
+@@ -147,12 +146,7 @@ export default function uncontrollable(Component, controlledValues, methods) {
+   if (React.forwardRef) {
+     WrappedComponent = React.forwardRef(function (props, ref) {
+       return React.createElement(UncontrolledComponent, _extends({}, props, {
+-        innerRef: ref,
+-        __source: {
+-          fileName: _jsxFileName,
+-          lineNumber: 128
+-        },
+-        __self: this
++        innerRef: ref
+       }));
+     });
+     WrappedComponent.propTypes = UncontrolledComponent.propTypes;

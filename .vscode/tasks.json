@@ -1,0 +1,79 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/web"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/web"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "start",
+      "type": "shell",
+      "command": "npm run start",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/web"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "lint",
+      "type": "shell",
+      "command": "npm run lint",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/web"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "test",
+      "type": "shell",
+      "command": "npm run test",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/web"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "test (workspace)",
+      "type": "shell",
+      "command": "npm test",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "test:rls",
+      "type": "shell",
+      "command": "npm run test:rls",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

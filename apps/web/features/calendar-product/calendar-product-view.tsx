@@ -1,15 +1,22 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { PanelLeft } from "lucide-react"
+import { HotkeysProvider } from "react-hotkeys-hook"
 import type { CalendarColor, CalendarEventRow } from "@planevo/core/types/calendar"
 import { toast } from "@/components/ui/toast"
 import { useSidebarLayout } from "@/features/shell/sidebar-layout-context"
+import { centeredAnchorRectFromElement } from "@/lib/calendar/event-popover-position"
+import { draftCreateCardAnchorRect } from "@/lib/calendar/event-popover-anchor"
+import type { DraftCreateEventState } from "@/lib/calendar/rbc-event-adapter"
+import { CALENDAR_HOTKEY_SCOPE } from "@/lib/calendar/calendar-shortcut-map"
 import { startOfWeekSunday } from "@/lib/calendar/calendar-navigation"
 import {
   DEFAULT_PLANNING_WIDTH,
+  getPlanningCollapsed,
   getPlanningWidth,
+  setPlanningCollapsed,
 } from "@/lib/calendar/planning-prefs"
 import {
   getCalendarScope,
@@ -22,27 +29,35 @@ import { cn } from "@/lib/utils"
 import {
   createCalendarAction,
   createCalendarEventAction,
+  deleteCalendarEventAction,
   quickAddTaskAction,
   scheduleTaskFromDragAction,
   setTaskStatusAction,
   toggleCalendarVisibilityAction,
+  updateCalendarEventAction,
   updateEventTimesAction,
 } from "@/app/(workspace)/calendar/actions"
+import { EventDetailPopover } from "./event-detail-popover"
 import { CalendarDndContext } from "./calendar-dnd-context"
+import { useMonthMutations } from "./use-month-mutations"
 import { CalendarGridEngine } from "./calendar-grid-engine"
 import { CalendarPlanningSidebar } from "./calendar-planning-sidebar"
 import { CalendarResizeHandle } from "./calendar-resize-handle"
+import { CalendarShortcutsCheatSheet } from "./calendar-shortcuts-cheat-sheet"
 import { CalendarToolbar } from "./calendar-toolbar"
-import { CreateEventPopover, type CreateEventInput } from "./create-event-popover"
+import {
+  EventDetailPanel,
+  type EventPanelSavePayload,
+} from "./event-detail-panel"
 import {
   EventCrossLinkDialogs,
   type EventCrossLinkPanel,
 } from "./event-cross-links"
-import { EventPeek } from "./event-peek"
 import {
   useCalendarData,
   useInvalidateCalendarData,
 } from "./use-calendar-data"
+import { useCalendarHotkeys } from "./use-calendar-hotkeys"
 import { useCalendarNavigation } from "./use-calendar-navigation"
 import { YearView } from "./year-view"
 import { CalendarViewTransition } from "./calendar-view-transition"
@@ -52,17 +67,38 @@ type CalendarProductViewProps = {
   workspaceId: string | null
 }
 
-type SelectedEvent = {
-  event: CalendarEventRow
-  anchor: HTMLElement
-}
+type EventPanelState =
+  | {
+      mode: "create"
+      /**
+       * Identifies one create session. The panel echoes its times back up
+       * through `onDraftChange`, so anything derived from `startsAt` — the
+       * popover key, the panel's form seed — would remount and wipe the form
+       * on every edit. Those both key off this instead, which only changes
+       * when a genuinely new create starts.
+       */
+      sessionId: string
+      startsAt: string
+      endsAt: string
+      anchorRect: DOMRect
+    }
+  | { mode: "edit"; eventId: string; anchorRect: DOMRect }
+  | null
 
 const PLANNING_TOGGLE_TRANSITION = {
   duration: 0.15,
   ease: [0.16, 1, 0.3, 1] as const,
 }
 
-export function CalendarProductView({
+export function CalendarProductView(props: CalendarProductViewProps) {
+  return (
+    <HotkeysProvider initiallyActiveScopes={[CALENDAR_HOTKEY_SCOPE]}>
+      <CalendarProductViewInner {...props} />
+    </HotkeysProvider>
+  )
+}
+
+function CalendarProductViewInner({
   initialScope,
   workspaceId,
 }: CalendarProductViewProps) {
@@ -85,15 +121,23 @@ export function CalendarProductView({
   } = useCalendarNavigation(initialScope)
   const calendarQuery = useCalendarData(scope, view, anchorDate)
   const [now, setNow] = useState(() => new Date())
-  const [selectedEvent, setSelectedEvent] = useState<SelectedEvent | null>(null)
+  const [eventPanel, setEventPanel] = useState<EventPanelState>(null)
+  const [eventPanelDirty, setEventPanelDirty] = useState(false)
+  const [draftCreateEvent, setDraftCreateEvent] =
+    useState<DraftCreateEventState | null>(null)
   const [crossLinkPanel, setCrossLinkPanel] =
     useState<EventCrossLinkPanel | null>(null)
-  const [createSlot, setCreateSlot] = useState<Date | null>(null)
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false)
   const [planningDrawerOpen, setPlanningDrawerOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [planningWidth, setPlanningWidthState] = useState(DEFAULT_PLANNING_WIDTH)
   const [isPlanningResizing, setIsPlanningResizing] = useState(false)
-  const [planningWidthRestored, setPlanningWidthRestored] = useState(false)
+  const [planningPrefsRestored, setPlanningPrefsRestored] = useState(false)
+  // Enter/exit chrome motion only after restore has painted — otherwise the
+  // "Show agenda" control fades in on every refresh when the rail was closed.
+  const [planningChromeMotionReady, setPlanningChromeMotionReady] =
+    useState(false)
+  const gridContainerRef = useRef<HTMLDivElement>(null)
 
   const calendars = calendarQuery.data?.calendars ?? []
   const events = calendarQuery.data?.events ?? []
@@ -107,10 +151,23 @@ export function CalendarProductView({
     return () => window.clearInterval(timer)
   }, [])
 
-  useEffect(() => {
+  // Restore before paint, then mount the rail at the saved width. Mounting only
+  // after restore avoids Framer springing open→closed on every refresh.
+  useLayoutEffect(() => {
+    setSidebarCollapsed(getPlanningCollapsed())
     setPlanningWidthState(getPlanningWidth())
-    setPlanningWidthRestored(true)
+    setPlanningPrefsRestored(true)
   }, [])
+
+  useEffect(() => {
+    if (!planningPrefsRestored) return
+    setPlanningChromeMotionReady(true)
+  }, [planningPrefsRestored])
+
+  useEffect(() => {
+    if (!planningPrefsRestored) return
+    setPlanningCollapsed(sidebarCollapsed)
+  }, [planningPrefsRestored, sidebarCollapsed])
 
   useEffect(() => {
     const storedScope = getCalendarScope()
@@ -160,17 +217,190 @@ export function CalendarProductView({
     })
   }
 
-  function handleCreateEvent(input: CreateEventInput) {
-    startTransition(async () => {
-      const result = await createCalendarEventAction(input)
-      if (!result.ok) {
-        toast(result.error, { tone: "error" })
+  const closeEventPanel = useCallback(
+    (options?: { force?: boolean }) => {
+      // Create flow matches Google Calendar: Escape / outside click / Cancel
+      // always discards the draft with no confirm prompt.
+      const isCreate = eventPanel?.mode === "create"
+      if (
+        !options?.force &&
+        !isCreate &&
+        eventPanelDirty &&
+        !window.confirm("Discard unsaved changes?")
+      ) {
         return
       }
-      setCreateSlot(null)
-      toast("Event created")
+      setEventPanel(null)
+      setEventPanelDirty(false)
+      setCrossLinkPanel(null)
+      setDraftCreateEvent(null)
+    },
+    [eventPanel?.mode, eventPanelDirty],
+  )
+
+  function resolveFallbackAnchorRect(): DOMRect {
+    if (gridContainerRef.current) {
+      return centeredAnchorRectFromElement(gridContainerRef.current)
+    }
+    return new DOMRect(
+      window.innerWidth / 2 - 80,
+      window.innerHeight / 2 - 24,
+      160,
+      48,
+    )
+  }
+
+  const handleDraftSelecting = useCallback(
+    (range: { startsAt: Date; endsAt: Date }) => {
+      setDraftCreateEvent((current) => ({
+        startsAt: range.startsAt.toISOString(),
+        endsAt: range.endsAt.toISOString(),
+        title: current?.title ?? "",
+        calendarId: current?.calendarId ?? calendars[0]?.id ?? "",
+      }))
+    },
+    [calendars],
+  )
+
+  function openCreateEventPanel(
+    range: { startsAt: Date; endsAt: Date },
+    anchorRect?: DOMRect,
+  ) {
+    if (eventPanelDirty && !window.confirm("Discard unsaved changes?")) return
+    setCrossLinkPanel(null)
+    const startsAt = range.startsAt.toISOString()
+    const endsAt = range.endsAt.toISOString()
+    setDraftCreateEvent((current) => ({
+      startsAt,
+      endsAt,
+      title: current?.title ?? "",
+      calendarId: current?.calendarId ?? calendars[0]?.id ?? "",
+    }))
+    setEventPanel({
+      mode: "create",
+      sessionId: crypto.randomUUID(),
+      startsAt,
+      endsAt,
+      anchorRect: anchorRect ?? resolveFallbackAnchorRect(),
+    })
+    setEventPanelDirty(false)
+  }
+
+  const handleDraftChange = useCallback(
+    (
+      payload: Pick<
+        EventPanelSavePayload,
+        "title" | "startsAt" | "endsAt" | "calendarId"
+      >,
+    ) => {
+      setDraftCreateEvent({
+        title: payload.title,
+        startsAt: payload.startsAt,
+        endsAt: payload.endsAt,
+        calendarId: payload.calendarId,
+      })
+      setEventPanel((current) =>
+        current?.mode === "create"
+          ? {
+              ...current,
+              startsAt: payload.startsAt,
+              endsAt: payload.endsAt,
+            }
+          : current,
+      )
+    },
+    [],
+  )
+
+  useLayoutEffect(() => {
+    if (eventPanel?.mode !== "create") return
+    const draftAnchor = draftCreateCardAnchorRect(gridContainerRef.current)
+    if (!draftAnchor) return
+    setEventPanel((current) => {
+      if (current?.mode !== "create") return current
+      const { anchorRect } = current
+      const same =
+        anchorRect.left === draftAnchor.left &&
+        anchorRect.top === draftAnchor.top &&
+        anchorRect.width === draftAnchor.width &&
+        anchorRect.height === draftAnchor.height
+      if (same) return current
+      return { ...current, anchorRect: draftAnchor }
+    })
+  }, [
+    eventPanel?.mode,
+    draftCreateEvent?.startsAt,
+    draftCreateEvent?.endsAt,
+    draftCreateEvent?.title,
+    draftCreateEvent?.calendarId,
+  ])
+
+  useEffect(() => {
+    if (view === "day" || view === "week") return
+    setDraftCreateEvent(null)
+  }, [view])
+
+  useEffect(() => {
+    if (!draftCreateEvent || eventPanel) return
+    const handleKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key !== "Escape") return
+      setDraftCreateEvent(null)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [draftCreateEvent, eventPanel])
+
+  function openEditEventPanel(event: CalendarEventRow, anchorRect: DOMRect) {
+    if (eventPanelDirty && !window.confirm("Discard unsaved changes?")) return
+    setCrossLinkPanel(null)
+    setDraftCreateEvent(null)
+    setEventPanel({ mode: "edit", eventId: event.id, anchorRect })
+    setEventPanelDirty(false)
+  }
+
+  function handleHotkeyCreateEvent(range: { startsAt: Date; endsAt: Date }) {
+    openCreateEventPanel(range, resolveFallbackAnchorRect())
+  }
+
+  function handleEventPanelSave(payload: EventPanelSavePayload) {
+    if (!eventPanel) return
+
+    startTransition(async () => {
+      if (eventPanel.mode === "create") {
+        const result = await createCalendarEventAction(payload)
+        if (!result.ok) {
+          toast(result.error, { tone: "error" })
+          return
+        }
+        toast("Event created")
+      } else {
+        const result = await updateCalendarEventAction({
+          eventId: eventPanel.eventId,
+          ...payload,
+        })
+        if (!result.ok) {
+          toast(result.error, { tone: "error" })
+          return
+        }
+        toast("Event saved")
+      }
+      setEventPanel(null)
+      setEventPanelDirty(false)
+      setDraftCreateEvent(null)
       invalidateCalendar(scope)
     })
+  }
+
+  async function handleEventPanelDelete(eventId: string) {
+    const result = await deleteCalendarEventAction({ eventId })
+    if (!result.ok) {
+      return { ok: false as const, error: result.error }
+    }
+    toast("Event deleted")
+    invalidateCalendar(scope)
+    return { ok: true as const }
   }
 
   function handleToggleTask(taskId: string, done: boolean) {
@@ -217,6 +447,12 @@ export function CalendarProductView({
     })
   }
 
+  const { applyMonthMove } = useMonthMutations({
+    scope,
+    anchor: anchorDate,
+    onSettled: () => invalidateCalendar(scope),
+  })
+
   function handleEventTimesChange(input: {
     eventId: string
     startsAt: string
@@ -233,11 +469,52 @@ export function CalendarProductView({
     })
   }
 
-  const selectedEventCalendar = selectedEvent
-    ? calendars.find(
-        (calendar) => calendar.id === selectedEvent.event.calendar_id,
-      ) ?? null
-    : null
+  const editingEvent =
+    eventPanel?.mode === "edit"
+      ? events.find((event) => event.id === eventPanel.eventId) ?? null
+      : null
+
+  const handleDismissOverlay = useCallback(() => {
+    if (crossLinkPanel) {
+      setCrossLinkPanel(null)
+      return true
+    }
+    if (eventPanel) {
+      closeEventPanel()
+      return true
+    }
+    if (planningDrawerOpen) {
+      setPlanningDrawerOpen(false)
+      return true
+    }
+    return false
+  }, [closeEventPanel, crossLinkPanel, eventPanel, planningDrawerOpen])
+
+  // Escape while the create/edit popover is open (title field focused, etc.).
+  // Calendar hotkeys stay disabled for other shortcuts so typing isn't stolen.
+  useEffect(() => {
+    if (!eventPanel) return
+    const handleKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key !== "Escape") return
+      if (keyEvent.defaultPrevented) return
+      keyEvent.preventDefault()
+      keyEvent.stopPropagation()
+      closeEventPanel()
+    }
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => window.removeEventListener("keydown", handleKeyDown, true)
+  }, [closeEventPanel, eventPanel])
+
+  useCalendarHotkeys({
+    now,
+    cheatSheetOpen,
+    enabled: !eventPanel,
+    onCheatSheetOpenChange: setCheatSheetOpen,
+    onViewChange: handleViewChange,
+    onNavigateToday: handleNavigateToday,
+    onCreateEvent: handleHotkeyCreateEvent,
+    onDismiss: handleDismissOverlay,
+  })
 
   const visibleWeekStart = startOfWeekSunday(anchorDate)
 
@@ -262,43 +539,48 @@ export function CalendarProductView({
     <section
       aria-labelledby="calendar-product-title"
       aria-busy={isPending || isFetchingNewRange}
-      className="flex h-full w-full flex-col bg-surface-raised"
+      className="flex h-full w-full flex-col bg-calendar-chrome"
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <CalendarDndContext onScheduleTask={handleScheduleTask}>
-          <motion.aside
-            initial={false}
-            animate={{ width: sidebarCollapsed ? 0 : planningWidth }}
-            transition={
-              isPlanningResizing || !planningWidthRestored
-                ? { duration: 0 }
-                : planningLayoutTransition
-            }
-            aria-hidden={sidebarCollapsed}
-            inert={sidebarCollapsed}
-            className={cn(
-              "hidden shrink-0 overflow-hidden bg-surface-raised lg:flex lg:flex-col",
-              sidebarCollapsed && "pointer-events-none",
-            )}
-          >
-            <div
-              className="relative flex h-full shrink-0 flex-col overflow-hidden"
-              style={{ width: planningWidth }}
+        <CalendarDndContext
+      onScheduleTask={handleScheduleTask}
+      onMonthMove={applyMonthMove}
+    >
+          {planningPrefsRestored ? (
+            <motion.aside
+              initial={{ width: sidebarCollapsed ? 0 : planningWidth }}
+              animate={{ width: sidebarCollapsed ? 0 : planningWidth }}
+              transition={
+                isPlanningResizing
+                  ? { duration: 0 }
+                  : planningLayoutTransition
+              }
+              aria-hidden={sidebarCollapsed}
+              inert={sidebarCollapsed}
+              className={cn(
+                "hidden shrink-0 overflow-hidden bg-calendar-chrome lg:flex lg:flex-col",
+                sidebarCollapsed && "pointer-events-none",
+              )}
             >
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {planningSidebar}
+              <div
+                className="relative flex h-full shrink-0 flex-col overflow-hidden"
+                style={{ width: planningWidth }}
+              >
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {planningSidebar}
+                </div>
+                <CalendarResizeHandle
+                  width={planningWidth}
+                  onWidthChange={handlePlanningWidthChange}
+                  onCollapse={() => setSidebarCollapsed(true)}
+                  onResizeStart={() => setIsPlanningResizing(true)}
+                  onResizeEnd={() => setIsPlanningResizing(false)}
+                />
               </div>
-              <CalendarResizeHandle
-                width={planningWidth}
-                onWidthChange={handlePlanningWidthChange}
-                onCollapse={() => setSidebarCollapsed(true)}
-                onResizeStart={() => setIsPlanningResizing(true)}
-                onResizeEnd={() => setIsPlanningResizing(false)}
-              />
-            </div>
-          </motion.aside>
+            </motion.aside>
+          ) : null}
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-raised">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-calendar-chrome">
             <div
               className={cn(
                 "shrink-0 pr-6 pt-5 pb-3",
@@ -310,14 +592,14 @@ export function CalendarProductView({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <AnimatePresence initial={false}>
-                    {sidebarCollapsed ? (
+                    {planningPrefsRestored && sidebarCollapsed ? (
                       <motion.button
                         key="show-planning"
                         type="button"
                         aria-label="Show agenda"
                         onClick={() => setSidebarCollapsed(false)}
                         initial={
-                          prefersReducedMotion
+                          prefersReducedMotion || !planningChromeMotionReady
                             ? false
                             : { opacity: 0, scale: 0.92 }
                         }
@@ -328,7 +610,7 @@ export function CalendarProductView({
                             : { opacity: 0, scale: 0.92 }
                         }
                         transition={
-                          prefersReducedMotion
+                          prefersReducedMotion || !planningChromeMotionReady
                             ? { duration: 0 }
                             : PLANNING_TOGGLE_TRANSITION
                         }
@@ -377,6 +659,7 @@ export function CalendarProductView({
               isFetchingNewRange={isFetchingNewRange}
               className="pt-2"
             >
+              <div ref={gridContainerRef} className="flex min-h-0 flex-1 flex-col">
               {view === "year" ? (
                 <YearView
                   year={anchorDate.getFullYear()}
@@ -392,15 +675,19 @@ export function CalendarProductView({
                   events={events}
                   taskDues={taskDues}
                   now={now}
-                  onSlotSelect={setCreateSlot}
-                  onEventSelect={(event, anchor) =>
-                    setSelectedEvent({ event, anchor })
-                  }
+                  draftCreateEvent={draftCreateEvent}
+                  onDraftSelecting={handleDraftSelecting}
+                  onSlotSelect={openCreateEventPanel}
+                  onEventSelect={openEditEventPanel}
                   onEventTimesChange={handleEventTimesChange}
                   onToggleTask={handleToggleTask}
                   onOpenDay={handleSelectDay}
+                  onNavigateMonth={(offset) =>
+                    offset > 0 ? handleNavigateNext() : handleNavigatePrevious()
+                  }
                 />
               )}
+              </div>
             </CalendarViewTransition>
           </div>
 
@@ -450,32 +737,68 @@ export function CalendarProductView({
         </CalendarDndContext>
       </div>
 
-      {createSlot ? (
-        <CreateEventPopover
-          slotStart={createSlot}
-          calendars={calendars}
-          onSubmit={handleCreateEvent}
-          onClose={() => setCreateSlot(null)}
-          isPending={isPending}
-        />
-      ) : null}
+      <CalendarShortcutsCheatSheet
+        open={cheatSheetOpen}
+        onClose={() => setCheatSheetOpen(false)}
+      />
 
-      {selectedEvent ? (
-        <EventPeek
-          key={selectedEvent.event.id}
-          event={selectedEvent.event}
-          calendar={selectedEventCalendar}
-          anchor={selectedEvent.anchor}
-          onClose={() => setSelectedEvent(null)}
-          onLinkTask={() => setCrossLinkPanel("task")}
-          onAttachFile={() => setCrossLinkPanel("files")}
-          onAddToWorkspace={() => setCrossLinkPanel("workspace")}
-        />
-      ) : null}
+      {/*
+        AnimatePresence stays mounted and the card is the conditional child —
+        mounting the two together gives it nothing to transition from, and the
+        popover sticks at its `initial` values (invisible) forever.
 
-      {selectedEvent && crossLinkPanel ? (
+        Two keys, deliberately different. The animated shell keys on the card's
+        identity only ("create", or the event being edited), so re-opening create
+        never hands AnimatePresence a new child mid-flight. The form inside keys
+        on the create session, which is how a genuinely new create resets the
+        fields: React remounting it, rather than an effect rewriting state.
+      */}
+      <AnimatePresence mode="wait">
+        {eventPanel ? (
+          <EventDetailPopover
+            key={eventPanel.mode === "create" ? "create" : eventPanel.eventId}
+            anchorRect={eventPanel.anchorRect}
+            mouseContainerRef={gridContainerRef}
+            onClose={() => closeEventPanel()}
+          >
+            <EventDetailPanel
+              key={
+                eventPanel.mode === "create"
+                  ? eventPanel.sessionId
+                  : eventPanel.eventId
+              }
+              mode={eventPanel.mode}
+              calendars={calendars}
+              event={editingEvent}
+              initialRange={
+                eventPanel.mode === "create"
+                  ? {
+                      startsAt: eventPanel.startsAt,
+                      endsAt: eventPanel.endsAt,
+                    }
+                  : undefined
+              }
+              onClose={closeEventPanel}
+              onSave={handleEventPanelSave}
+              onDelete={
+                eventPanel.mode === "edit" ? handleEventPanelDelete : undefined
+              }
+              onOpenCrossLink={
+                eventPanel.mode === "edit" ? setCrossLinkPanel : undefined
+              }
+              onDirtyChange={setEventPanelDirty}
+              onDraftChange={
+                eventPanel.mode === "create" ? handleDraftChange : undefined
+              }
+              isPending={isPending}
+            />
+          </EventDetailPopover>
+        ) : null}
+      </AnimatePresence>
+
+      {eventPanel?.mode === "edit" && crossLinkPanel ? (
         <EventCrossLinkDialogs
-          eventId={selectedEvent.event.id}
+          eventId={eventPanel.eventId}
           panel={crossLinkPanel}
           onClose={() => setCrossLinkPanel(null)}
           onMutationSuccess={() => invalidateCalendar(scope)}

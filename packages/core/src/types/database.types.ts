@@ -420,6 +420,48 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; user_id?: string; folder_id?: string | null; operation_key?: string | null; reservation_expires_at?: string | null; storage_path?: string; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      file_document_state: {
+        Row: { file_source_id: string; user_id: string; format: string; current_version: number; content_hash: string | null; indexed_version: number | null; last_checkpoint_at: string | null; encoding_json: Json; created_at: string; updated_at: string };
+        Insert: { file_source_id: string; user_id: string; format: string; current_version?: number; content_hash?: string | null; indexed_version?: number | null; last_checkpoint_at?: string | null; encoding_json?: Json; created_at?: string; updated_at?: string };
+        Update: { file_source_id?: string; user_id?: string; format?: string; current_version?: number; content_hash?: string | null; indexed_version?: number | null; last_checkpoint_at?: string | null; encoding_json?: Json; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      file_revisions: {
+        Row: { id: string; file_source_id: string; user_id: string; version: number; storage_path: string; size_bytes: number; content_hash: string | null; reason: string; created_at: string; expires_at: string };
+        Insert: { id?: string; file_source_id: string; user_id: string; version: number; storage_path: string; size_bytes?: number; content_hash?: string | null; reason?: string; created_at?: string; expires_at: string };
+        Update: { id?: string; file_source_id?: string; user_id?: string; version?: number; storage_path?: string; size_bytes?: number; content_hash?: string | null; reason?: string; created_at?: string; expires_at?: string };
+        Relationships: [];
+      };
+      file_notes: {
+        Row: { file_source_id: string; user_id: string; content: string; created_at: string; updated_at: string };
+        Insert: { file_source_id: string; user_id: string; content?: string; created_at?: string; updated_at?: string };
+        Update: { file_source_id?: string; user_id?: string; content?: string; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      file_comment_threads: {
+        Row: { id: string; file_source_id: string; user_id: string; anchor_json: Json; resolved_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; file_source_id: string; user_id: string; anchor_json?: Json; resolved_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; file_source_id?: string; user_id?: string; anchor_json?: Json; resolved_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      file_comments: {
+        Row: { id: string; thread_id: string; user_id: string; body: string; created_at: string; updated_at: string };
+        Insert: { id?: string; thread_id: string; user_id: string; body: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; thread_id?: string; user_id?: string; body?: string; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      file_index_jobs: {
+        Row: { id: string; file_source_id: string; user_id: string; target_version: number; status: string; attempts: number; available_at: string; last_error: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; file_source_id: string; user_id: string; target_version: number; status?: string; attempts?: number; available_at?: string; last_error?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; file_source_id?: string; user_id?: string; target_version?: number; status?: string; attempts?: number; available_at?: string; last_error?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      file_storage_cleanup_jobs: {
+        Row: { id: string; user_id: string; storage_paths: string[]; status: string; attempts: number; available_at: string; last_error: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; storage_paths?: string[]; status?: string; attempts?: number; available_at?: string; last_error?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; user_id?: string; storage_paths?: string[]; status?: string; attempts?: number; available_at?: string; last_error?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
       file_folders: {
         Row: { id: string; user_id: string; workspace_id: string | null; parent_id: string | null; name: string; position: number; created_at: string; updated_at: string };
         Insert: { id?: string; user_id: string; workspace_id?: string | null; parent_id?: string | null; name: string; position?: number; created_at?: string; updated_at?: string };
@@ -541,6 +583,30 @@ export interface Database {
       schedule_task_idempotent: {
         Args: { p_owner_id: string; p_task_id: string; p_operation_key: string; p_title: string; p_starts_at: string; p_ends_at: string };
         Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      save_file_page_document: {
+        Args: { p_owner_id: string; p_file_source_id: string; p_base_version: number; p_content_json: Json; p_content_hash: string };
+        Returns: Json;
+      };
+      finalize_file_text_document: {
+        Args: { p_owner_id: string; p_file_source_id: string; p_base_version: number; p_storage_path: string; p_size_bytes: number; p_content_hash: string; p_format: string; p_encoding_json: Json };
+        Returns: Json;
+      };
+      delete_file_document: {
+        Args: { p_owner_id: string; p_file_source_id: string };
+        Returns: Json;
+      };
+      replace_file_source_chunks: {
+        Args: { p_file_source_id: string; p_target_version: number; p_chunks: Json };
+        Returns: undefined;
+      };
+      claim_file_index_jobs: {
+        Args: { p_limit?: number };
+        Returns: Database["public"]["Tables"]["file_index_jobs"]["Row"][];
+      };
+      claim_file_storage_cleanup_jobs: {
+        Args: { p_limit?: number };
+        Returns: Database["public"]["Tables"]["file_storage_cleanup_jobs"]["Row"][];
       };
       create_planevo_workspace: {
         Args: { p_owner_id: string; p_name: string; p_icon?: string | null };

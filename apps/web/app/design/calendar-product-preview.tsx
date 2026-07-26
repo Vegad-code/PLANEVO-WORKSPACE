@@ -6,18 +6,23 @@ import type {
   CalendarRow,
   TaskDueChip,
 } from "@planevo/core/types/calendar";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { CalendarGridEngine } from "@/features/calendar-product/calendar-grid-engine";
 import { CalendarPlanningSidebar } from "@/features/calendar-product/calendar-planning-sidebar";
+import { CalendarShortcutsCheatSheet } from "@/features/calendar-product/calendar-shortcuts-cheat-sheet";
 import { CalendarTasksSection } from "@/features/calendar-product/calendar-tasks-section";
-import { CreateEventPopover } from "@/features/calendar-product/create-event-popover";
-import { EventPeek } from "@/features/calendar-product/event-peek";
+import { EventDetailPanel } from "@/features/calendar-product/event-detail-panel";
+import { EventQuickCaptureField } from "@/features/calendar-product/event-quick-capture-field";
+import { EventDetailPopover } from "@/features/calendar-product/event-detail-popover";
 import type { TodayColumnTask } from "@/features/calendar-product/today-task-row";
+import { CALENDAR_P0_SHORTCUTS } from "@/lib/calendar/calendar-shortcut-map";
 
 /** Fixed clock so preview states do not drift day to day. */
 const DESIGN_NOW = new Date(2026, 6, 15, 13, 0);
 const DESIGN_WEEK_START = new Date(2026, 6, 13);
+const DESIGN_DAY_ANCHOR = new Date(2026, 6, 24);
+const DESIGN_DAY_NOW = new Date(2026, 6, 24, 13, 0);
 const DESIGN_MONTH_ANCHOR = new Date(2026, 6, 24);
 const DESIGN_MONTH_NOW = new Date(2026, 6, 24, 10, 0);
 const DESIGN_SIX_WEEK_MONTH_ANCHOR = new Date(2026, 4, 24);
@@ -69,6 +74,7 @@ export const DESIGN_CALENDARS: CalendarRow[] = [
     name: "Personal",
     color: "ocean",
     is_visible: true,
+    is_default: true,
     position: 0,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -78,6 +84,7 @@ export const DESIGN_CALENDARS: CalendarRow[] = [
     name: "Work",
     color: "slate",
     is_visible: true,
+    is_default: false,
     position: 1,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -87,6 +94,7 @@ export const DESIGN_CALENDARS: CalendarRow[] = [
     name: "Holidays",
     color: "meadow",
     is_visible: false,
+    is_default: false,
     position: 2,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -264,6 +272,24 @@ const DESIGN_MONTH_MULTI_DAY_EVENTS = DESIGN_MONTH_EVENTS.filter((event) =>
   ["ev-month-span", "ev-month-allday", "ev-month-sync"].includes(event.id),
 );
 
+const DESIGN_MONTH_WEEK_CROSS_EVENTS: CalendarEventRow[] = [
+  previewEvent({
+    id: "ev-week-cross",
+    title: "Conference",
+    calendar_id: "cal-work",
+    all_day: true,
+    starts_at: new Date(2026, 6, 3, 0, 0).toISOString(),
+    ends_at: new Date(2026, 6, 7, 0, 0).toISOString(),
+  }),
+  previewEvent({
+    id: "ev-month-sync",
+    title: "Team sync",
+    calendar_id: "cal-work",
+    starts_at: previewTime(24, 9, 0),
+    ends_at: previewTime(24, 10, 0),
+  }),
+];
+
 const DESIGN_MONTH_OUTSIDE_EVENTS = DESIGN_MONTH_EVENTS.filter((event) =>
   event.id === "ev-aug-1",
 );
@@ -342,62 +368,169 @@ function PlanningSidebarFrame({
   );
 }
 
-function EventPeekDemo() {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const peekEvent = DESIGN_EVENTS[3]!;
+/**
+ * Every read quick capture can produce. The field is controlled, so a fixed
+ * `value` with an inert setter renders exactly the state that line resolves to.
+ */
+const QUICK_CAPTURE_STATES: { line: string; note: string }[] = [
+  { line: "", note: "Empty — the prompt teaches the syntax" },
+  {
+    line: "Design review tomorrow 3-4pm",
+    note: "Everything stated — day and time both read as parsed",
+  },
+  {
+    line: "Lunch with Sam at noon",
+    note: "Time stated, day assumed from the clicked slot",
+  },
+  { line: "Standup", note: "Nothing stated — the whole slot is assumed" },
+  {
+    line: "Coffee at Cafe May",
+    note: "Guarded — a proper noun never becomes a date",
+  },
+  {
+    line: "Retro every Tuesday 9am",
+    note: "Recurrence read and reported, not silently dropped",
+  },
+];
+
+function QuickCaptureStatesDemo() {
+  const fallbackStartsAt = new Date(2026, 6, 15, 15, 0).toISOString();
+  const fallbackEndsAt = new Date(2026, 6, 15, 17, 0).toISOString();
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={(clickEvent) =>
-          setAnchor(anchor ? null : clickEvent.currentTarget)
-        }
-        className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-ink hover:bg-paper"
-      >
-        {anchor ? "Close event peek" : "Open event peek"}
-      </button>
-      {anchor ? (
-        <EventPeek
-          event={{
-            ...peekEvent,
-            description_json: {
-              text: "Everyone should join this call. The team is all set for the new update.",
-            },
-          }}
-          calendar={DESIGN_CALENDARS[0]!}
-          anchor={anchor}
-          onClose={() => setAnchor(null)}
-          onLinkTask={noop}
-          onAttachFile={noop}
-          onAddToWorkspace={noop}
-        />
-      ) : null}
-    </div>
+    <figure>
+      <figcaption className="mb-2 text-label uppercase text-text-muted">
+        Quick capture — every interpretation state
+      </figcaption>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {QUICK_CAPTURE_STATES.map((state) => (
+          <div key={state.note}>
+            <div className="event-card-surface overflow-hidden rounded-xl">
+              <EventQuickCaptureField
+                value={state.line}
+                onValueChange={noop}
+                onCapture={noop}
+                fallbackStartsAt={fallbackStartsAt}
+                fallbackEndsAt={fallbackEndsAt}
+              />
+            </div>
+            <p className="mt-1.5 text-product-meta text-text-muted">
+              {state.note}
+            </p>
+          </div>
+        ))}
+      </div>
+    </figure>
   );
 }
 
-function CreateEventDemo() {
-  const [open, setOpen] = useState(false);
+function EventDetailPanelDemo({
+  mode,
+  label,
+}: {
+  mode: "create" | "edit";
+  label: string;
+}) {
+  const peekEvent = DESIGN_EVENTS[3]!;
+  const anchorRect = new DOMRect(120, 120, 96, 36);
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-ink hover:bg-paper"
-      >
-        Open create-event form
-      </button>
-      {open ? (
-        <CreateEventPopover
-          slotStart={new Date(2026, 6, 15, 9, 30)}
-          calendars={DESIGN_CALENDARS}
-          onSubmit={() => setOpen(false)}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
-    </div>
+    <figure>
+      <figcaption className="mb-2 text-label uppercase text-text-muted">
+        {label}
+      </figcaption>
+      <div className="relative h-[36rem] overflow-hidden rounded-2xl border border-border bg-calendar-chrome">
+        <EventDetailPopover anchorRect={anchorRect} onClose={noop}>
+          <EventDetailPanel
+            mode={mode}
+            calendars={DESIGN_CALENDARS}
+            event={
+              mode === "edit"
+                ? {
+                    ...peekEvent,
+                    description_json: {
+                      text: "Everyone should join this call. The team is all set for the new update.",
+                    },
+                  }
+                : null
+            }
+            initialRange={
+              mode === "create"
+                ? {
+                    startsAt: new Date(2026, 6, 15, 9, 30).toISOString(),
+                    endsAt: new Date(2026, 6, 15, 10, 30).toISOString(),
+                  }
+                : undefined
+            }
+            onClose={noop}
+            onSave={noop}
+            onDelete={
+              mode === "edit" ? async () => ({ ok: true as const }) : undefined
+            }
+            onOpenCrossLink={mode === "edit" ? noop : undefined}
+          />
+        </EventDetailPopover>
+      </div>
+    </figure>
+  );
+}
+
+function DraftCreatePreview() {
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const draftCreateEvent = {
+    startsAt: new Date(2026, 6, 15, 9, 30).toISOString(),
+    endsAt: new Date(2026, 6, 15, 10, 30).toISOString(),
+    title: "New event",
+    calendarId: DESIGN_CALENDARS[0]!.id,
+  };
+  const anchorRect = new DOMRect(320, 180, 120, 64);
+
+  return (
+    <figure className="w-full">
+      <figcaption className="mb-2 text-label uppercase text-text-muted">
+        Drag-create draft — solid card on grid + liquid glass popover with arrow
+      </figcaption>
+      <div className="relative h-[36rem] overflow-hidden rounded-xl bg-sidebar p-3">
+        <div
+          ref={gridContainerRef}
+          className="calendar-panel-glass h-full overflow-hidden rounded-xl p-2"
+        >
+          <CalendarGridEngine
+            view="week"
+            anchor={DESIGN_WEEK_START}
+            calendars={DESIGN_CALENDARS}
+            events={DESIGN_EVENTS}
+            taskDues={[]}
+            now={DESIGN_NOW}
+            draftCreateEvent={draftCreateEvent}
+            onSlotSelect={noop}
+            onDraftSelecting={noop}
+            onEventSelect={noop}
+            onEventTimesChange={noop}
+            onToggleTask={noop}
+            onOpenDay={noop}
+            onNavigateMonth={noop}
+          />
+        </div>
+        <EventDetailPopover
+          anchorRect={anchorRect}
+          mouseContainerRef={gridContainerRef}
+          onClose={noop}
+        >
+          <EventDetailPanel
+            mode="create"
+            calendars={DESIGN_CALENDARS}
+            initialRange={{
+              startsAt: draftCreateEvent.startsAt,
+              endsAt: draftCreateEvent.endsAt,
+            }}
+            onClose={noop}
+            onSave={noop}
+            onDraftChange={noop}
+          />
+        </EventDetailPopover>
+      </div>
+    </figure>
   );
 }
 
@@ -409,6 +542,19 @@ type MonthDesignStateProps = {
   now?: Date;
 };
 
+/**
+ * Every month state is shown at two heights.
+ *
+ * The tall frame is not decoration: this harness used to render month only at
+ * `h-80`, where the old grid looked fine, and that is exactly why cavernous
+ * rows shipped unnoticed at a real viewport height. Density regressions have to
+ * be visible here or they are not visible until production.
+ */
+const MONTH_PREVIEW_FRAMES = [
+  { key: "compact", label: "compact", className: "h-80" },
+  { key: "full-height", label: "full height", className: "h-[900px]" },
+] as const;
+
 function MonthDesignState({
   label,
   events,
@@ -418,46 +564,37 @@ function MonthDesignState({
 }: MonthDesignStateProps) {
   return (
     <>
-      <figure className="w-full">
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Month state — {label} · light
-        </figcaption>
-        <div className="calendar-panel-glass h-80 overflow-hidden rounded-xl p-2">
-          <CalendarGridEngine
-            view="month"
-            anchor={anchor}
-            calendars={DESIGN_CALENDARS}
-            events={events}
-            taskDues={taskDues}
-            now={now}
-            onSlotSelect={noop}
-            onEventSelect={noop}
-            onEventTimesChange={noop}
-            onToggleTask={noop}
-            onOpenDay={noop}
-          />
-        </div>
-      </figure>
-      <figure data-theme="dark" className="w-full">
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Month state — {label} · dark
-        </figcaption>
-        <div className="calendar-panel-glass h-80 overflow-hidden rounded-xl p-2">
-          <CalendarGridEngine
-            view="month"
-            anchor={anchor}
-            calendars={DESIGN_CALENDARS}
-            events={events}
-            taskDues={taskDues}
-            now={now}
-            onSlotSelect={noop}
-            onEventSelect={noop}
-            onEventTimesChange={noop}
-            onToggleTask={noop}
-            onOpenDay={noop}
-          />
-        </div>
-      </figure>
+      {MONTH_PREVIEW_FRAMES.flatMap((frame) =>
+        (["light", "dark"] as const).map((theme) => (
+          <figure
+            key={`${frame.key}-${theme}`}
+            data-theme={theme === "dark" ? "dark" : undefined}
+            className="w-full"
+          >
+            <figcaption className="mb-2 text-label uppercase text-text-muted">
+              Month state — {label} · {frame.label} · {theme}
+            </figcaption>
+            <div
+              className={`calendar-panel-glass ${frame.className} overflow-hidden rounded-xl p-2`}
+            >
+              <CalendarGridEngine
+                view="month"
+                anchor={anchor}
+                calendars={DESIGN_CALENDARS}
+                events={events}
+                taskDues={taskDues}
+                now={now}
+                onSlotSelect={noop}
+                onEventSelect={noop}
+                onEventTimesChange={noop}
+                onToggleTask={noop}
+                onOpenDay={noop}
+                onNavigateMonth={noop}
+              />
+            </div>
+          </figure>
+        )),
+      )}
     </>
   );
 }
@@ -499,11 +636,40 @@ export function CalendarProductPreview() {
                 onEventTimesChange={noop}
                 onToggleTask={noop}
                 onOpenDay={noop}
+                onNavigateMonth={noop}
               />
             </div>
           </DndContext>
         </div>
       </figure>
+
+      {(["light", "dark"] as const).map((theme) => (
+        <figure
+          key={`day-view-${theme}`}
+          className="w-full"
+          data-theme={theme === "dark" ? "dark" : undefined}
+        >
+          <figcaption className="mb-2 text-label uppercase text-text-muted">
+            Day view — GCal craft (header, gutter, all-day band, now line) · {theme}
+          </figcaption>
+          <div className="h-[36rem] overflow-hidden rounded-xl bg-calendar-chrome p-2">
+            <CalendarGridEngine
+              view="day"
+              anchor={DESIGN_DAY_ANCHOR}
+              calendars={DESIGN_CALENDARS}
+              events={DESIGN_EVENTS}
+              taskDues={[]}
+              now={DESIGN_DAY_NOW}
+              onSlotSelect={noop}
+              onEventSelect={noop}
+              onEventTimesChange={noop}
+              onToggleTask={noop}
+              onOpenDay={noop}
+              onNavigateMonth={noop}
+            />
+          </div>
+        </figure>
+      ))}
 
       <MonthDesignState label="empty" events={[]} />
       <MonthDesignState
@@ -520,6 +686,10 @@ export function CalendarProductPreview() {
       <MonthDesignState
         label="multi-day"
         events={DESIGN_MONTH_MULTI_DAY_EVENTS}
+      />
+      <MonthDesignState
+        label="week-crossing bar"
+        events={DESIGN_MONTH_WEEK_CROSS_EVENTS}
       />
       <MonthDesignState
         label="outside-month"
@@ -618,19 +788,67 @@ export function CalendarProductPreview() {
         </div>
       </figure>
 
-      <figure>
-        <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Event peek — anchored popover with cross-links
-        </figcaption>
-        <EventPeekDemo />
-      </figure>
+      <DraftCreatePreview />
 
-      <figure>
+      <QuickCaptureStatesDemo />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <EventDetailPanelDemo
+          mode="create"
+          label="Event card — create, opens in quick capture"
+        />
+        <EventDetailPanelDemo
+          mode="edit"
+          label="Event card — edit with cross-links and delete"
+        />
+      </div>
+
+      <figure className="w-full max-w-lg">
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Create event — from grid slot click
+          Keyboard shortcuts — ? cheat sheet (P0)
         </figcaption>
-        <CreateEventDemo />
+        <div className="spotlight-glass-panel overflow-hidden rounded-2xl border border-border">
+          <div className="border-b border-border px-5 py-3.5">
+            <p className="text-h3 font-medium text-ink">Calendar shortcuts</p>
+            <p className="mt-0.5 text-product-meta text-text-muted">
+              Press ? on /calendar · Esc closes
+            </p>
+          </div>
+          <ul className="divide-y divide-border px-5 py-1">
+            {CALENDAR_P0_SHORTCUTS.map((entry) => (
+              <li
+                key={entry.key}
+                className="flex items-center justify-between gap-3 py-2.5 text-product-body text-ink"
+              >
+                <span>{entry.label}</span>
+                <kbd className="rounded-md border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-product-meta">
+                  {entry.mac}
+                </kbd>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="mt-3">
+          <ShortcutsCheatSheetDemo />
+        </div>
       </figure>
+    </div>
+  );
+}
+
+function ShortcutsCheatSheetDemo() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-ink hover:bg-paper"
+      >
+        Open shortcuts dialog
+      </button>
+      <CalendarShortcutsCheatSheet open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

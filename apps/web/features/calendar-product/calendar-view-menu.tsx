@@ -13,6 +13,12 @@ type CalendarViewMenuProps = {
   onViewChange: (view: CalendarView) => void
 }
 
+const VIEW_KEYSHORTCUTS: Partial<Record<CalendarView, string>> = {
+  day: "d",
+  week: "w",
+  month: "m",
+}
+
 export function CalendarViewMenu({ view, onViewChange }: CalendarViewMenuProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -64,12 +70,14 @@ export function CalendarViewMenu({ view, onViewChange }: CalendarViewMenuProps) 
         >
           {CALENDAR_VIEWS.map((option) => {
             const isSelected = view === option
+            const keyshortcut = VIEW_KEYSHORTCUTS[option]
             return (
               <button
                 key={option}
                 type="button"
                 role="option"
                 aria-selected={isSelected}
+                aria-keyshortcuts={keyshortcut}
                 onClick={() => {
                   onViewChange(option)
                   setOpen(false)

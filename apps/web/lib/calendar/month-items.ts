@@ -61,7 +61,7 @@ function isCompletedTaskStatus(status: string): boolean {
  * last day the event actually occupies, so an all-day event ending at midnight
  * does not incorrectly render on the next day.
  */
-function lastOccupiedMoment(start: Date, end: Date): Date {
+export function lastOccupiedMoment(start: Date, end: Date): Date {
   if (end.getTime() <= start.getTime()) return start
   return new Date(end.getTime() - 1)
 }

@@ -3,7 +3,9 @@ import type {
   CalendarEventRow,
   CalendarRow,
 } from "@planevo/core/types/calendar"
-import type { MonthItem } from "./month-items"
+
+export const DRAFT_CREATE_EVENT_ID = "__draft-create__"
+export const DRAFT_CREATE_PLACEHOLDER_TITLE = "(No title)"
 
 export type PlanevoRbcEvent = {
   id: string
@@ -14,19 +16,19 @@ export type PlanevoRbcEvent = {
   planevoEventId: string
   calendarId: string
   color: CalendarColor
+  isDraft?: boolean
 }
 
-/** A Month-only RBC input backed by the unified event/task item model. */
-export type MonthRbcEvent = {
-  id: string
+export type DraftCreateEventState = {
+  startsAt: string
+  endsAt: string
   title: string
-  start: Date
-  end: Date
-  allDay: boolean
-  monthItem: MonthItem
+  calendarId: string
 }
 
-export type CalendarRbcEvent = PlanevoRbcEvent | MonthRbcEvent
+export type DraftCreateEventInput = DraftCreateEventState & {
+  color: CalendarColor
+}
 
 /** Map Planevo events to react-big-calendar inputs, honoring calendar visibility. */
 export function toRbcEvents(
@@ -67,59 +69,21 @@ export function getEventColor(event: PlanevoRbcEvent): CalendarColor {
   return event.color
 }
 
-/**
- * RBC owns the visible row limit and therefore the +N more count. Supplying
- * every unified Month item here means due tasks and events share that limit.
- */
-export function toMonthRbcEvents(items: MonthItem[]): MonthRbcEvent[] {
-  return items.map((item) => {
-    if (item.kind === "task") {
-      const taskDay = new Date(item.dueAt)
-      taskDay.setHours(0, 0, 0, 0)
-      const nextDay = new Date(taskDay)
-      nextDay.setDate(nextDay.getDate() + 1)
-
-      return {
-        id: item.id,
-        title: item.title,
-        // RBC's Month sorter puts longer items ahead. An open task occupies
-        // its due day only (exclusive next-day end) so it follows bars and
-        // precedes timed events; completed tasks retain a zero-length sort key.
-        start: taskDay,
-        end: item.completed ? taskDay : nextDay,
-        allDay: false,
-        monthItem: item,
-      }
-    }
-
-    return {
-      id: item.id,
-      title: item.title,
-      start: item.start,
-      end: item.end,
-      allDay: item.allDay,
-      monthItem: item,
-    }
-  })
+export function isDraftCreateEvent(event: PlanevoRbcEvent): boolean {
+  return event.isDraft === true || event.id === DRAFT_CREATE_EVENT_ID
 }
 
-export function isMonthRbcEvent(
-  event: CalendarRbcEvent,
-): event is MonthRbcEvent {
-  return "monthItem" in event
-}
-
-export type MonthItemInteraction =
-  | { kind: "event"; event: CalendarEventRow }
-  | { kind: "task"; taskId: string; nextCompleted: boolean }
-
-/** The interaction dispatch used by both the Month rows and its day agenda. */
-export function getMonthItemInteraction(item: MonthItem): MonthItemInteraction {
-  if (item.kind === "event") return { kind: "event", event: item.event }
-
+export function toDraftRbcEvent(input: DraftCreateEventInput): PlanevoRbcEvent {
+  const trimmedTitle = input.title.trim()
   return {
-    kind: "task",
-    taskId: item.toggle.taskId,
-    nextCompleted: item.toggle.nextCompleted,
+    id: DRAFT_CREATE_EVENT_ID,
+    title: trimmedTitle || DRAFT_CREATE_PLACEHOLDER_TITLE,
+    start: new Date(input.startsAt),
+    end: new Date(input.endsAt),
+    allDay: false,
+    planevoEventId: DRAFT_CREATE_EVENT_ID,
+    calendarId: input.calendarId,
+    color: input.color,
+    isDraft: true,
   }
 }

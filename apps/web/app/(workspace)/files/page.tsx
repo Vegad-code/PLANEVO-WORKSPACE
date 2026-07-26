@@ -16,19 +16,6 @@ async function FilesProductPage({ scope }: { scope: FilesScope }) {
     data = await loadFilesPageData("all");
   }
 
-  if (data.status === "unauthenticated") {
-    return (
-      <section className="mx-auto w-full max-w-3xl px-6 py-12">
-        <p className="text-label uppercase text-text-muted">Files</p>
-        <h1 className="mt-2 text-h1">Sign in to see your files</h1>
-        <p className="mt-2 text-body text-text-secondary">
-          Your uploads, documents, and attachments will be ready here after you
-          sign in.
-        </p>
-      </section>
-    );
-  }
-
   return (
     <FilesProductView
       initialFiles={data.files}

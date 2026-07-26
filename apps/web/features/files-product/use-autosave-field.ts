@@ -20,6 +20,7 @@ type UseAutosaveFieldOptions = {
   /** Persist the trimmed value. Resolve true on success, false to keep it dirty (retry). */
   onSave: (value: string) => Promise<boolean>;
   debounceMs?: number;
+  normalize?: (value: string) => string;
 };
 
 /**
@@ -33,6 +34,7 @@ export function useAutosaveField({
   initial,
   onSave,
   debounceMs = DEFAULT_DEBOUNCE_MS,
+  normalize = (value) => value.trim(),
 }: UseAutosaveFieldOptions) {
   const [value, setValueState] = useState(initial);
   const [status, setStatus] = useState<AutosaveStatus>("idle");
@@ -57,7 +59,7 @@ export function useAutosaveField({
     if (!saving) return;
     saveState.current = saving;
     setStatus("saving");
-    const ok = await onSave(latest.current.trim());
+    const ok = await onSave(normalize(latest.current));
     if (ok) {
       saveState.current = completeSave(saveState.current);
       if (saveState.current.status === "dirty") {
@@ -71,7 +73,7 @@ export function useAutosaveField({
       setStatus("error");
       timer.current = setTimeout(() => flushRef.current(), debounceMs);
     }
-  }, [onSave, debounceMs]);
+  }, [onSave, debounceMs, normalize]);
 
   useEffect(() => {
     flushRef.current = () => void flush();

@@ -14,8 +14,31 @@ export type CalendarRow = {
   name: string;
   color: CalendarColor;
   is_visible: boolean;
+  /** Default write target for new events and task scheduling. One per user. */
+  is_default: boolean;
   position: number;
   created_at: string;
+};
+
+/**
+ * A saved view: a lens over the event pool, not a property of one calendar.
+ * `source_calendar_ids` empty means every visible calendar.
+ *
+ * Availability is never scoped to these sources — conflict detection reads the
+ * whole pool. A view filters what is drawn, not what the user is busy with.
+ */
+export type CalendarViewRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  preset: string;
+  config: Record<string, unknown>;
+  source_calendar_ids: string[];
+  include_task_dues: boolean;
+  is_default: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export type CalendarEventRow = {

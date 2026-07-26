@@ -19,22 +19,17 @@ import type { OwnerDisplay } from "@/features/files-product/kb-contracts";
 
 const SIGNED_URL_TTL_SECONDS = 900;
 
-export type FilesPageData =
-  | {
-      status: "unauthenticated";
-      scope: FilesScope;
-    }
-  | {
-      status: "ready";
-      scope: FilesScope;
-      files: ProductFileItem[];
-      folders: FolderTreeItem[];
-      workspaceId: string | null;
-      firstName: string | null;
-      owner: OwnerDisplay;
-      usedBytes: number;
-      capBytes: number;
-    };
+export type FilesPageData = {
+  status: "ready";
+  scope: FilesScope;
+  files: ProductFileItem[];
+  folders: FolderTreeItem[];
+  workspaceId: string | null;
+  firstName: string | null;
+  owner: OwnerDisplay;
+  usedBytes: number;
+  capBytes: number;
+};
 
 type AuthUser = {
   email?: string | null;
@@ -46,6 +41,20 @@ const FALLBACK_OWNER: OwnerDisplay = {
   name: null,
   avatarUrl: null,
 };
+
+function emptyFilesPageData(scope: FilesScope): FilesPageData {
+  return {
+    status: "ready",
+    scope,
+    files: [],
+    folders: [],
+    workspaceId: null,
+    firstName: null,
+    owner: FALLBACK_OWNER,
+    usedBytes: 0,
+    capBytes: storageCapBytesForPlan("free"),
+  };
+}
 
 /** Single auth.getUser() round trip shared by firstName + owner display below.
  * Dev/alias mode has no auth session — never throw, just fall back. */
@@ -101,7 +110,7 @@ export async function loadFilesPageData(
   const access = currentWorkspace?.access ?? (await getDataAccess());
 
   if (!access) {
-    return { status: "unauthenticated", scope };
+    return emptyFilesPageData(scope);
   }
 
   const workspaceId = currentWorkspace?.workspace.id ?? null;

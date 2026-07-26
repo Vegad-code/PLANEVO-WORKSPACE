@@ -1,9 +1,8 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import {
   Calendar,
-  type DateHeaderProps,
   type EventProps,
   type HeaderProps,
   type SlotInfo,
@@ -17,27 +16,41 @@ import type {
   TaskDueChip,
 } from "@planevo/core/types/calendar"
 import {
-  getMonthItemInteraction,
   getPlanevoEventId,
-  isMonthRbcEvent,
-  toMonthRbcEvents,
+  isDraftCreateEvent,
+  toDraftRbcEvent,
   toRbcEvents,
-  type CalendarRbcEvent,
+  type DraftCreateEventState,
   type PlanevoRbcEvent,
 } from "@/lib/calendar/rbc-event-adapter"
+import { isCalendarEventPast } from "@/lib/calendar/event-is-past"
 import { calendarLocalizer } from "@/lib/calendar/rbc-localizer"
-import { MONTH_GRID_BEHAVIOR } from "@/lib/calendar/month-grid-behavior"
-import { openMonthDayFromCell } from "@/lib/calendar/month-day-open"
-import { toMonthItems } from "@/lib/calendar/month-items"
+import { startOfWeekSunday } from "@/lib/calendar/calendar-navigation"
+import { isCalendarToday } from "@/lib/calendar/day-header-model"
+import { defaultMonthCreateRange } from "@/lib/calendar/month-day-create"
+import { toMonthItems, type MonthItem } from "@/lib/calendar/month-items"
+import {
+  configForLegacyView,
+  resolveRenderer,
+} from "@/lib/calendar/view-registry"
 import { cn } from "@/lib/utils"
+import {
+  elementToAnchorRect,
+  slotInfoToAnchorRect,
+} from "@/lib/calendar/event-popover-anchor"
 import { MonthDayAgendaPopover } from "./month-day-agenda-popover"
+import { MonthGrid } from "./month-grid"
+import { CalendarNowIndicator } from "./calendar-now-indicator"
 import { RbcDayHeader } from "./rbc-day-header"
+import { RbcNowIndicatorWrapper } from "./rbc-now-indicator-wrapper"
 import { RbcEventContent } from "./rbc-event-content"
-import { RbcMonthDateCell } from "./rbc-month-date-cell"
-import { RbcMonthEventContent } from "./rbc-month-event-content"
-import { RbcMonthWeekdayHeader } from "./rbc-month-weekday-header"
+import { RbcPlanevoEventWrapper } from "./rbc-planevo-event-wrapper"
 import { RbcTimeGutterHeader } from "./rbc-time-gutter-header"
-import { formatHourLabel } from "./time-axis"
+import {
+  DAY_START_HOUR,
+  formatHourLabel,
+  VISIBLE_HOURS,
+} from "./time-axis"
 import "react-big-calendar/lib/css/react-big-calendar.css"
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
 
@@ -50,13 +63,13 @@ type RbcInteractionInfo = {
 }
 
 type DragAndDropCalendarProps = React.ComponentProps<
-  typeof Calendar<CalendarRbcEvent>
+  typeof Calendar<PlanevoRbcEvent>
 > & {
   onEventDrop?: (info: RbcInteractionInfo) => void
   onEventResize?: (info: RbcInteractionInfo) => void
   resizable?: boolean
-  draggableAccessor?: (event: CalendarRbcEvent) => boolean
-  resizableAccessor?: (event: CalendarRbcEvent) => boolean
+  draggableAccessor?: (event: PlanevoRbcEvent) => boolean
+  resizableAccessor?: (event: PlanevoRbcEvent) => boolean
 }
 
 const DragAndDropCalendar = withDragAndDrop(
@@ -70,8 +83,13 @@ type CalendarGridEngineProps = {
   events: CalendarEventRow[]
   taskDues: TaskDueChip[]
   now: Date
-  onSlotSelect: (slotStart: Date) => void
-  onEventSelect: (event: CalendarEventRow, anchor: HTMLElement) => void
+  onSlotSelect: (
+    range: { startsAt: Date; endsAt: Date },
+    anchorRect: DOMRect,
+  ) => void
+  onDraftSelecting?: (range: { startsAt: Date; endsAt: Date }) => void
+  draftCreateEvent?: DraftCreateEventState | null
+  onEventSelect: (event: CalendarEventRow, anchorRect: DOMRect) => void
   onEventTimesChange: (input: {
     eventId: string
     startsAt: string
@@ -79,6 +97,7 @@ type CalendarGridEngineProps = {
   }) => void
   onToggleTask: (taskId: string, done: boolean) => void
   onOpenDay: (date: Date) => void
+  onNavigateMonth: (offset: number) => void
   className?: string
 }
 
@@ -101,8 +120,13 @@ function calendarSlotDataAttributes(date: Date) {
 }
 
 /**
- * Week/day/month grid via react-big-calendar + drag-and-drop addon.
- * Month view uses day agenda popover; week/day retain move/resize.
+ * Picks the grid for the current view.
+ *
+ * Week and day run on react-big-calendar, whose time grid, now-indicator, and
+ * drag/resize are worth keeping. Month runs on its own CSS Grid: RBC measures a
+ * single dummy row and applies that one item limit to every week, and its month
+ * renderer re-sorts multi-day events ahead of everything else before any
+ * caller-supplied order can apply — neither is overridable.
  */
 export function CalendarGridEngine({
   view,
@@ -112,10 +136,13 @@ export function CalendarGridEngine({
   taskDues,
   now,
   onSlotSelect,
+  onDraftSelecting,
+  draftCreateEvent = null,
   onEventSelect,
   onEventTimesChange,
   onToggleTask,
   onOpenDay,
+  onNavigateMonth,
   className,
 }: CalendarGridEngineProps) {
   const [agenda, setAgenda] = useState<{
@@ -123,21 +150,35 @@ export function CalendarGridEngine({
     origin: HTMLElement
   } | null>(null)
 
-  const rbcView: View =
-    view === "day" ? "day" : view === "month" ? "month" : "week"
-  const isMonthView = view === "month"
+  // View goes through the registry rather than branching on the string directly,
+  // so a saved view's config picks the renderer by the same path the legacy
+  // toolbar does.
+  const renderer = useMemo(
+    () => resolveRenderer(configForLegacyView(view)),
+    [view],
+  )
+  const isMonthView = renderer.id === "month-grid"
+  const rbcView: View = renderer.navigationUnit === "day" ? "day" : "week"
 
   const timeGridEvents = useMemo(
     () => toRbcEvents(events, calendars),
     [events, calendars],
   )
+  const draftRbcEvent = useMemo(() => {
+    if (!draftCreateEvent) return null
+    const color =
+      calendars.find((calendar) => calendar.id === draftCreateEvent.calendarId)
+        ?.color ?? "ocean"
+    return toDraftRbcEvent({ ...draftCreateEvent, color })
+  }, [calendars, draftCreateEvent])
+  const rbcEvents = useMemo(
+    () =>
+      draftRbcEvent ? [...timeGridEvents, draftRbcEvent] : timeGridEvents,
+    [draftRbcEvent, timeGridEvents],
+  )
   const monthItems = useMemo(
     () => toMonthItems(events, taskDues, calendars),
     [events, taskDues, calendars],
-  )
-  const monthEvents = useMemo(
-    () => toMonthRbcEvents(monthItems),
-    [monthItems],
   )
   const eventsById = useMemo(() => {
     const map = new Map<string, CalendarEventRow>()
@@ -151,10 +192,50 @@ export function CalendarGridEngine({
   )
 
   const scrollToTime = useMemo(() => scrollTimeNearNow(), [])
+  const gridRef = useRef<HTMLDivElement>(null)
 
-  const openAgenda = useCallback((date: Date, target: HTMLElement) => {
-    setAgenda({ date, origin: target })
-  }, [])
+  const todayInVisibleRange = useMemo(() => {
+    if (view === "day") return isCalendarToday(anchor, now)
+
+    const weekStart = startOfWeekSunday(anchor)
+    for (let index = 0; index < 7; index += 1) {
+      const day = new Date(weekStart)
+      day.setDate(weekStart.getDate() + index)
+      if (isCalendarToday(day, now)) return true
+    }
+
+    return false
+  }, [anchor, now, view])
+
+  const showNowIndicator = useMemo(() => {
+    if (isMonthView || !todayInVisibleRange) return false
+
+    const nowHour = now.getHours()
+    return (
+      nowHour >= DAY_START_HOUR &&
+      nowHour < DAY_START_HOUR + VISIBLE_HOURS
+    )
+  }, [isMonthView, now, todayInVisibleRange, view])
+
+  const timeGridComponents = useMemo(
+    () => ({
+      toolbar: () => null,
+      header: (props: HeaderProps) => (
+        <RbcDayHeader
+          {...props}
+          now={now}
+          align={view === "day" ? "start" : "center"}
+        />
+      ),
+      event: (props: EventProps<PlanevoRbcEvent>) => (
+        <RbcEventContent {...props} />
+      ),
+      eventWrapper: RbcPlanevoEventWrapper,
+      timeGutterHeader: RbcTimeGutterHeader,
+      timeIndicatorWrapper: RbcNowIndicatorWrapper,
+    }),
+    [now, view],
+  )
 
   const closeAgenda = useCallback(
     (restoreFocus = true) => {
@@ -165,116 +246,47 @@ export function CalendarGridEngine({
     [agenda],
   )
 
-  const handleShowMore = useCallback(
-    (_events: CalendarRbcEvent[], date: Date) => {
-      const dayKey = format(date, "yyyy-MM-dd")
-      const cell = document.querySelector(`[data-calendar-day="${dayKey}"]`)
-      const target =
-        cell instanceof HTMLElement ? cell : document.body
-      openAgenda(date, target)
+  const handleOpenAgenda = useCallback((date: Date, origin: HTMLElement) => {
+    setAgenda({ date, origin })
+  }, [])
+
+  const handleSelectMonthItem = useCallback(
+    (item: MonthItem, anchorEl: HTMLElement) => {
+      if (item.kind !== "event") return
+      onEventSelect(item.event, elementToAnchorRect(anchorEl))
     },
-    [openAgenda],
+    [onEventSelect],
   )
 
-  const monthComponents = useMemo(
-    () => ({
-      toolbar: () => null,
-      header: (props: HeaderProps) => <RbcMonthWeekdayHeader {...props} />,
-      event: (props: EventProps<CalendarRbcEvent>) => {
-        if (!isMonthRbcEvent(props.event)) return null
-        return (
-          <RbcMonthEventContent
-            {...props}
-            event={props.event}
-            onToggleTask={onToggleTask}
-          />
-        )
-      },
-      timeGutterHeader: RbcTimeGutterHeader,
-      month: {
-        dateHeader: (props: DateHeaderProps) => (
-          <RbcMonthDateCell {...props} now={now} />
-        ),
-      },
-      dateCellWrapper: ({
-        value,
-        children,
-      }: {
-        value: Date
-        children: React.ReactNode
-      }) => (
-        <div
-          data-calendar-day={format(value, "yyyy-MM-dd")}
-          tabIndex={-1}
-          onDoubleClick={() => {
-            closeAgenda()
-            openMonthDayFromCell(value, onOpenDay)
-          }}
-        >
-          {children}
-        </div>
-      ),
-    }),
-    [closeAgenda, now, onOpenDay, onToggleTask],
+  const handleSelecting = useCallback(
+    (range: { start: Date; end: Date }) => {
+      onDraftSelecting?.({
+        startsAt: range.start,
+        endsAt: range.end,
+      })
+      return true
+    },
+    [onDraftSelecting],
   )
-
-  const timeGridComponents = useMemo(
-    () => ({
-      toolbar: () => null,
-      header: (props: HeaderProps) => <RbcDayHeader {...props} now={now} />,
-      event: (props: EventProps<CalendarRbcEvent>) => {
-        if (isMonthRbcEvent(props.event)) return null
-        return <RbcEventContent {...props} event={props.event} />
-      },
-      timeGutterHeader: RbcTimeGutterHeader,
-    }),
-    [now],
-  )
-
-  const components = isMonthView ? monthComponents : timeGridComponents
 
   const handleSelectSlot = useCallback(
-    (slotInfo: SlotInfo) => {
-      if (view === "month") {
-        const dayKey = format(slotInfo.start, "yyyy-MM-dd")
-        const dayCell = document.querySelector(
-          `[data-calendar-day="${dayKey}"]`,
-        )
-        const target =
-          dayCell instanceof HTMLElement
-            ? dayCell
-            : slotInfo.box instanceof HTMLElement
-            ? slotInfo.box
-            : document.activeElement instanceof HTMLElement
-              ? document.activeElement
-              : document.body
-        openAgenda(slotInfo.start, target)
-        return
-      }
-      onSlotSelect(slotInfo.start)
-    },
-    [view, onSlotSelect, openAgenda],
+    (slotInfo: SlotInfo) =>
+      onSlotSelect(
+        { startsAt: slotInfo.start, endsAt: slotInfo.end },
+        slotInfoToAnchorRect(slotInfo, gridRef.current),
+      ),
+    [onSlotSelect],
   )
 
   const handleSelectEvent = useCallback(
-    (rbcEvent: CalendarRbcEvent, e: React.SyntheticEvent<HTMLElement>) => {
-      if (isMonthRbcEvent(rbcEvent)) {
-        const interaction = getMonthItemInteraction(rbcEvent.monthItem)
-        if (interaction.kind === "task") return
-        const anchorEl =
-          e.currentTarget instanceof HTMLElement
-            ? e.currentTarget
-            : document.body
-        onEventSelect(interaction.event, anchorEl)
-        return
-      }
+    (rbcEvent: PlanevoRbcEvent, e: React.SyntheticEvent<HTMLElement>) => {
+      if (isDraftCreateEvent(rbcEvent)) return
       const row = eventsById.get(getPlanevoEventId(rbcEvent))
       if (!row) return
       const anchorEl =
-        e.currentTarget instanceof HTMLElement
-          ? e.currentTarget
-          : document.body
-      onEventSelect(row, anchorEl)
+        e.currentTarget instanceof HTMLElement ? e.currentTarget : gridRef.current
+      if (!anchorEl) return
+      onEventSelect(row, elementToAnchorRect(anchorEl))
     },
     [eventsById, onEventSelect],
   )
@@ -291,32 +303,33 @@ export function CalendarGridEngine({
     [onEventTimesChange],
   )
 
-  const eventPropGetter = useCallback((event: CalendarRbcEvent) => {
-    if (isMonthRbcEvent(event)) {
-      const item = event.monthItem
-      if (item.kind === "task") {
-        return {
-          className: cn(
-            "planevo-rbc-event",
-            "planevo-rbc-event--month-task",
-            item.completed && "planevo-rbc-event--month-task-completed",
-          ),
-        }
-      }
-
+  const eventPropGetter = useCallback(
+    (event: PlanevoRbcEvent) => {
+      const isDraft = isDraftCreateEvent(event)
+      // Cosmetic only — past events stay fully editable like Google Calendar.
+      const isPast = !isDraft && isCalendarEventPast(event.end, now)
       return {
         className: cn(
           "planevo-rbc-event",
-          `planevo-rbc-event--${item.calendarColor}`,
-          `planevo-rbc-event--month-${item.displayStyle}`,
+          `planevo-rbc-event--${event.color}`,
+          isDraft && "planevo-rbc-event--draft pointer-events-none",
+          isPast && "planevo-rbc-event--past",
         ),
+        "data-event-id": event.id,
       }
-    }
+    },
+    [now],
+  )
 
-    return {
-      className: cn("planevo-rbc-event", `planevo-rbc-event--${event.color}`),
-    }
-  }, [])
+  const draggableAccessor = useCallback(
+    (event: PlanevoRbcEvent) => !isDraftCreateEvent(event),
+    [],
+  )
+
+  const resizableAccessor = useCallback(
+    (event: PlanevoRbcEvent) => !isDraftCreateEvent(event),
+    [],
+  )
 
   const slotPropGetter = useCallback(
     (date: Date) => calendarSlotDataAttributes(date),
@@ -327,65 +340,76 @@ export function CalendarGridEngine({
     <>
       <div
         className={cn(
-          "planevo-rbc planevo-calendar-grid planevo-calendar-grid-shell min-h-0 h-full w-full overflow-hidden border border-border bg-calendar-grid",
-          isMonthView && "planevo-rbc--month",
+          "planevo-calendar-grid min-h-0 h-full w-full overflow-hidden border border-border bg-calendar-grid",
+          isMonthView
+            ? "planevo-calendar-grid-shell"
+            : "planevo-rbc planevo-calendar-grid-shell",
           !hasAllDayEvents && !isMonthView && "planevo-rbc--no-allday",
           className,
         )}
-        data-calendar-grid="rbc"
+        data-calendar-grid={isMonthView ? "month" : "rbc"}
         aria-label="Calendar grid"
       >
-        <DragAndDropCalendar
-          key={rbcView}
-          localizer={calendarLocalizer}
-          culture="en-US"
-          date={anchor}
-          view={rbcView}
-          views={["month", "week", "day"]}
-          events={isMonthView ? monthEvents : timeGridEvents}
-          getNow={() => now}
-          toolbar={false}
-          selectable={isMonthView ? "ignoreEvents" : true}
-          popup={isMonthView ? MONTH_GRID_BEHAVIOR.popup : false}
-          doShowMoreDrillDown={
-            isMonthView ? MONTH_GRID_BEHAVIOR.doShowMoreDrillDown : undefined
-          }
-          drilldownView={isMonthView ? null : undefined}
-          resizable={isMonthView ? MONTH_GRID_BEHAVIOR.resizable : true}
-          step={30}
-          timeslots={2}
-          min={DAY_MIN}
-          max={DAY_MAX}
-          scrollToTime={scrollToTime}
-          enableAutoScroll={false}
-          showMultiDayTimes
-          dayLayoutAlgorithm="overlap"
-          allDayMaxRows={hasAllDayEvents ? 10 : 0}
-          components={components}
-          formats={{
-            timeGutterFormat: (date) => formatHourLabel(date.getHours()),
-          }}
-          eventPropGetter={eventPropGetter}
-          slotPropGetter={slotPropGetter}
-          draggableAccessor={(event) =>
-            isMonthView
-              ? MONTH_GRID_BEHAVIOR.draggable
-              : !isMonthRbcEvent(event)
-          }
-          resizableAccessor={(event) =>
-            isMonthView
-              ? MONTH_GRID_BEHAVIOR.resizable
-              : !isMonthRbcEvent(event)
-          }
-          onNavigate={() => {}}
-          onView={() => {}}
-          onSelectSlot={handleSelectSlot}
-          onSelectEvent={handleSelectEvent}
-          onShowMore={isMonthView ? handleShowMore : undefined}
-          onEventDrop={handleEventTimes}
-          onEventResize={handleEventTimes}
-          style={{ height: "100%" }}
-        />
+        {isMonthView ? (
+          <MonthGrid
+            anchor={anchor}
+            items={monthItems}
+            now={now}
+            onOpenAgenda={handleOpenAgenda}
+            onOpenDay={onOpenDay}
+            onSelectItem={handleSelectMonthItem}
+            onToggleTask={onToggleTask}
+            onNavigateMonth={onNavigateMonth}
+          />
+        ) : (
+          <div ref={gridRef} className="h-full min-h-0">
+            <DragAndDropCalendar
+              key={rbcView}
+              localizer={calendarLocalizer}
+              culture="en-US"
+              date={anchor}
+              view={rbcView}
+              views={["week", "day"]}
+              events={rbcEvents}
+              getNow={() => now}
+              toolbar={false}
+              selectable
+              popup={false}
+              resizable
+              draggableAccessor={draggableAccessor}
+              resizableAccessor={resizableAccessor}
+              step={30}
+              timeslots={2}
+              min={DAY_MIN}
+              max={DAY_MAX}
+              scrollToTime={scrollToTime}
+              enableAutoScroll={false}
+              showMultiDayTimes
+              dayLayoutAlgorithm="overlap"
+              allDayMaxRows={hasAllDayEvents ? 10 : 0}
+              components={timeGridComponents}
+              formats={{
+                timeGutterFormat: (date) => formatHourLabel(date.getHours()),
+              }}
+              eventPropGetter={eventPropGetter}
+              slotPropGetter={slotPropGetter}
+              onNavigate={() => {}}
+              onView={() => {}}
+              onSelecting={handleSelecting}
+              onSelectSlot={handleSelectSlot}
+              onSelectEvent={handleSelectEvent}
+              onEventDrop={handleEventTimes}
+              onEventResize={handleEventTimes}
+              style={{ height: "100%" }}
+            />
+            <CalendarNowIndicator
+              now={now}
+              visible={showNowIndicator}
+              preferSingleDaySlot={view === "day"}
+              rbcRootRef={gridRef}
+            />
+          </div>
+        )}
       </div>
       {agenda ? (
         <MonthDayAgendaPopover
@@ -397,9 +421,14 @@ export function CalendarGridEngine({
             closeAgenda(false)
             onOpenDay(day)
           }}
+          onCreateEvent={(day, anchorEl) => {
+            const anchorRect = elementToAnchorRect(anchorEl)
+            closeAgenda(false)
+            onSlotSelect(defaultMonthCreateRange(day), anchorRect)
+          }}
           onSelectEvent={(event, anchorEl) => {
             closeAgenda(false)
-            onEventSelect(event, anchorEl)
+            onEventSelect(event, elementToAnchorRect(anchorEl))
           }}
           onToggleTask={onToggleTask}
         />

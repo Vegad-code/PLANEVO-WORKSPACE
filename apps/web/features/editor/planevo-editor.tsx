@@ -135,6 +135,10 @@ export function PlanevoEditor({
   databaseOptions = [],
   onPromoteRequest,
   toolbar,
+  onContentChange,
+  saveDebounceMs = SAVE_DEBOUNCE_MS,
+  saveDestinationLabel,
+  retryOnSaveError = true,
 }: {
   initialContent: unknown;
   onSave: EditorSaveHandler;
@@ -145,6 +149,10 @@ export function PlanevoEditor({
     editor: PlanevoEditorInstance;
     markDirtyAndSchedule: () => void;
   }) => ReactNode;
+  onContentChange?: (content: PlanevoPartialBlock[]) => void;
+  saveDebounceMs?: number;
+  saveDestinationLabel?: string;
+  retryOnSaveError?: boolean;
 }) {
   const theme = useResolvedTheme();
   const dictionary = useMemo(
@@ -168,16 +176,12 @@ export function PlanevoEditor({
 
   const saveState = useRef<EditorSaveState>(INITIAL_SAVE_STATE);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushRef = useRef<() => void>(() => {});
+  const mounted = useRef(true);
   const [indicator, setIndicator] = useState<"idle" | "dirty" | "saving" | "saved" | "error">(
     "idle",
   );
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, []);
 
   // F-16 passive autolink stub — full title-match + Tab-to-accept lands with WS-E index.
   useEffect(() => {
@@ -191,32 +195,66 @@ export function PlanevoEditor({
     setIndicator("saving");
 
     const result = await onSave(editor.document);
+    if (!mounted.current) return;
     if (result.ok) {
       setSaveError(null);
       saveState.current = completeSave(saveState.current);
       setIndicator("saved");
       if (saveState.current.status === "dirty") {
-        timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
+        timer.current = setTimeout(() => flushRef.current(), saveDebounceMs);
       }
     } else {
       setSaveError(result.error ?? "Failed to save.");
       saveState.current = failSave();
       setIndicator("error");
-      timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
+      if (retryOnSaveError) {
+        timer.current = setTimeout(() => flushRef.current(), saveDebounceMs);
+      }
     }
-  }, [editor, onSave]);
+  }, [editor, onSave, retryOnSaveError, saveDebounceMs]);
+
+  useEffect(() => {
+    flushRef.current = () => void flush();
+  }, [flush]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (
+        event.key.toLowerCase() === "s" &&
+        (event.metaKey || event.ctrlKey)
+      ) {
+        event.preventDefault();
+        flushRef.current();
+      }
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") flushRef.current();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (timer.current) clearTimeout(timer.current);
+      flushRef.current();
+      mounted.current = false;
+    };
+  }, []);
 
   const scheduleSave = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
-  }, [flush]);
+    timer.current = setTimeout(() => void flush(), saveDebounceMs);
+  }, [flush, saveDebounceMs]);
 
   const markDirtyAndSchedule = useCallback(() => {
+    onContentChange?.(editor.document);
     saveState.current = markDirty(saveState.current);
     setIndicator("dirty");
     scheduleSave();
-  }, [scheduleSave]);
+  }, [editor, onContentChange, scheduleSave]);
 
+  // The legacy toolbar render prop may hand the editor instance to its parent.
+  // eslint-disable-next-line react-hooks/refs
   const toolbarNode = toolbar?.({ editor, markDirtyAndSchedule });
 
   const DragHandleMenu = useMemo(() => {
@@ -233,7 +271,20 @@ export function PlanevoEditor({
     <div className="planevo-editor">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">{toolbarNode}</div>
-        <SaveIndicator state={indicator} errorMessage={saveError} />
+        <SaveIndicator
+          state={indicator}
+          errorMessage={saveError}
+          savedLabel={
+            saveDestinationLabel
+              ? `Saved to ${saveDestinationLabel}`
+              : undefined
+          }
+          savingLabel={
+            saveDestinationLabel
+              ? `Saving to ${saveDestinationLabel}…`
+              : undefined
+          }
+        />
       </div>
       <BlockNoteView
         editor={editor}

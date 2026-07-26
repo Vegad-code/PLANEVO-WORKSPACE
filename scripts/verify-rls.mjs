@@ -19,7 +19,8 @@ function loadEnv(path) {
 
 const env = loadEnv(new URL("../apps/web/.env.local", import.meta.url));
 const url = env.NEXT_PUBLIC_SUPABASE_URL;
-const anonKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const anonKey =
+  env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const secretKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !anonKey || !secretKey) {
@@ -38,6 +39,13 @@ const TABLES = [
   "record_values",
   "views",
   "file_sources",
+  "file_document_state",
+  "file_revisions",
+  "file_notes",
+  "file_comment_threads",
+  "file_comments",
+  "file_index_jobs",
+  "file_storage_cleanup_jobs",
   "ai_conversations",
 ];
 
@@ -60,8 +68,13 @@ async function createUser(label) {
     email_confirm: true,
   });
   if (error) throw error;
-  const client = createClient(url, anonKey, { auth: { persistSession: false } });
-  const { error: signInError } = await client.auth.signInWithPassword({ email, password });
+  const client = createClient(url, anonKey, {
+    auth: { persistSession: false },
+  });
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email,
+    password,
+  });
   if (signInError) throw signInError;
   return { id: data.user.id, client };
 }
@@ -86,17 +99,31 @@ try {
 
   console.log("User B is fully isolated:");
   for (const table of TABLES) {
-    const { data, error } = await userB.client.from(table).select("*").limit(10);
-    check(`B reads zero rows from ${table}`, !error && (data ?? []).length === 0, error?.message);
+    const { data, error } = await userB.client
+      .from(table)
+      .select("*")
+      .limit(10);
+    check(
+      `B reads zero rows from ${table}`,
+      !error && (data ?? []).length === 0,
+      error?.message,
+    );
   }
 
   {
-    const { error } = await userB.client.rpc("create_task_with_required_foundation", {
-      p_owner_id: userA.id,
-      p_workspace_id: workspaceId,
-      p_title: "cross-tenant write attempt",
-    });
-    check("B cannot call task RPC as A", Boolean(error), "RPC succeeded cross-tenant");
+    const { error } = await userB.client.rpc(
+      "create_task_with_required_foundation",
+      {
+        p_owner_id: userA.id,
+        p_workspace_id: workspaceId,
+        p_title: "cross-tenant write attempt",
+      },
+    );
+    check(
+      "B cannot call task RPC as A",
+      Boolean(error),
+      "RPC succeeded cross-tenant",
+    );
   }
 
   {
@@ -104,7 +131,10 @@ try {
       .from("pages")
       .insert({ workspace_id: workspaceId, title: "intruder page" })
       .select("id");
-    check("B cannot insert into A's workspace", Boolean(error) || (data ?? []).length === 0);
+    check(
+      "B cannot insert into A's workspace",
+      Boolean(error) || (data ?? []).length === 0,
+    );
   }
 
   {

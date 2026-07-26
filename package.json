@@ -15,9 +15,11 @@
     "db:seed": "node scripts/seed-dev.mjs",
     "icons:generate": "node scripts/generate-icon-catalog.mjs",
     "icons:seed": "node scripts/seed-icon-catalog.mjs",
-    "db:types": "supabase gen types typescript --project-id aixvpsmpiucticxutngp --schema public > packages/core/src/types/database.types.ts"
+    "db:types": "supabase gen types typescript --project-id aixvpsmpiucticxutngp --schema public > packages/core/src/types/database.types.ts",
+    "postinstall": "patch-package"
   },
   "devDependencies": {
+    "patch-package": "^8.0.1",
     "supabase": "^2.109.1"
   }
 }

@@ -265,7 +265,15 @@ function FileRow({
   return (
     <tr
       onClick={() => onSelectFile(file)}
-      className={`group cursor-pointer border-b border-files-border/70 transition-colors ${
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        onSelectFile(file);
+      }}
+      tabIndex={0}
+      aria-selected={isSelected}
+      className={`group cursor-pointer border-b border-files-border/70 outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta ${
         isSelected ? "bg-files-surface-muted" : "hover:bg-files-surface-muted/60"
       } ${isDragging ? "opacity-50" : ""}`}
     >

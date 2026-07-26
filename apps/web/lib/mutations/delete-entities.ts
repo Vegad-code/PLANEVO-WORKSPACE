@@ -4,12 +4,19 @@ import type { DataAccess } from "@planevo/core/types/data-access";
 export type DeleteResult = { ok: true } | { ok: false; error: string };
 
 export function deleteError(cause: unknown, fallback: string): DeleteResult {
-  return { ok: false, error: cause instanceof Error ? cause.message : fallback };
+  return {
+    ok: false,
+    error: cause instanceof Error ? cause.message : fallback,
+  };
 }
 
 export async function clearRecentItems(
   access: DataAccess,
-  input: { workspaceId: string; targetType: RecentTargetType; targetId: string },
+  input: {
+    workspaceId: string;
+    targetType: RecentTargetType;
+    targetId: string;
+  },
 ): Promise<void> {
   const { error } = await access.client
     .from("recent_items")
@@ -49,12 +56,31 @@ export async function removeStorageObject(
   access: DataAccess,
   storagePath: string,
 ): Promise<void> {
-  const location = parseStorageLocation(storagePath);
-  if (!location) return;
-  const { error } = await access.client.storage
-    .from(location.bucket)
-    .remove([location.path]);
-  if (error) throw error;
+  await removeStorageObjects(access, [storagePath]);
+}
+
+export async function removeStorageObjects(
+  access: DataAccess,
+  storagePaths: string[],
+): Promise<void> {
+  const pathsByBucket = new Map<string, Set<string>>();
+  for (const storagePath of storagePaths) {
+    const location = parseStorageLocation(storagePath);
+    if (!location) continue;
+    const paths = pathsByBucket.get(location.bucket) ?? new Set<string>();
+    paths.add(location.path);
+    pathsByBucket.set(location.bucket, paths);
+  }
+
+  for (const [bucket, pathSet] of pathsByBucket) {
+    const paths = [...pathSet];
+    for (let start = 0; start < paths.length; start += 100) {
+      const { error } = await access.client.storage
+        .from(bucket)
+        .remove(paths.slice(start, start + 100));
+      if (error) throw error;
+    }
+  }
 }
 
 /** Removes every blob under `{workspaceId}/` in the workspace-files bucket. */

@@ -7,11 +7,16 @@ import { attachFileToEvent } from "@planevo/core/mutations/file-cross-links";
 import {
   createCalendar,
   createCalendarEvent,
+  deleteCalendarEvent,
   scheduleTaskFromDrag,
   updateCalendarEvent,
   updateCalendarVisibility,
 } from "@planevo/core/mutations/product-calendar";
-import { createTask, updateTaskStatus } from "@planevo/core/mutations/product-tasks";
+import {
+  createTask,
+  updateTask,
+  updateTaskStatus,
+} from "@planevo/core/mutations/product-tasks";
 import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
 import { CALENDAR_COLORS } from "@planevo/core/types/calendar";
 import type { DataAccess } from "@/lib/data/access";
@@ -42,6 +47,27 @@ function actionError(
 ): CalendarActionResult<never> {
   const correlationId = randomUUID();
   console.error(`[calendar:${correlationId}]`, cause);
+
+  if (cause instanceof Error) {
+    if (cause.message.startsWith("No mutation access")) {
+      return {
+        ok: false,
+        code: "CALENDAR_AUTH_UNAVAILABLE",
+        error:
+          "Could not save — local dev identity is unavailable. Restart the dev server, or set PLANEVO_DEV_OWNER_UUID in .env.local.",
+        correlationId,
+      };
+    }
+    if (cause.message === "Event not found." || cause.message === "Task not found.") {
+      return {
+        ok: false,
+        code: "CALENDAR_NOT_FOUND",
+        error: cause.message,
+        correlationId,
+      };
+    }
+  }
+
   return {
     ok: false,
     code: "CALENDAR_ACTION_FAILED",
@@ -73,6 +99,7 @@ const createCalendarEventSchema = z
     startsAt: isoDateTimeSchema,
     endsAt: isoDateTimeSchema,
     location: z.string().trim().max(500).nullable().optional(),
+    description: z.string().trim().max(5000).optional(),
   })
   .refine(
     (input) => new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
@@ -85,6 +112,7 @@ export async function createCalendarEventAction(input: {
   startsAt: string;
   endsAt: string;
   location?: string | null;
+  description?: string;
 }): Promise<CalendarActionResult<{ eventId: string }>> {
   try {
     const access = await requireMutationDataAccess();
@@ -103,6 +131,9 @@ export async function createCalendarEventAction(input: {
       startsAt: parsed.data.startsAt,
       endsAt: parsed.data.endsAt,
       location: parsed.data.location ?? null,
+      description: parsed.data.description
+        ? { text: parsed.data.description }
+        : undefined,
     });
     revalidatePath("/calendar");
     return { ok: true, data: { eventId: event.id } };
@@ -315,6 +346,8 @@ async function requireOwnedEvent(
   if (!data) throw new Error("Event not found.");
 }
 
+const eventIdSchema = z.object({ eventId: z.string().uuid() });
+
 const updateEventTimesSchema = z
   .object({
     eventId: z.string().uuid(),
@@ -325,6 +358,84 @@ const updateEventTimesSchema = z
     (input) => new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime(),
     { message: "The event must end after it starts." },
   );
+
+const updateCalendarEventSchema = z
+  .object({
+    eventId: z.string().uuid(),
+    title: z.string().trim().min(1).max(500).optional(),
+    startsAt: isoDateTimeSchema.optional(),
+    endsAt: isoDateTimeSchema.optional(),
+    calendarId: z.string().uuid().optional(),
+    location: z.string().trim().max(500).nullable().optional(),
+    description: z.string().trim().max(5000).optional(),
+  })
+  .refine(
+    (input) => {
+      if (!input.startsAt || !input.endsAt) return true;
+      return new Date(input.endsAt).getTime() > new Date(input.startsAt).getTime();
+    },
+    { message: "The event must end after it starts." },
+  );
+
+/** Update editable event fields from the event detail panel. */
+export async function updateCalendarEventAction(input: {
+  eventId: string;
+  title?: string;
+  startsAt?: string;
+  endsAt?: string;
+  calendarId?: string;
+  location?: string | null;
+  description?: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = updateCalendarEventSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error:
+          parsed.error.issues[0]?.message ?? "Check the event details and try again.",
+      };
+    }
+    await requireOwnedEvent(access, parsed.data.eventId);
+    if (parsed.data.calendarId) {
+      await requireOwnedCalendar(access, parsed.data.calendarId);
+    }
+    await updateCalendarEvent(access.client, access.ownerId, parsed.data.eventId, {
+      ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+      ...(parsed.data.startsAt !== undefined ? { startsAt: parsed.data.startsAt } : {}),
+      ...(parsed.data.endsAt !== undefined ? { endsAt: parsed.data.endsAt } : {}),
+      ...(parsed.data.calendarId !== undefined
+        ? { calendarId: parsed.data.calendarId }
+        : {}),
+      ...(parsed.data.location !== undefined ? { location: parsed.data.location } : {}),
+      ...(parsed.data.description !== undefined
+        ? { description: { text: parsed.data.description } }
+        : {}),
+    });
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the event.");
+  }
+}
+
+/** Permanently delete an event from the calendar. */
+export async function deleteCalendarEventAction(input: {
+  eventId: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = eventIdSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid event." };
+    await requireOwnedEvent(access, parsed.data.eventId);
+    await deleteCalendarEvent(access.client, access.ownerId, parsed.data.eventId);
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not delete the event.");
+  }
+}
 
 /** Move or resize an event on the grid (react-big-calendar drop/resize). */
 export async function updateEventTimesAction(input: {
@@ -348,9 +459,32 @@ export async function updateEventTimesAction(input: {
   }
 }
 
-const eventIdSchema = z.object({ eventId: z.string().uuid() });
+const updateTaskDueDateSchema = z.object({
+  taskId: z.string().uuid(),
+  dueAt: isoDateTimeSchema,
+});
 
-/** Files, tasks, and workspaces an event peek can link to. */
+/** Move a task's due date by dragging its chip to another day in Month. */
+export async function updateTaskDueDateAction(input: {
+  taskId: string;
+  dueAt: string;
+}): Promise<CalendarActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = updateTaskDueDateSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Choose a valid date." };
+    await updateTask(access.client, access.ownerId, parsed.data.taskId, {
+      due_at: parsed.data.dueAt,
+    });
+    revalidatePath("/calendar");
+    revalidatePath("/tasks");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return actionError(cause, "Could not update the task.");
+  }
+}
+
+/** Files, tasks, and workspaces an event can link to. */
 export async function loadEventCrossLinkOptionsAction(input: {
   eventId: string;
 }): Promise<CalendarActionResult<EventCrossLinkOptions>> {

@@ -18,6 +18,7 @@ type MonthDayAgendaPopoverProps = {
   anchorRect: DOMRect | null
   onClose: () => void
   onOpenDay: (date: Date) => void
+  onCreateEvent: (date: Date, anchor: HTMLElement) => void
   onSelectEvent: (event: CalendarEventRow, anchor: HTMLElement) => void
   onToggleTask: (taskId: string, done: boolean) => void
 }
@@ -28,6 +29,7 @@ export function MonthDayAgendaPopover({
   anchorRect,
   onClose,
   onOpenDay,
+  onCreateEvent,
   onSelectEvent,
   onToggleTask,
 }: MonthDayAgendaPopoverProps) {
@@ -216,13 +218,24 @@ export function MonthDayAgendaPopover({
           })
         )}
       </ul>
-      <button
-        type="button"
-        className="mt-3 w-full rounded-[var(--radius-calendar-control)] border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-        onClick={() => openMonthDayFromAgenda(date, onOpenDay)}
-      >
-        Open day
-      </button>
+      <div className="mt-3 flex gap-1.5">
+        <button
+          type="button"
+          className="flex-1 rounded-[var(--radius-calendar-control)] bg-ink px-3 py-1.5 text-product-body font-medium text-paper outline-none hover:opacity-85 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          onClick={(clickEvent) =>
+            onCreateEvent(date, clickEvent.currentTarget)
+          }
+        >
+          New event
+        </button>
+        <button
+          type="button"
+          className="flex-1 rounded-[var(--radius-calendar-control)] border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          onClick={() => openMonthDayFromAgenda(date, onOpenDay)}
+        >
+          Open day
+        </button>
+      </div>
     </div>
   )
 }

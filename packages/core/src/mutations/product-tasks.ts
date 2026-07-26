@@ -55,7 +55,7 @@ export async function updateTask(
   taskId: string,
   input: UpdateTaskInput,
 ): Promise<void> {
-  const { error } = await client
+  const { data, error } = await client
     .from("tasks")
     .update({
       ...(input.title !== undefined ? { title: input.title } : {}),
@@ -67,8 +67,11 @@ export async function updateTask(
       updated_at: nowIso(),
     })
     .eq("id", taskId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Task not found.");
 }
 
 /** Apply editable fields and status/completion semantics in one row update. */

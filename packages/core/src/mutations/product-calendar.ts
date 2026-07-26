@@ -62,7 +62,7 @@ export async function updateCalendarEvent(
   eventId: string,
   input: UpdateCalendarEventInput,
 ): Promise<void> {
-  const { error } = await client
+  const { data, error } = await client
     .from("calendar_events")
     .update({
       ...(input.title !== undefined ? { title: input.title } : {}),
@@ -77,8 +77,11 @@ export async function updateCalendarEvent(
       updated_at: nowIso(),
     })
     .eq("id", eventId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Event not found.");
 }
 
 export async function deleteCalendarEvent(

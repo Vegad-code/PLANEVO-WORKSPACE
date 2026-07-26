@@ -27,7 +27,10 @@ npm run test:rls       # two-user RLS isolation check (needs env keys)
 
 `apps/web/.env.local` needs the Supabase URL + publishable key. For pre-auth
 dev mode add `PLANEVO_DEV_MODE=1`, `PLANEVO_DEV_OWNER_ID`, and a server secret
-key — dev mode is hard-disabled in production builds.
+key — dev mode is hard-disabled in production builds. If calendar or file
+mutations intermittently fail with `bad_jwt`, also set `PLANEVO_DEV_OWNER_UUID`
+to the dev user's auth UUID (from Supabase Auth → Users) so the app skips Auth
+Admin lookups on every drag.
 
 Database changes are migrations in `supabase/migrations/`, applied with
 `npm run db:push` (one-time `npx supabase login` first). After schema changes

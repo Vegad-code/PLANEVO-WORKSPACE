@@ -66,6 +66,7 @@ export function CalendarToolbar({
         <button
           type="button"
           onClick={onNavigateToday}
+          aria-keyshortcuts="t"
           className="rounded-[var(--radius-calendar-control)] border border-border bg-surface-raised px-3 py-1.5 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           Today

@@ -23,5 +23,8 @@ supabase/.temp/
 # Cursor local settings
 .cursor/
 
+# Deep research skill outputs (outline / JSON / reports)
+research/
+
 # Apple emoji TTF (loaded via CDN; do not commit 111MB binary)
 apps/web/public/fonts/apple-color-emoji/

@@ -30,6 +30,8 @@ export function formatTimeLabel(date: Date): string {
   });
 }
 
+export { formatNowIndicatorTime } from "@/lib/calendar/format-now-indicator-time";
+
 export { formatCompactMonthTime } from "@/lib/calendar/format-compact-month-time";
 
 /** Hours from the start of the day window, clamped to [0, VISIBLE_HOURS]. */
