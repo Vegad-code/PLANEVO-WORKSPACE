@@ -38,6 +38,14 @@ export function RbcEventContent({ event }: EventProps<PlanevoRbcEvent>) {
               : "Scheduled task block: "}
           </span>
         ) : null}
+        {event.isReadOnly ? (
+          <span
+            aria-label="Read-only synced event"
+            className="shrink-0 text-product-meta text-text-secondary"
+          >
+            ↗
+          </span>
+        ) : null}
         <span
           className={
             event.isTaskComplete

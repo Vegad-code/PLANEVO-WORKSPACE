@@ -118,6 +118,7 @@ export async function updateCalendarEvent(
     })
     .eq("id", eventId)
     .eq("user_id", userId)
+    .eq("source", "planevo")
     .is("deleted_at", null)
     .select("id")
     .maybeSingle();
@@ -254,6 +255,7 @@ export async function softDeleteCalendarEvent(
     .update({ deleted_at: nowIso(), updated_at: nowIso() })
     .eq("id", eventId)
     .eq("user_id", userId)
+    .eq("source", "planevo")
     .is("deleted_at", null)
     .select("id")
     .maybeSingle();

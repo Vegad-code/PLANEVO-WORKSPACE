@@ -95,19 +95,18 @@ test("converts task dues with completion and toggle metadata", () => {
 })
 
 test("filters hidden calendars and preserves color plus synced-source metadata", () => {
-  const visibleGoogle = event({
-    id: "google-event",
-    source: "google",
-    google_event_id: "google-123",
+  const visibleSubscription = event({
+    id: "ics-event",
+    source: "ics",
   })
   const hidden = event({ id: "hidden-event", calendar_id: "calendar-hidden" })
-  const items = toMonthItems([visibleGoogle, hidden], [], calendars)
+  const items = toMonthItems([visibleSubscription, hidden], [], calendars)
 
   assert.equal(items.length, 1)
   assert.equal(items[0].kind, "event")
   assert.equal(items[0].calendarColor, "ocean")
   assert.equal(items[0].isSyncedSource, true)
-  assert.equal(items[0].source, "google")
+  assert.equal(items[0].source, "ics")
 })
 
 test("task blocks use the task's current title", () => {

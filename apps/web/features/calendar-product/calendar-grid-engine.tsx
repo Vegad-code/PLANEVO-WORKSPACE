@@ -363,6 +363,7 @@ export function CalendarGridEngine({
           `planevo-rbc-event--${event.color}`,
           isDraft && "planevo-rbc-event--draft pointer-events-none",
           isPast && "planevo-rbc-event--past",
+          event.isReadOnly && "planevo-rbc-event--read-only",
           event.isTaskComplete && "opacity-65",
         ),
         "data-event-id": event.id,
@@ -372,12 +373,14 @@ export function CalendarGridEngine({
   )
 
   const draggableAccessor = useCallback(
-    (event: PlanevoRbcEvent) => !isDraftCreateEvent(event),
+    (event: PlanevoRbcEvent) =>
+      !isDraftCreateEvent(event) && !event.isReadOnly,
     [],
   )
 
   const resizableAccessor = useCallback(
-    (event: PlanevoRbcEvent) => !isDraftCreateEvent(event),
+    (event: PlanevoRbcEvent) =>
+      !isDraftCreateEvent(event) && !event.isReadOnly,
     [],
   )
 

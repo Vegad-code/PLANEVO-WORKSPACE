@@ -5,6 +5,7 @@ import type {
   CalendarRow,
 } from "@planevo/core/types/calendar"
 import { isLinkedTaskComplete } from "./task-linked-events.ts"
+import { calendarEventDisplayRange } from "./calendar-event-display-range.ts"
 
 export const DRAFT_CREATE_EVENT_ID = "__draft-create__"
 export const DRAFT_CREATE_PLACEHOLDER_TITLE = "(No title)"
@@ -18,6 +19,8 @@ export type PlanevoRbcEvent = {
   planevoEventId: string
   calendarId: string
   color: CalendarColor
+  source: CalendarDisplayEvent["source"]
+  isReadOnly: boolean
   linkedTask: CalendarLinkedTask | null
   isTaskComplete: boolean
   isDraft?: boolean
@@ -50,20 +53,24 @@ export function toRbcEvents(
 
   return events
     .filter((event) => visibleIds.has(event.calendar_id))
-    .map((event) => {
+    .flatMap((event) => {
       const color = colorByCalendarId.get(event.calendar_id) ?? "slate"
-      return {
+      const range = calendarEventDisplayRange(event)
+      if (!range) return []
+      return [{
         id: event.id,
         title: event.linked_task?.title ?? event.title,
-        start: new Date(event.starts_at),
-        end: new Date(event.ends_at),
+        start: range.start,
+        end: range.end,
         allDay: event.all_day,
         planevoEventId: event.id,
         calendarId: event.calendar_id,
         color,
+        source: event.source,
+        isReadOnly: event.source !== "planevo",
         linkedTask: event.linked_task,
         isTaskComplete: isLinkedTaskComplete(event.linked_task),
-      }
+      }]
     })
 }
 
@@ -90,6 +97,8 @@ export function toDraftRbcEvent(input: DraftCreateEventInput): PlanevoRbcEvent {
     planevoEventId: DRAFT_CREATE_EVENT_ID,
     calendarId: input.calendarId,
     color: input.color,
+    source: "planevo",
+    isReadOnly: false,
     linkedTask: null,
     isTaskComplete: false,
     isDraft: true,

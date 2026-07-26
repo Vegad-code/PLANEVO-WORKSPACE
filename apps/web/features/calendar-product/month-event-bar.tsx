@@ -74,9 +74,11 @@ export function MonthEventBar({
   onSelect,
 }: MonthEventBarProps) {
   const { item, isContinuedFromPrevWeek, isContinuedIntoNextWeek } = segment
+  const isReadOnly = item.source !== "planevo"
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `month-bar-${segment.itemId}-w${segment.weekIndex}`,
+    disabled: isReadOnly,
     data: {
       type: "month-move",
       item,
@@ -99,7 +101,11 @@ export function MonthEventBar({
       )}
     >
       {!isContinuedFromPrevWeek ? (
-        <BarResizeHandle segment={segment} edge="start" />
+        <BarResizeHandle
+          segment={segment}
+          edge="start"
+          disabled={isReadOnly}
+        />
       ) : null}
 
       <button
@@ -154,7 +160,11 @@ export function MonthEventBar({
       </button>
 
       {!isContinuedIntoNextWeek ? (
-        <BarResizeHandle segment={segment} edge="end" />
+        <BarResizeHandle
+          segment={segment}
+          edge="end"
+          disabled={isReadOnly}
+        />
       ) : null}
     </div>
   )

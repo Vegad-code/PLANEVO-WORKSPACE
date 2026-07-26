@@ -7,6 +7,7 @@ import type {
   TaskDueChip,
 } from "@planevo/core/types/calendar";
 import { isLinkedTaskComplete } from "./task-linked-events.ts";
+import { calendarEventDisplayRange } from "./calendar-event-display-range.ts";
 
 const MINIMUM_EVENT_DURATION_MS = 60_000;
 
@@ -79,11 +80,14 @@ export function localDayWindow(day: Date): LocalDayWindow | null {
 }
 
 function normalizedEventRange(
-  event: Pick<CalendarEventRow, "starts_at" | "ends_at">,
+  event: Pick<
+    CalendarEventRow,
+    "starts_at" | "ends_at" | "all_day" | "source"
+  >,
 ): { start: Date; end: Date } | null {
-  const start = new Date(event.starts_at);
-  const parsedEnd = new Date(event.ends_at);
-  if (!isValidDate(start) || !isValidDate(parsedEnd)) return null;
+  const displayRange = calendarEventDisplayRange(event);
+  if (!displayRange) return null;
+  const { start, end: parsedEnd } = displayRange;
 
   const end =
     parsedEnd.getTime() > start.getTime()
@@ -128,7 +132,7 @@ export function eventToTimelineItem({
     calendarId: event.calendar_id,
     calendarColor,
     source: event.source,
-    isReadOnly: event.source === "google",
+    isReadOnly: event.source !== "planevo",
     allDay: event.all_day,
     linkedTask: event.linked_task,
     isTaskComplete: isLinkedTaskComplete(event.linked_task),

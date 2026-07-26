@@ -10,7 +10,7 @@ import {
 } from "./month-drag.ts"
 import { eventToMonthItem, taskDueToMonthItem } from "./month-items.ts"
 
-function eventItem({ start, end, allDay = false }) {
+function eventItem({ start, end, allDay = false, source = "planevo" }) {
   return eventToMonthItem(
     {
       id: "event-1",
@@ -24,7 +24,7 @@ function eventItem({ start, end, allDay = false }) {
       description_json: {},
       task_id: null,
       google_event_id: null,
-      source: "planevo",
+      source,
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-01T00:00:00.000Z",
     },
@@ -301,4 +301,18 @@ test("returns null when a drag lands where it started", () => {
     ),
     null,
   )
+})
+
+test("connected calendar events cannot be moved or resized", () => {
+  // Arrange
+  const item = eventItem({
+    start: new Date(2026, 6, 10),
+    end: new Date(2026, 6, 13),
+    allDay: true,
+    source: "ics",
+  })
+
+  // Act / Assert
+  assert.equal(moveItemToDay(item, "2026-07-10", "2026-07-11"), null)
+  assert.equal(resizeBarEdge(item, "end", "2026-07-14"), null)
 })

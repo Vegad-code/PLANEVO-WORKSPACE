@@ -31,10 +31,13 @@ export function MonthItemChip({
   onSelect,
   onToggleTask,
 }: MonthItemChipProps) {
+  const isReadOnlyEvent =
+    item.kind === "event" && item.source !== "planevo"
   // The pointer sensor's 8px activation distance keeps plain clicks working,
   // so the same element can both open an item and drag it to another day.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `month-item-${item.id}`,
+    disabled: isReadOnlyEvent,
     data: {
       type: "month-move",
       item,

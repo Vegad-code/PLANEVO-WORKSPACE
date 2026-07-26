@@ -118,10 +118,9 @@ test("builds one local day from visible overlapping events and task dues", () =>
 
 test("carries event color, task state, read-only, and original row metadata", () => {
   const googleTaskEvent = event({
-    id: "google-task",
+    id: "ics-task",
     title: "Stale event title",
-    source: "google",
-    google_event_id: "google-1",
+    source: "ics",
     task_id: "linked-task",
     linked_task: {
       id: "linked-task",

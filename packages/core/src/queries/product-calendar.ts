@@ -46,15 +46,45 @@ export async function loadCalendars(
   client: SupabaseClient<Database>,
   userId: string,
 ): Promise<CalendarRow[]> {
-  const { data, error } = await client
-    .from("calendars")
-    .select("*")
-    .eq("user_id", userId)
-    .order("position", { ascending: true });
-  if (error) throw error;
-  // ponytail: DB CHECK constrains color to CALENDAR_COLORS, so narrowing the
-  // generated Row is safe (same convention as loadProductTasks).
-  return (data ?? []) as unknown as CalendarRow[];
+  const [calendarsResult, connectionsResult] = await Promise.all([
+    client
+      .from("calendars")
+      .select("*")
+      .eq("user_id", userId)
+      .order("position", { ascending: true }),
+    client
+      .from("calendar_connections")
+      .select(
+        "id, calendar_id, provider, last_synced_at, last_sync_error, is_enabled",
+      )
+      .eq("user_id", userId),
+  ]);
+  if (calendarsResult.error) throw calendarsResult.error;
+  if (connectionsResult.error) throw connectionsResult.error;
+
+  const connectionsByCalendarId = new Map(
+    (connectionsResult.data ?? []).map((connection) => [
+      connection.calendar_id,
+      connection,
+    ]),
+  );
+
+  return (calendarsResult.data ?? []).map((calendar) => {
+    const connection = connectionsByCalendarId.get(calendar.id);
+    return {
+      ...calendar,
+      // Both tables enforce one connection per calendar. Only safe operational
+      // metadata crosses this boundary; feed URLs/tokens never do.
+      connection: connection
+        ? {
+            ...connection,
+            provider: connection.provider as "ics" | "google",
+          }
+        : null,
+      // DB CHECK constrains this text column to CALENDAR_COLORS.
+      color: calendar.color as CalendarRow["color"],
+    };
+  });
 }
 
 /**

@@ -79,6 +79,15 @@ test("getPlanevoEventId and getEventColor read adapter fields", () => {
   assert.equal(getEventColor(event), "ocean")
 })
 
+test("marks every connected provider as read-only", () => {
+  const [event] = toRbcEvents(
+    [{ ...events[0], source: "ics" }],
+    calendars,
+  )
+  assert.equal(event.isReadOnly, true)
+  assert.equal(event.source, "ics")
+})
+
 test("task blocks use the task's current title and completion state", () => {
   const [event] = toRbcEvents(
     [

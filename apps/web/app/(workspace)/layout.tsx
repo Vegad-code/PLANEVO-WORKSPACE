@@ -3,6 +3,7 @@ import { AppShell } from "@/features/shell/app-shell";
 import { Toaster } from "@/components/ui/toast";
 import { workspaceNeedsOnboarding } from "@/lib/onboarding/gate";
 import { getWorkspaceShellData } from "@/lib/queries/workspace-shell";
+import { CalendarReminderProvider } from "@/features/calendar-product/calendar-reminder-provider";
 
 export default async function WorkspaceLayout({
   children,
@@ -24,6 +25,7 @@ export default async function WorkspaceLayout({
 
   return (
     <>
+      <CalendarReminderProvider />
       <AppShell shell={shell}>{children}</AppShell>
       <Toaster />
     </>

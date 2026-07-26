@@ -1,6 +1,13 @@
 "use client";
 
-import { AlignLeft, Link2, MapPin, Paperclip, Repeat } from "lucide-react";
+import {
+  AlignLeft,
+  Bell,
+  Link2,
+  MapPin,
+  Paperclip,
+  Repeat,
+} from "lucide-react";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import type { CalendarRow } from "@planevo/core/types/calendar";
 import { cn } from "@/lib/utils";
@@ -19,6 +26,9 @@ type EventDetailFieldsProps = {
   onFormChange: (patch: Partial<EventFormState>) => void;
   calendars: CalendarRow[];
   durationLabel: string | null;
+  reminderOffsetMinutes: number | null;
+  onReminderChange: (offsetMinutes: number | null) => void;
+  reminderDisabled?: boolean;
   showCrossLinks: boolean;
   taskLinked?: boolean;
   onOpenCrossLink?: (panel: EventCrossLinkPanel) => void;
@@ -140,6 +150,9 @@ export function EventDetailFields({
   onFormChange,
   calendars,
   durationLabel,
+  reminderOffsetMinutes,
+  onReminderChange,
+  reminderDisabled = false,
   showCrossLinks,
   taskLinked = false,
   onOpenCrossLink,
@@ -203,6 +216,37 @@ export function EventDetailFields({
           {durationLabel}
         </p>
       ) : null}
+
+      <div className={ROW_CLASS}>
+        <Bell aria-hidden="true" className="size-3.5 shrink-0 text-text-muted" />
+        <select
+          aria-label="Browser reminder"
+          disabled={reminderDisabled}
+          value={reminderOffsetMinutes === null ? "" : reminderOffsetMinutes}
+          onChange={(event) =>
+            onReminderChange(
+              event.target.value === "" ? null : Number(event.target.value),
+            )
+          }
+          className={cn(
+            PLAIN_INPUT_CLASS,
+            reminderDisabled && "cursor-not-allowed text-text-muted",
+          )}
+        >
+          <option value="">No reminder</option>
+          <option value="0">At start time</option>
+          <option value="5">5 minutes before</option>
+          <option value="10">10 minutes before</option>
+          <option value="15">15 minutes before</option>
+          <option value="30">30 minutes before</option>
+          <option value="60">1 hour before</option>
+          <option value="1440">1 day before</option>
+        </select>
+      </div>
+      <p className="px-3 pb-2 pl-[4.5rem] text-label text-text-muted">
+        Browser reminders fire while Planevo is open.
+        {reminderDisabled ? " Repeating events are not supported yet." : ""}
+      </p>
 
       <div className={ROW_CLASS}>
         <Repeat aria-hidden="true" className="size-3.5 shrink-0 text-text-muted" />

@@ -54,6 +54,8 @@ import {
   setDefaultCalendarAction,
   setDefaultCalendarViewAction,
   setTaskStatusAction,
+  subscribeIcsCalendarAction,
+  syncCalendarConnectionAction,
   toggleCalendarVisibilityAction,
   unscheduleTaskLinkedEventAction,
   updateCalendarDetailsAction,
@@ -86,6 +88,7 @@ import { CalendarDndContext } from "./calendar-dnd-context";
 import { useMonthMutations } from "./use-month-mutations";
 import { CalendarGridEngine } from "./calendar-grid-engine";
 import { CalendarPlanningSidebar } from "./calendar-planning-sidebar";
+import type { IcsCalendarSubscriptionInput } from "./calendar-sources-section";
 import { CalendarResizeHandle } from "./calendar-resize-handle";
 import { CalendarShortcutsCheatSheet } from "./calendar-shortcuts-cheat-sheet";
 import { CalendarToolbar } from "./calendar-toolbar";
@@ -193,6 +196,7 @@ function recurrencePayload(
     rrule: pending.event.rrule,
     location: pending.event.location,
     description: eventDescription(pending.event),
+    reminderOffsetMinutes: null,
   };
 }
 
@@ -329,6 +333,21 @@ function CalendarProductViewInner({
     setScope(storedScope);
   }, [scope, setScope, workspaceId]);
 
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const googleStatus = url.searchParams.get("google");
+    if (!googleStatus) return;
+    if (googleStatus === "connected") {
+      toast("Google Calendar connected");
+    } else if (googleStatus === "denied") {
+      toast("Google Calendar connection was cancelled", { tone: "error" });
+    } else {
+      toast("Could not connect Google Calendar", { tone: "error" });
+    }
+    url.searchParams.delete("google");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
   function handlePlanningWidthChange(nextWidth: number) {
     setPlanningWidthState(nextWidth);
   }
@@ -394,6 +413,35 @@ function CalendarProductViewInner({
       toast("Default calendar updated");
       invalidateCalendar(scope);
     });
+  }
+
+  async function handleSubscribeIcs(
+    input: IcsCalendarSubscriptionInput,
+  ): Promise<boolean> {
+    const result = await subscribeIcsCalendarAction(input);
+    if (!result.ok) {
+      toast(result.error, { tone: "error" });
+      return false;
+    }
+    if (result.data.synced) {
+      toast("Subscribed calendar added");
+    } else {
+      toast(result.data.warning ?? "Calendar added; first sync needs a retry.", {
+        tone: "error",
+      });
+    }
+    invalidateCalendar(scope);
+    return true;
+  }
+
+  async function handleSyncConnection(connectionId: string): Promise<void> {
+    const result = await syncCalendarConnectionAction({ connectionId });
+    if (!result.ok) {
+      toast(result.error, { tone: "error" });
+      return;
+    }
+    toast("Calendar synced");
+    invalidateCalendar(scope);
   }
 
   function handleStandardViewChange(
@@ -1045,6 +1093,8 @@ function CalendarProductViewInner({
       onCreateCalendar={handleCreateCalendar}
       onUpdateCalendar={handleUpdateCalendar}
       onSetDefaultCalendar={handleSetDefaultCalendar}
+      onSubscribeIcs={handleSubscribeIcs}
+      onSyncConnection={handleSyncConnection}
       onToggleTask={handleToggleTask}
       onQuickAddTask={handleQuickAddTask}
       onCollapse={() => setSidebarCollapsed(true)}
@@ -1264,6 +1314,8 @@ function CalendarProductViewInner({
                     onCreateCalendar={handleCreateCalendar}
                     onUpdateCalendar={handleUpdateCalendar}
                     onSetDefaultCalendar={handleSetDefaultCalendar}
+                    onSubscribeIcs={handleSubscribeIcs}
+                    onSyncConnection={handleSyncConnection}
                     onToggleTask={handleToggleTask}
                     onQuickAddTask={handleQuickAddTask}
                     onCollapse={() => setPlanningDrawerOpen(false)}

@@ -9,6 +9,15 @@ export const CALENDAR_COLORS = [
 ] as const;
 
 export type CalendarColor = (typeof CALENDAR_COLORS)[number];
+export type CalendarExternalProvider = "ics" | "google";
+
+export type CalendarConnectionSummary = {
+  id: string;
+  provider: CalendarExternalProvider;
+  last_synced_at: string | null;
+  last_sync_error: string | null;
+  is_enabled: boolean;
+};
 
 export type CalendarViewConfigValue =
   | string
@@ -37,6 +46,8 @@ export type CalendarRow = {
   is_default: boolean;
   position: number;
   created_at: string;
+  /** Present only on product reads that request connection-safe metadata. */
+  connection?: CalendarConnectionSummary | null;
 };
 
 /**
@@ -90,7 +101,11 @@ export type CalendarEventRow = {
   description_json: Record<string, unknown>;
   task_id: string | null;
   google_event_id: string | null;
-  source: "planevo" | "google";
+  external_connection_id: string | null;
+  external_event_id: string | null;
+  external_etag: string | null;
+  external_updated_at: string | null;
+  source: "planevo" | CalendarExternalProvider;
   created_at: string;
   updated_at: string;
 };

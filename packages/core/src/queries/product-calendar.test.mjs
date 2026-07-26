@@ -93,6 +93,7 @@ function calendarClient({
   recurringMasters = [],
   taskRows = [],
   calendarViewRows = [],
+  calendarConnectionRows = [],
   workspaceLinks = {},
 } = {}) {
   const calls = [];
@@ -114,6 +115,7 @@ function calendarClient({
 
       let rows;
       if (table === "calendars") rows = CALENDAR_ROWS;
+      else if (table === "calendar_connections") rows = calendarConnectionRows;
       else if (table === "calendar_views") rows = calendarViewRows;
       else if (table === "calendar_events") {
         rows = eventQueries[queryIndex] ?? [];
@@ -179,12 +181,25 @@ function hasCall(calls, method, ...args) {
 }
 
 test("loadCalendars returns user calendars ordered by position", async () => {
-  const client = calendarClient();
+  const client = calendarClient({
+    calendarConnectionRows: [
+      {
+        id: "connection-1",
+        calendar_id: "c1",
+        provider: "ics",
+        last_synced_at: "2026-07-26T12:00:00.000Z",
+        last_sync_error: null,
+        is_enabled: true,
+      },
+    ],
+  });
   const result = await loadCalendars(client, "u1");
 
   assert.equal(result.length, 2);
   assert.equal(result[0].name, "Work");
   assert.equal(result[1].is_visible, false);
+  assert.equal(result[0].connection.provider, "ics");
+  assert.equal(result[1].connection, null);
   assert.equal(
     hasCall(callsFor(client, "calendars", 0), "order", "position", {
       ascending: true,

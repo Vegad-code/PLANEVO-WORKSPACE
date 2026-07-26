@@ -17,6 +17,13 @@ const viewSource = readFileSync(
   ),
   "utf8",
 );
+const atomicReminderMigration = readFileSync(
+  new URL(
+    "../../../../supabase/migrations/20260726127000_atomic_event_reminders.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("calendar actions use atomic task round-trip mutations", () => {
   assert.match(actionsSource, /setTaskStatusWithLinkedEvents/);
@@ -26,7 +33,12 @@ test("calendar actions use atomic task round-trip mutations", () => {
   );
   assert.match(
     actionsSource,
-    /syncTaskDueTime[\s\S]+await moveTaskLinkedEvent/,
+    /update_calendar_event_with_reminder/,
+  );
+  assert.match(atomicReminderMigration, /perform pg_advisory_xact_lock/);
+  assert.match(
+    atomicReminderMigration,
+    /update public\.tasks task[\s\S]+due_at = v_starts_at/,
   );
   assert.match(actionsSource, /completeTaskLinkedEventAction/);
   assert.match(actionsSource, /unscheduleTaskLinkedEventAction/);

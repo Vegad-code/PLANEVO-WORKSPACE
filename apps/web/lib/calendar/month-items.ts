@@ -7,6 +7,7 @@ import type {
   TaskDueChip,
 } from "@planevo/core/types/calendar"
 import { isLinkedTaskComplete } from "./task-linked-events.ts"
+import { calendarEventDisplayRange } from "./calendar-event-display-range.ts"
 
 export type MonthEventItem = {
   kind: "event"
@@ -87,8 +88,9 @@ export function eventToMonthItem(
   event: CalendarDisplayEvent,
   calendarColor: CalendarColor,
 ): MonthEventItem {
-  const start = new Date(event.starts_at)
-  const end = new Date(event.ends_at)
+  const range = calendarEventDisplayRange(event)
+  const start = range?.start ?? new Date(event.starts_at)
+  const end = range?.end ?? new Date(event.ends_at)
 
   return {
     kind: "event",
@@ -101,7 +103,7 @@ export function eventToMonthItem(
     calendarId: event.calendar_id,
     calendarColor,
     source: event.source,
-    isSyncedSource: event.source === "google",
+    isSyncedSource: event.source !== "planevo",
     allDay: event.all_day,
     linkedTask: event.linked_task,
     isTaskComplete: isLinkedTaskComplete(event.linked_task),

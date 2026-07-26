@@ -8,6 +8,7 @@ import type {
   CalendarRow,
 } from "@planevo/core/types/calendar";
 import { defaultCalendarId } from "@/lib/calendar/default-calendar";
+import { calendarEventDisplayRange } from "@/lib/calendar/calendar-event-display-range";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { Select } from "@/components/ui/select";
 import {
@@ -28,6 +29,7 @@ import {
 import { EventDetailFields } from "./event-detail-fields";
 import type { EventCrossLinkPanel } from "./event-cross-links";
 import { EventQuickCaptureField } from "./event-quick-capture-field";
+import { loadEventReminderAction } from "@/app/(workspace)/calendar/actions";
 
 export type EventPanelSavePayload = {
   calendarId: string;
@@ -41,7 +43,11 @@ export type EventPanelSavePayload = {
   rrule: string | null;
   location: string | null;
   description: string;
+  reminderOffsetMinutes: number | null;
 };
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type EventDetailPanelProps = {
   mode: "create" | "edit";
@@ -70,6 +76,38 @@ type EventDetailPanelProps = {
   ) => void;
 };
 
+function readOnlyEventTime(event: CalendarEventRow): string {
+  const range = calendarEventDisplayRange(event);
+  if (!range) return "Time unavailable";
+  const { start, end } = range;
+  if (event.all_day) {
+    const finalDay = new Date(end.getTime() - 1);
+    const startLabel = start.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+    const endLabel = finalDay.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+    return startLabel === endLabel
+      ? `${startLabel} · All day`
+      : `${startLabel} – ${endLabel} · All day`;
+  }
+  return `${start.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })} – ${end.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
 export function EventDetailPanel({
   mode,
   calendars,
@@ -86,7 +124,17 @@ export function EventDetailPanel({
   onDraftChange,
 }: EventDetailPanelProps) {
   const isCreate = mode === "create";
-  const createCalendarId = defaultCalendarId(calendars);
+  const writableCalendars = useMemo(
+    () => calendars.filter((calendar) => !calendar.connection),
+    [calendars],
+  );
+  const createCalendarId = defaultCalendarId(writableCalendars);
+  const reminderEventId = event?.id ?? null;
+  const reminderEventSource = event?.source ?? null;
+  const shouldLoadReminder =
+    !isCreate &&
+    reminderEventSource === "planevo" &&
+    Boolean(reminderEventId && UUID_PATTERN.test(reminderEventId));
 
   /**
    * What the card opened with, frozen for its lifetime. The panel echoes its
@@ -112,6 +160,12 @@ export function EventDetailPanel({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [linkedActionPending, setLinkedActionPending] = useState(false);
+  const [reminderOffsetMinutes, setReminderOffsetMinutes] = useState<
+    number | null
+  >(null);
+  const [reminderLoaded, setReminderLoaded] = useState(!shouldLoadReminder);
+  const [baselineReminderOffsetMinutes, setBaselineReminderOffsetMinutes] =
+    useState<number | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
   const isQuick = captureMode === "quick";
@@ -144,9 +198,12 @@ export function EventDetailPanel({
 
   // A parse the user never asked for is not an unsaved edit. Only count the
   // typed line and hand-edited fields, or closing an untouched card nags.
-  const isDirty = isQuick
-    ? captureLine.trim().length > 0
-    : !eventFormStatesEqual(form, baseline);
+  const reminderDirty =
+    reminderOffsetMinutes !== baselineReminderOffsetMinutes;
+  const isDirty =
+    (isQuick
+      ? captureLine.trim().length > 0
+      : !eventFormStatesEqual(form, baseline)) || reminderDirty;
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -156,6 +213,24 @@ export function EventDetailPanel({
     if (isQuick) return;
     titleRef.current?.focus();
   }, [isQuick]);
+
+  useEffect(() => {
+    if (!shouldLoadReminder || !reminderEventId) return;
+    let active = true;
+    void loadEventReminderAction({ eventId: reminderEventId }).then((result) => {
+      if (!active) return;
+      if (result.ok) {
+        setBaselineReminderOffsetMinutes(result.data.offsetMinutes);
+        setReminderOffsetMinutes(result.data.offsetMinutes);
+        setReminderLoaded(true);
+        return;
+      }
+      setValidationError(result.error);
+    });
+    return () => {
+      active = false;
+    };
+  }, [reminderEventId, shouldLoadReminder]);
 
   // Keeps the ghost block on the grid in step with the card while creating.
   useEffect(() => {
@@ -177,6 +252,7 @@ export function EventDetailPanel({
 
   function handleFormChange(patch: Partial<EventFormState>) {
     setForm((current) => applyFormPatch(current, patch));
+    if (patch.rrule) setReminderOffsetMinutes(null);
     setValidationError(null);
   }
 
@@ -202,7 +278,7 @@ export function EventDetailPanel({
       return;
     }
     if (!selectedCalendarId) {
-      setValidationError("Choose a calendar before saving.");
+      setValidationError("Create a Planevo calendar before saving.");
       return;
     }
     if (!resolvedTimes.ok) {
@@ -223,11 +299,89 @@ export function EventDetailPanel({
       rrule: form.rrule,
       location: form.location.trim() || null,
       description: form.description.trim(),
+      reminderOffsetMinutes,
     });
   }
 
   const canSave =
-    !isPending && Boolean(form.title.trim()) && calendars.length > 0;
+    !isPending &&
+    reminderLoaded &&
+    Boolean(form.title.trim()) &&
+    writableCalendars.length > 0;
+
+  async function handleReminderChange(offsetMinutes: number | null) {
+    if (offsetMinutes === null) {
+      setReminderOffsetMinutes(null);
+      return;
+    }
+    if (typeof Notification === "undefined") {
+      setValidationError("This browser does not support notifications.");
+      return;
+    }
+    const permission =
+      Notification.permission === "default"
+        ? await Notification.requestPermission()
+        : Notification.permission;
+    if (permission !== "granted") {
+      setValidationError(
+        "Allow notifications in your browser before adding a reminder.",
+      );
+      return;
+    }
+    setValidationError(null);
+    setReminderOffsetMinutes(offsetMinutes);
+  }
+
+  if (!isCreate && event && event.source !== "planevo") {
+    const description =
+      typeof event.description_json.text === "string"
+        ? event.description_json.text
+        : null;
+    const provider =
+      event.source === "google" ? "Google Calendar" : "Subscribed calendar";
+    return (
+      <div className="flex flex-col gap-2 p-2">
+        <header className="flex shrink-0 items-center gap-2 pl-1">
+          <CalendarColorDot color={selectedCalendar?.color ?? "ocean"} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-product-meta font-medium text-text-secondary">
+              {selectedCalendar?.name ?? provider}
+            </span>
+            <span className="block text-label uppercase text-text-muted">
+              {provider} · Read-only
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Close event details"
+            onClick={() => onClose({ force: true })}
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            <X aria-hidden="true" className="size-3.5" />
+          </button>
+        </header>
+        <section className="event-card-surface flex flex-col gap-3 rounded-xl p-3">
+          <h3 className="text-h3 font-medium text-ink">{event.title}</h3>
+          <p className="text-product-body text-text-secondary">
+            {readOnlyEventTime(event)}
+          </p>
+          {event.location ? (
+            <p className="text-product-meta text-text-secondary">
+              {event.location}
+            </p>
+          ) : null}
+          {description ? (
+            <p className="whitespace-pre-wrap text-product-meta leading-relaxed text-text-secondary">
+              {description}
+            </p>
+          ) : null}
+        </section>
+        <p className="px-1 text-label text-text-muted">
+          Changes from the connected calendar will appear after the next sync.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -235,7 +389,7 @@ export function EventDetailPanel({
         <header className="flex shrink-0 items-center gap-2 pl-1">
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <CalendarColorDot color={selectedCalendar?.color ?? "ocean"} />
-            {calendars.length > 1 ? (
+            {writableCalendars.length > 1 ? (
               <Select
                 aria-label="Calendar"
                 value={selectedCalendarId}
@@ -244,7 +398,7 @@ export function EventDetailPanel({
                 }
                 className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-product-meta font-medium shadow-none focus:border-0"
               >
-                {calendars.map((calendar) => (
+                {writableCalendars.map((calendar) => (
                   <option key={calendar.id} value={calendar.id}>
                     {calendar.name}
                   </option>
@@ -288,8 +442,11 @@ export function EventDetailPanel({
             <EventDetailFields
               form={form}
               onFormChange={handleFormChange}
-              calendars={calendars}
+              calendars={writableCalendars}
               durationLabel={durationLabel}
+              reminderOffsetMinutes={reminderOffsetMinutes}
+              onReminderChange={(offset) => void handleReminderChange(offset)}
+              reminderDisabled={Boolean(form.rrule)}
               showCrossLinks={!isCreate && Boolean(event)}
               taskLinked={hasLinkedTask}
               onOpenCrossLink={onOpenCrossLink}

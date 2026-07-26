@@ -18,6 +18,7 @@ import { CalendarDateSection } from "./calendar-date-section";
 import { CalendarPlanningSection } from "./calendar-planning-section";
 import {
   CalendarSourcesSection,
+  type IcsCalendarSubscriptionInput,
   type CalendarSourceUpdateInput,
 } from "./calendar-sources-section";
 import {
@@ -40,6 +41,10 @@ export type CalendarPlanningSidebarProps = {
     input: CalendarSourceUpdateInput,
   ) => void;
   onSetDefaultCalendar: (calendarId: string) => void;
+  onSubscribeIcs?: (
+    input: IcsCalendarSubscriptionInput,
+  ) => Promise<boolean>;
+  onSyncConnection?: (connectionId: string) => Promise<void>;
   onToggleTask: (taskId: string, done: boolean) => void;
   onQuickAddTask: (title: string, bucket: "week" | "month" | "none") => void;
   onCollapse: () => void;
@@ -64,6 +69,8 @@ export function CalendarPlanningSidebar({
   onCreateCalendar,
   onUpdateCalendar,
   onSetDefaultCalendar,
+  onSubscribeIcs,
+  onSyncConnection,
   onToggleTask,
   onQuickAddTask,
   onCollapse,
@@ -164,6 +171,8 @@ export function CalendarPlanningSidebar({
             onCreateCalendar={onCreateCalendar}
             onUpdateCalendar={onUpdateCalendar}
             onSetDefaultCalendar={onSetDefaultCalendar}
+            onSubscribeIcs={onSubscribeIcs}
+            onSyncConnection={onSyncConnection}
           />
         </CalendarPlanningSection>
       </nav>

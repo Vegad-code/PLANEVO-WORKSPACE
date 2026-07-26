@@ -11,7 +11,6 @@ import {
 } from "@planevo/core/mutations/calendar-undo";
 import {
   createCalendar,
-  createCalendarEvent,
   createCalendarView,
   deleteCalendarView,
   deleteCalendarEvent,
@@ -60,6 +59,14 @@ import {
   viewConfigSchema,
   type ViewConfig,
 } from "@/lib/calendar/view-config";
+import { syncGoogleConnection } from "@/lib/calendar/google-calendar-sync";
+import { syncIcsConnection } from "@/lib/calendar/ics-calendar-sync";
+import { resolvePublicCalendarFeedUrl } from "@/lib/calendar/public-calendar-feed";
+import {
+  calendarTokenEncryptionKey,
+  sealCalendarToken,
+} from "@/lib/calendar/calendar-token-crypto";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createCalendarDatabaseWithViews, createWorkspace } from "../actions";
 
 const { RRule } =
@@ -108,6 +115,22 @@ function actionError(
         correlationId,
       };
     }
+    if (cause.message === "Connected calendar events are read-only.") {
+      return {
+        ok: false,
+        code: "CALENDAR_READ_ONLY",
+        error: cause.message,
+        correlationId,
+      };
+    }
+    if (cause.message === "Reminders for repeating events are not available yet.") {
+      return {
+        ok: false,
+        code: "CALENDAR_REMINDER_UNSUPPORTED",
+        error: cause.message,
+        correlationId,
+      };
+    }
   }
 
   return {
@@ -118,18 +141,30 @@ function actionError(
   };
 }
 
-async function requireOwnedCalendar(
+async function requireOwnedWritableCalendar(
   access: DataAccess,
   calendarId: string,
 ): Promise<void> {
-  const { data, error } = await access.client
-    .from("calendars")
-    .select("id")
-    .eq("id", calendarId)
-    .eq("user_id", access.ownerId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error("Calendar not found.");
+  const [calendarResult, connectionResult] = await Promise.all([
+    access.client
+      .from("calendars")
+      .select("id")
+      .eq("id", calendarId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle(),
+    access.client
+      .from("calendar_connections")
+      .select("id")
+      .eq("calendar_id", calendarId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle(),
+  ]);
+  if (calendarResult.error) throw calendarResult.error;
+  if (connectionResult.error) throw connectionResult.error;
+  if (!calendarResult.data) throw new Error("Calendar not found.");
+  if (connectionResult.data) {
+    throw new Error("Connected calendar events are read-only.");
+  }
 }
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
@@ -175,6 +210,13 @@ const createCalendarEventSchema = z
     rrule: rruleSchema.nullable(),
     location: z.string().trim().max(500).nullable().optional(),
     description: z.string().trim().max(5000).optional(),
+    reminderOffsetMinutes: z
+      .number()
+      .int()
+      .min(0)
+      .max(10_080)
+      .nullable()
+      .optional(),
   })
   .refine(
     (input) =>
@@ -194,6 +236,7 @@ export async function createCalendarEventAction(input: {
   rrule: string | null;
   location?: string | null;
   description?: string;
+  reminderOffsetMinutes?: number | null;
 }): Promise<CalendarActionResult<{ eventId: string }>> {
   try {
     const access = await requireMutationDataAccess();
@@ -206,7 +249,7 @@ export async function createCalendarEventAction(input: {
           "Check the event details and try again.",
       };
     }
-    await requireOwnedCalendar(access, parsed.data.calendarId);
+    await requireOwnedWritableCalendar(access, parsed.data.calendarId);
     const recurrenceBoundary = parsed.data.rrule
       ? deriveRecurrenceBoundary({
           rrule: parsed.data.rrule,
@@ -220,24 +263,44 @@ export async function createCalendarEventAction(input: {
         error: "This repeat pattern is too large or does not match its start.",
       };
     }
-    const event = await createCalendarEvent(access.client, access.ownerId, {
-      calendarId: parsed.data.calendarId,
-      title: parsed.data.title,
-      startsAt: parsed.data.startsAt,
-      endsAt: parsed.data.endsAt,
-      startsAtLocal: parsed.data.startsAtLocal,
-      endsAtLocal: parsed.data.endsAtLocal,
-      timezone: parsed.data.timezone,
-      durationMinutes: parsed.data.durationMinutes,
-      rrule: parsed.data.rrule,
-      recurrenceEnd: recurrenceBoundary.recurrenceEnd,
-      location: parsed.data.location ?? null,
-      description: parsed.data.description
-        ? { text: parsed.data.description }
-        : undefined,
-    });
+    if (
+      parsed.data.rrule &&
+      parsed.data.reminderOffsetMinutes !== undefined &&
+      parsed.data.reminderOffsetMinutes !== null
+    ) {
+      return {
+        ok: false,
+        error: "Reminders for repeating events are not available yet.",
+      };
+    }
+    const { data: eventId, error } = await access.client.rpc(
+      "create_calendar_event_with_reminder",
+      {
+        p_owner_id: access.ownerId,
+        p_calendar_id: parsed.data.calendarId,
+        p_title: parsed.data.title,
+        p_starts_at: parsed.data.startsAt,
+        p_ends_at: parsed.data.endsAt,
+        p_starts_at_local: parsed.data.startsAtLocal,
+        p_ends_at_local: parsed.data.endsAtLocal,
+        p_timezone: parsed.data.timezone,
+        p_duration_minutes: parsed.data.durationMinutes,
+        p_rrule: parsed.data.rrule,
+        p_recurrence_end: recurrenceBoundary.recurrenceEnd,
+        p_location: parsed.data.location ?? null,
+        p_description_json: parsed.data.description
+          ? { text: parsed.data.description }
+          : {},
+        p_reminder_offset_minutes:
+          parsed.data.reminderOffsetMinutes ?? null,
+      },
+    );
+    if (error) throw error;
+    if (!eventId) {
+      throw new Error("Calendar event creation returned no event.");
+    }
     revalidatePath("/calendar");
-    return { ok: true, data: { eventId: event.id } };
+    return { ok: true, data: { eventId } };
   } catch (cause) {
     return actionError(cause, "Could not create the event.");
   }
@@ -267,6 +330,134 @@ export async function createCalendarAction(input: {
     return { ok: true, data: { calendarId: calendar.id } };
   } catch (cause) {
     return actionError(cause, "Could not create the calendar.");
+  }
+}
+
+const subscribeIcsCalendarSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  color: z.enum(CALENDAR_COLORS),
+  feedUrl: z.string().trim().url().max(2_000),
+});
+
+export async function subscribeIcsCalendarAction(input: {
+  name: string;
+  color: string;
+  feedUrl: string;
+}): Promise<
+  CalendarActionResult<{
+    calendarId: string;
+    synced: boolean;
+    warning?: string;
+  }>
+> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = subscribeIcsCalendarSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Check the calendar name, color, and feed URL." };
+    }
+    const feedUrl = (
+      await resolvePublicCalendarFeedUrl(parsed.data.feedUrl)
+    ).href;
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient.rpc("subscribe_ics_calendar", {
+      p_owner_id: access.ownerId,
+      p_name: parsed.data.name,
+      p_color: parsed.data.color,
+      p_feed_url: sealCalendarToken(
+        feedUrl,
+        calendarTokenEncryptionKey(),
+      ),
+    });
+    if (error) throw error;
+    const result =
+      data && typeof data === "object" && !Array.isArray(data)
+        ? data
+        : null;
+    const calendarId =
+      result && typeof result.calendar_id === "string"
+        ? result.calendar_id
+        : null;
+    const connectionId =
+      result && typeof result.connection_id === "string"
+        ? result.connection_id
+        : null;
+    if (!calendarId || !connectionId) {
+      throw new Error("Database returned an invalid calendar subscription.");
+    }
+
+    const { data: connection, error: connectionError } = await adminClient
+      .from("calendar_connections")
+      .select("*")
+      .eq("id", connectionId)
+      .eq("user_id", access.ownerId)
+      .single();
+    if (connectionError) throw connectionError;
+
+    try {
+      await syncIcsConnection(adminClient, connection);
+      revalidatePath("/calendar");
+      return { ok: true, data: { calendarId, synced: true } };
+    } catch (cause) {
+      revalidatePath("/calendar");
+      const warning =
+        cause instanceof Error
+          ? cause.message
+          : "The calendar was added but its first sync failed.";
+      return {
+        ok: true,
+        data: {
+          calendarId,
+          synced: false,
+          warning: warning.slice(0, 240),
+        },
+      };
+    }
+  } catch (cause) {
+    return actionError(cause, "Could not subscribe to the calendar.");
+  }
+}
+
+const syncCalendarConnectionSchema = z.object({
+  connectionId: z.string().uuid(),
+});
+
+export async function syncCalendarConnectionAction(input: {
+  connectionId: string;
+}): Promise<CalendarActionResult<{ eventCount: number }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = syncCalendarConnectionSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid connected calendar." };
+    }
+    const { data: ownedConnection, error: ownershipError } = await access.client
+      .from("calendar_connections")
+      .select("id")
+      .eq("id", parsed.data.connectionId)
+      .eq("user_id", access.ownerId)
+      .eq("is_enabled", true)
+      .maybeSingle();
+    if (ownershipError) throw ownershipError;
+    if (!ownedConnection) throw new Error("Calendar not found.");
+
+    const syncClient = createAdminClient();
+    const { data: connection, error } = await syncClient
+      .from("calendar_connections")
+      .select("*")
+      .eq("id", ownedConnection.id)
+      .eq("user_id", access.ownerId)
+      .eq("is_enabled", true)
+      .single();
+    if (error) throw error;
+    const eventCount =
+      connection.provider === "ics"
+        ? (await syncIcsConnection(syncClient, connection)).eventCount
+        : (await syncGoogleConnection(syncClient, connection)).eventCount;
+    revalidatePath("/calendar");
+    return { ok: true, data: { eventCount } };
+  } catch (cause) {
+    return actionError(cause, "Could not sync the connected calendar.");
   }
 }
 
@@ -608,19 +799,64 @@ async function requireOwnedEvent(
 ): Promise<
   Pick<
     CalendarEventRow,
-    "id" | "task_id" | "starts_at" | "ends_at" | "timezone"
+    | "id"
+    | "task_id"
+    | "starts_at"
+    | "ends_at"
+    | "timezone"
+    | "source"
+    | "rrule"
   >
 > {
   const { data, error } = await access.client
     .from("calendar_events")
-    .select("id,task_id,starts_at,ends_at,timezone")
+    .select("id,task_id,starts_at,ends_at,timezone,source,rrule")
     .eq("id", eventId)
     .eq("user_id", access.ownerId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Event not found.");
-  return data;
+  return {
+    ...data,
+    source: data.source as CalendarEventRow["source"],
+  };
+}
+
+async function requireEditableEvent(
+  access: DataAccess,
+  eventId: string,
+): ReturnType<typeof requireOwnedEvent> {
+  const event = await requireOwnedEvent(access, eventId);
+  if (event.source !== "planevo") {
+    throw new Error("Connected calendar events are read-only.");
+  }
+  return event;
+}
+
+export async function loadEventReminderAction(input: {
+  eventId: string;
+}): Promise<CalendarActionResult<{ offsetMinutes: number | null }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    const parsed = eventIdSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid event." };
+    await requireEditableEvent(access, parsed.data.eventId);
+    const { data, error } = await access.client
+      .from("event_reminders")
+      .select("offset_minutes")
+      .eq("event_id", parsed.data.eventId)
+      .eq("user_id", access.ownerId)
+      .eq("method", "browser")
+      .maybeSingle();
+    if (error) throw error;
+    return {
+      ok: true,
+      data: { offsetMinutes: data?.offset_minutes ?? null },
+    };
+  } catch (cause) {
+    return actionError(cause, "Could not load the event reminder.");
+  }
 }
 
 const eventIdSchema = z.object({ eventId: z.string().uuid() });
@@ -666,6 +902,13 @@ const updateCalendarEventSchema = z
     calendarId: z.string().uuid().optional(),
     location: z.string().trim().max(500).nullable().optional(),
     description: z.string().trim().max(5000).optional(),
+    reminderOffsetMinutes: z
+      .number()
+      .int()
+      .min(0)
+      .max(10_080)
+      .nullable()
+      .optional(),
   })
   .refine(
     (input) => {
@@ -691,6 +934,7 @@ export async function updateCalendarEventAction(input: {
   calendarId?: string;
   location?: string | null;
   description?: string;
+  reminderOffsetMinutes?: number | null;
 }): Promise<CalendarActionResult> {
   try {
     const access = await requireMutationDataAccess();
@@ -703,7 +947,19 @@ export async function updateCalendarEventAction(input: {
           "Check the event details and try again.",
       };
     }
-    const ownedEvent = await requireOwnedEvent(access, parsed.data.eventId);
+    const ownedEvent = await requireEditableEvent(access, parsed.data.eventId);
+    const nextRrule =
+      parsed.data.rrule === undefined ? ownedEvent.rrule : parsed.data.rrule;
+    if (
+      nextRrule &&
+      parsed.data.reminderOffsetMinutes !== undefined &&
+      parsed.data.reminderOffsetMinutes !== null
+    ) {
+      return {
+        ok: false,
+        error: "Reminders for repeating events are not available yet.",
+      };
+    }
     if (ownedEvent.task_id && parsed.data.rrule) {
       return {
         ok: false,
@@ -711,7 +967,7 @@ export async function updateCalendarEventAction(input: {
       };
     }
     if (parsed.data.calendarId) {
-      await requireOwnedCalendar(access, parsed.data.calendarId);
+      await requireOwnedWritableCalendar(access, parsed.data.calendarId);
     }
     const recurrenceBoundary =
       parsed.data.rrule === undefined
@@ -731,65 +987,70 @@ export async function updateCalendarEventAction(input: {
         error: "A repeating event needs a valid local start and timezone.",
       };
     }
-    const syncTaskDueTime =
-      Boolean(ownedEvent.task_id) &&
-      (parsed.data.startsAt !== undefined || parsed.data.endsAt !== undefined);
-    if (syncTaskDueTime) {
+    if (
+      ownedEvent.task_id &&
+      (parsed.data.startsAt !== undefined || parsed.data.endsAt !== undefined)
+    ) {
       const startsAt = parsed.data.startsAt ?? ownedEvent.starts_at;
       const endsAt = parsed.data.endsAt ?? ownedEvent.ends_at;
       if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
         return { ok: false, error: "The event must end after it starts." };
       }
-      await moveTaskLinkedEvent(access.client, access.ownerId, {
-        eventId: parsed.data.eventId,
-        startsAt,
-        endsAt,
-      });
     }
 
-    await updateCalendarEvent(
-      access.client,
-      access.ownerId,
-      parsed.data.eventId,
+    const eventPatch = {
+      ...(parsed.data.title !== undefined
+        ? { title: parsed.data.title }
+        : {}),
+      ...(parsed.data.startsAt !== undefined
+        ? { starts_at: parsed.data.startsAt }
+        : {}),
+      ...(parsed.data.endsAt !== undefined
+        ? { ends_at: parsed.data.endsAt }
+        : {}),
+      ...(parsed.data.startsAtLocal !== undefined
+        ? { starts_at_local: parsed.data.startsAtLocal }
+        : {}),
+      ...(parsed.data.endsAtLocal !== undefined
+        ? { ends_at_local: parsed.data.endsAtLocal }
+        : {}),
+      ...(parsed.data.timezone !== undefined
+        ? { timezone: parsed.data.timezone }
+        : {}),
+      ...(parsed.data.durationMinutes !== undefined
+        ? { duration_minutes: parsed.data.durationMinutes }
+        : {}),
+      ...(parsed.data.rrule !== undefined
+        ? { rrule: parsed.data.rrule }
+        : {}),
+      ...(recurrenceBoundary
+        ? { recurrence_end: recurrenceBoundary.recurrenceEnd }
+        : {}),
+      ...(parsed.data.calendarId !== undefined
+        ? { calendar_id: parsed.data.calendarId }
+        : {}),
+      ...(parsed.data.location !== undefined
+        ? { location: parsed.data.location }
+        : {}),
+      ...(parsed.data.description !== undefined
+        ? { description_json: { text: parsed.data.description } }
+        : {}),
+    };
+    const { error } = await access.client.rpc(
+      "update_calendar_event_with_reminder",
       {
-        ...(parsed.data.title !== undefined
-          ? { title: parsed.data.title }
-          : {}),
-        ...(!syncTaskDueTime && parsed.data.startsAt !== undefined
-          ? { startsAt: parsed.data.startsAt }
-          : {}),
-        ...(!syncTaskDueTime && parsed.data.endsAt !== undefined
-          ? { endsAt: parsed.data.endsAt }
-          : {}),
-        ...(parsed.data.startsAtLocal !== undefined
-          ? { startsAtLocal: parsed.data.startsAtLocal }
-          : {}),
-        ...(parsed.data.endsAtLocal !== undefined
-          ? { endsAtLocal: parsed.data.endsAtLocal }
-          : {}),
-        ...(parsed.data.timezone !== undefined
-          ? { timezone: parsed.data.timezone }
-          : {}),
-        ...(parsed.data.durationMinutes !== undefined
-          ? { durationMinutes: parsed.data.durationMinutes }
-          : {}),
-        ...(parsed.data.rrule !== undefined
-          ? { rrule: parsed.data.rrule }
-          : {}),
-        ...(recurrenceBoundary
-          ? { recurrenceEnd: recurrenceBoundary.recurrenceEnd }
-          : {}),
-        ...(parsed.data.calendarId !== undefined
-          ? { calendarId: parsed.data.calendarId }
-          : {}),
-        ...(parsed.data.location !== undefined
-          ? { location: parsed.data.location }
-          : {}),
-        ...(parsed.data.description !== undefined
-          ? { description: { text: parsed.data.description } }
-          : {}),
+        p_owner_id: access.ownerId,
+        p_event_id: parsed.data.eventId,
+        p_patch: eventPatch,
+        p_reminder_specified:
+          parsed.data.reminderOffsetMinutes !== undefined,
+        p_reminder_offset_minutes:
+          parsed.data.reminderOffsetMinutes ?? null,
       },
     );
+    if (error) {
+      throw error;
+    }
     revalidatePath("/calendar");
     if (ownedEvent.task_id) revalidatePath("/tasks");
     return { ok: true, data: undefined };
@@ -869,6 +1130,7 @@ async function loadOwnedRecurringMaster(
     .eq("user_id", access.ownerId)
     .is("parent_event_id", null)
     .not("rrule", "is", null)
+    .eq("source", "planevo")
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
@@ -990,7 +1252,7 @@ export async function updateRecurringEventAction(input: {
       };
     }
     const master = await loadOwnedRecurringMaster(access, parsed.data.masterId);
-    await requireOwnedCalendar(access, parsed.data.calendarId);
+    await requireOwnedWritableCalendar(access, parsed.data.calendarId);
     const eventRows = await loadOwnedRecurringFamily(access, master.id);
     let guardEventId = master.id;
     let newMasterEventId: string | null = null;
@@ -1294,7 +1556,7 @@ export async function deleteCalendarEventAction(input: {
     const access = await requireMutationDataAccess();
     const parsed = eventIdSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Invalid event." };
-    const event = await requireOwnedEvent(access, parsed.data.eventId);
+    const event = await requireEditableEvent(access, parsed.data.eventId);
     if (event.task_id) {
       await unscheduleTaskLinkedEvent(
         access.client,
@@ -1325,7 +1587,7 @@ export async function completeTaskLinkedEventAction(input: {
     const access = await requireMutationDataAccess();
     const parsed = eventIdSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Invalid event." };
-    const event = await requireOwnedEvent(access, parsed.data.eventId);
+    const event = await requireEditableEvent(access, parsed.data.eventId);
     if (!event.task_id) {
       return { ok: false, error: "This event is not linked to a task." };
     }
@@ -1350,7 +1612,7 @@ export async function unscheduleTaskLinkedEventAction(input: {
     const access = await requireMutationDataAccess();
     const parsed = eventIdSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Invalid event." };
-    const event = await requireOwnedEvent(access, parsed.data.eventId);
+    const event = await requireEditableEvent(access, parsed.data.eventId);
     if (!event.task_id) {
       return { ok: false, error: "This event is not linked to a task." };
     }
@@ -1399,7 +1661,7 @@ export async function updateEventTimesAction(input: {
     const access = await requireMutationDataAccess();
     const parsed = updateEventTimesSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Choose a valid time." };
-    const event = await requireOwnedEvent(access, parsed.data.eventId);
+    const event = await requireEditableEvent(access, parsed.data.eventId);
     if (event.task_id) {
       await moveTaskLinkedEvent(access.client, access.ownerId, parsed.data);
     } else {
@@ -1454,7 +1716,7 @@ export async function restoreCalendarEventTimesAction(input: {
     const parsed = restoreEventTimesSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Choose a valid time." };
 
-    const event = await requireOwnedEvent(access, parsed.data.eventId);
+    const event = await requireEditableEvent(access, parsed.data.eventId);
     if (event.task_id) {
       await moveTaskLinkedEvent(access.client, access.ownerId, parsed.data);
     } else {

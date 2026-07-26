@@ -64,6 +64,7 @@ export function moveItemToDay(
       dueAt: addLocalDays(item.dueAt, deltaDays).toISOString(),
     }
   }
+  if (item.source !== "planevo") return null
 
   return {
     kind: "event",
@@ -89,6 +90,7 @@ export function resizeBarEdge(
   edge: "start" | "end",
   targetDateKey: string,
 ): MonthMoveResult | null {
+  if (item.source !== "planevo") return null
   const target = parseLocalDateKey(targetDateKey)
   const lastDay = lastOccupiedMoment(item.start, item.end)
 

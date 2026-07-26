@@ -105,6 +105,34 @@ function previewTime(dayOfMonth: number, hour: number, minute = 0): string {
   return new Date(2026, 6, dayOfMonth, hour, minute).toISOString();
 }
 
+function previewAnchorRect({
+  left,
+  top,
+  width,
+  height,
+}: {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}): DOMRect {
+  const right = left + width;
+  const bottom = top + height;
+
+  // DOMRect is not available while the design route is prerendered in Node.
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right,
+    bottom,
+    width,
+    height,
+    toJSON: () => ({ x: left, y: top, left, top, right, bottom, width, height }),
+  };
+}
+
 function previewEvent(
   overrides: Partial<CalendarEventRow> &
     Pick<
@@ -132,6 +160,10 @@ function previewEvent(
     description_json: {},
     task_id: null,
     google_event_id: null,
+    external_connection_id: null,
+    external_event_id: null,
+    external_etag: null,
+    external_updated_at: null,
     source: "planevo",
     created_at: "2026-07-01T00:00:00.000Z",
     updated_at: "2026-07-01T00:00:00.000Z",
@@ -448,7 +480,12 @@ function EventDetailPanelDemo({
   label: string;
 }) {
   const peekEvent = DESIGN_EVENTS[3]!;
-  const anchorRect = new DOMRect(120, 120, 96, 36);
+  const anchorRect = previewAnchorRect({
+    left: 120,
+    top: 120,
+    width: 96,
+    height: 36,
+  });
 
   return (
     <figure>
@@ -499,7 +536,12 @@ function DraftCreatePreview() {
     title: "New event",
     calendarId: DESIGN_CALENDARS[0]!.id,
   };
-  const anchorRect = new DOMRect(320, 180, 120, 64);
+  const anchorRect = previewAnchorRect({
+    left: 320,
+    top: 180,
+    width: 120,
+    height: 64,
+  });
 
   return (
     <figure className="w-full">

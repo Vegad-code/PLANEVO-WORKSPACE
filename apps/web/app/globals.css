@@ -1371,6 +1371,11 @@ body {
   opacity: 0.72;
 }
 
+.planevo-rbc .planevo-rbc-event--read-only {
+  border-style: dashed;
+  cursor: default;
+}
+
 .planevo-rbc .rbc-addons-dnd-resizable {
   position: relative;
   height: 100%;
