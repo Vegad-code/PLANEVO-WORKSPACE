@@ -35,12 +35,17 @@ function event(overrides = {}) {
   }
 }
 
-function expand({ master = event(), exceptions = [] } = {}) {
+function expand({
+  master = event(),
+  exceptions = [],
+  windowStart = new Date("2026-03-08T00:00:00.000Z"),
+  windowEnd = new Date("2026-03-17T23:59:59.999Z"),
+} = {}) {
   return expandRecurrence({
     master,
     exceptions,
-    windowStart: new Date("2026-03-08T00:00:00.000Z"),
-    windowEnd: new Date("2026-03-17T23:59:59.999Z"),
+    windowStart,
+    windowEnd,
   })
 }
 
@@ -132,6 +137,106 @@ test("does not emit dtstart when it does not match the rule", () => {
   })
 
   assert.deepEqual(instances.map(({ starts_at }) => starts_at), ["2026-03-11T16:00:00.000Z"])
+})
+
+test("treats RFC UNTIL as an inclusive cap in instant time", () => {
+  const beforeOccurrence = expand({
+    master: event({ rrule: "FREQ=WEEKLY;BYDAY=MO;UNTIL=20260309T150000Z" }),
+  })
+  const atOccurrence = expand({
+    master: event({ rrule: "FREQ=WEEKLY;BYDAY=MO;UNTIL=20260309T160000Z" }),
+  })
+
+  assert.deepEqual(beforeOccurrence, [])
+  assert.deepEqual(atOccurrence.map(({ starts_at }) => starts_at), [
+    "2026-03-09T16:00:00.000Z",
+  ])
+})
+
+test("excludes an occurrence exactly at the controller window end", () => {
+  const instances = expand({
+    windowEnd: new Date("2026-03-09T16:00:00.000Z"),
+  })
+
+  assert.deepEqual(instances, [])
+})
+
+test("includes an occurrence exactly at recurrence_end", () => {
+  const instances = expand({
+    master: event({ recurrence_end: "2026-03-09T16:00:00.000Z" }),
+  })
+
+  assert.deepEqual(instances.map(({ starts_at }) => starts_at), [
+    "2026-03-09T16:00:00.000Z",
+  ])
+})
+
+test("fails closed when supplied exception rows are malformed", () => {
+  const recurrenceId = "2026-03-09T16:00:00.000Z"
+  const malformedExceptions = [
+    event({
+      id: "wrong-parent",
+      parent_event_id: "another-master",
+      recurrence_id: recurrenceId,
+      is_exception: true,
+    }),
+    event({
+      id: "missing-recurrence-id",
+      parent_event_id: "master-1",
+      recurrence_id: null,
+      is_exception: true,
+      is_cancelled: true,
+    }),
+    event({
+      id: "not-an-exception",
+      parent_event_id: "master-1",
+      recurrence_id: recurrenceId,
+      is_exception: false,
+    }),
+    event({
+      id: "deleted-override",
+      parent_event_id: "master-1",
+      recurrence_id: recurrenceId,
+      is_exception: true,
+      deleted_at: "2026-03-08T00:00:00.000Z",
+    }),
+    event({
+      id: "bad-start",
+      parent_event_id: "master-1",
+      recurrence_id: recurrenceId,
+      is_exception: true,
+      starts_at: "not-an-instant",
+    }),
+    event({
+      id: "reversed-range",
+      parent_event_id: "master-1",
+      recurrence_id: recurrenceId,
+      is_exception: true,
+      starts_at: "2026-03-09T19:00:00.000Z",
+      ends_at: "2026-03-09T18:00:00.000Z",
+    }),
+  ]
+
+  for (const malformedException of malformedExceptions) {
+    assert.deepEqual(expand({ exceptions: [malformedException] }), [])
+  }
+})
+
+test("does not return an override moved outside the requested window", () => {
+  const movedOutOverride = event({
+    id: "moved-out",
+    parent_event_id: "master-1",
+    recurrence_id: "2026-03-09T16:00:00.000Z",
+    is_exception: true,
+    starts_at: "2026-03-18T18:00:00.000Z",
+    ends_at: "2026-03-18T19:00:00.000Z",
+  })
+
+  const instances = expand({ exceptions: [movedOutOverride] })
+
+  assert.deepEqual(instances.map(({ id }) => id), [
+    "master-1::2026-03-16T16:00:00.000Z",
+  ])
 })
 
 test("fails closed for malformed recurrence data and malformed instance ids", () => {

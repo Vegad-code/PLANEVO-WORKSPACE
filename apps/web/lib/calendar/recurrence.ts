@@ -25,6 +25,16 @@ type LocalDateTime = {
   millisecond: number
 }
 
+type BuiltRule = {
+  rule: InstanceType<typeof RRule>
+  until: Date | null
+}
+
+type IndexedException = {
+  row: CalendarEventRow
+  startsAt: Date | null
+}
+
 const INSTANCE_SEPARATOR = "::"
 
 export function expandRecurrence({
@@ -42,7 +52,7 @@ export function expandRecurrence({
     !isDuration(durationMinutes) ||
     !isValidDate(windowStart) ||
     !isValidDate(windowEnd) ||
-    windowStart > windowEnd
+    windowStart >= windowEnd
   ) {
     return []
   }
@@ -52,19 +62,20 @@ export function expandRecurrence({
     return []
   }
 
-  const cappedWindowEnd = recurrenceEnd && recurrenceEnd < windowEnd ? recurrenceEnd : windowEnd
-  if (cappedWindowEnd < windowStart) {
+  const builtRule = buildRule({ rrule: rruleValue, dtstart: toFloatingDate(localStart) })
+  if (!builtRule) {
     return []
   }
 
+  const inclusiveEnd = earliestInstant(recurrenceEnd, builtRule.until)
+  if (inclusiveEnd && inclusiveEnd < windowStart) {
+    return []
+  }
+
+  const queryEnd = inclusiveEnd && inclusiveEnd < windowEnd ? inclusiveEnd : windowEnd
   const localWindowStart = toLocalDateTime({ date: windowStart, timezone })
-  const localWindowEnd = toLocalDateTime({ date: cappedWindowEnd, timezone })
-  if (!localWindowStart || !localWindowEnd) {
-    return []
-  }
-
-  const rule = buildRule({ rrule: rruleValue, dtstart: toFloatingDate(localStart) })
-  if (!rule) {
+  const localQueryEnd = toLocalDateTime({ date: queryEnd, timezone })
+  if (!localWindowStart || !localQueryEnd) {
     return []
   }
 
@@ -74,8 +85,8 @@ export function expandRecurrence({
   }
 
   try {
-    return rule
-      .between(toFloatingDate(localWindowStart), toFloatingDate(localWindowEnd), true)
+    return builtRule.rule
+      .between(toFloatingDate(localWindowStart), toFloatingDate(localQueryEnd), true)
       .flatMap((floatingOccurrence) => {
         const occurrenceStart = fromFloatingDate({
           floatingDate: floatingOccurrence,
@@ -84,8 +95,8 @@ export function expandRecurrence({
         if (
           !occurrenceStart ||
           occurrenceStart < windowStart ||
-          occurrenceStart > cappedWindowEnd ||
-          (recurrenceEnd && occurrenceStart > recurrenceEnd)
+          occurrenceStart >= windowEnd ||
+          (inclusiveEnd && occurrenceStart > inclusiveEnd)
         ) {
           return []
         }
@@ -93,7 +104,16 @@ export function expandRecurrence({
         const recurrenceId = occurrenceStart.toISOString()
         const exception = exceptionsByRecurrenceId.get(recurrenceId)
         if (exception) {
-          return exception.is_cancelled ? [] : [exception]
+          if (
+            exception.row.is_cancelled ||
+            !exception.startsAt ||
+            exception.startsAt < windowStart ||
+            exception.startsAt >= windowEnd
+          ) {
+            return []
+          }
+
+          return [exception.row]
         }
 
         const occurrenceEnd = new Date(
@@ -141,14 +161,22 @@ function buildRule({
 }: {
   rrule: string
   dtstart: Date
-}): InstanceType<typeof RRule> | null {
+}): BuiltRule | null {
   try {
     const parsed = RRule.parseString(rrule.trim())
     if (parsed.freq === undefined) {
       return null
     }
 
-    return new RRule({ ...parsed, dtstart })
+    const { until, ...floatingOptions } = parsed
+    if (until && !isValidDate(until)) {
+      return null
+    }
+
+    return {
+      rule: new RRule({ ...floatingOptions, dtstart }),
+      until: until ?? null,
+    }
   } catch {
     return null
   }
@@ -160,22 +188,49 @@ function indexExceptions({
 }: {
   exceptions: CalendarEventRow[]
   masterId: string
-}): Map<string, CalendarEventRow> | null {
-  const indexed = new Map<string, CalendarEventRow>()
+}): Map<string, IndexedException> | null {
+  const indexed = new Map<string, IndexedException>()
   for (const exception of exceptions) {
-    if (exception.parent_event_id !== masterId || !exception.recurrence_id) {
-      continue
-    }
-
-    const recurrenceId = parseInstant(exception.recurrence_id)
-    if (!recurrenceId) {
+    if (
+      exception.parent_event_id !== masterId ||
+      !exception.recurrence_id ||
+      !exception.is_exception ||
+      exception.deleted_at !== null
+    ) {
       return null
     }
 
-    indexed.set(recurrenceId.toISOString(), exception)
+    const recurrenceId = parseInstant(exception.recurrence_id)
+    const recurrenceKey = recurrenceId?.toISOString()
+    if (!recurrenceKey || indexed.has(recurrenceKey)) {
+      return null
+    }
+
+    if (exception.is_cancelled) {
+      indexed.set(recurrenceKey, { row: exception, startsAt: null })
+      continue
+    }
+
+    const startsAt = parseInstant(exception.starts_at)
+    const endsAt = parseInstant(exception.ends_at)
+    if (!startsAt || !endsAt || startsAt >= endsAt) {
+      return null
+    }
+
+    indexed.set(recurrenceKey, { row: exception, startsAt })
   }
 
   return indexed
+}
+
+function earliestInstant(left: Date | null, right: Date | null): Date | null {
+  if (!left) {
+    return right
+  }
+  if (!right) {
+    return left
+  }
+  return left < right ? left : right
 }
 
 function isDuration(value: number | null): value is number {
