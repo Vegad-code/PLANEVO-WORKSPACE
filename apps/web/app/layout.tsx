@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Inter } from "next/font/google";
 import { GeistMono } from "geist/font/mono";
+import { PLANNING_RAIL_BOOT_SCRIPT } from "@/lib/calendar/planning-prefs";
+import { LIBRARY_RAIL_BOOT_SCRIPT } from "@/lib/files/library-prefs";
 import "./globals.css";
 
 const appearanceScript = `
@@ -55,7 +57,15 @@ export default function RootLayout({
       className={`${generalSans.variable} ${inter.variable} ${GeistMono.variable} h-full antialiased`}
     >
       <head>
+        {/* Blocking head scripts (same pattern as appearance) — next/script
+            beforeInteractive is root-only and still warns when nested. */}
         <script dangerouslySetInnerHTML={{ __html: appearanceScript }} />
+        <script
+          dangerouslySetInnerHTML={{ __html: PLANNING_RAIL_BOOT_SCRIPT }}
+        />
+        <script
+          dangerouslySetInnerHTML={{ __html: LIBRARY_RAIL_BOOT_SCRIPT }}
+        />
       </head>
       <body className="min-h-full">{children}</body>
     </html>

@@ -3,6 +3,8 @@
 import { useEffect, useState, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import { formatNowIndicatorTime } from "@/lib/calendar/format-now-indicator-time"
+import { shouldFlipNowIndicatorBadge } from "@/lib/calendar/now-indicator-badge-flip"
+import { cn } from "@/lib/utils"
 import { percentOffsetForTime } from "./time-axis"
 
 type CalendarNowIndicatorProps = {
@@ -14,12 +16,27 @@ type CalendarNowIndicatorProps = {
   rbcRootRef: RefObject<HTMLElement | null>
 }
 
-function NowIndicatorMarkup({ now }: { now: Date }) {
+function NowIndicatorMarkup({
+  now,
+  containerHeightPx,
+}: {
+  now: Date
+  containerHeightPx: number
+}) {
+  const percentTop = percentOffsetForTime(now)
+  const flipBadge = shouldFlipNowIndicatorBadge({
+    percentTop,
+    containerHeightPx,
+  })
+
   return (
     <div
       aria-hidden="true"
-      style={{ top: `${percentOffsetForTime(now)}%` }}
-      className="planevo-rbc-now-indicator pointer-events-none absolute"
+      style={{ top: `${percentTop}%` }}
+      className={cn(
+        "planevo-rbc-now-indicator pointer-events-none absolute",
+        flipBadge && "planevo-rbc-now-indicator--badge-below",
+      )}
     >
       <div className="planevo-rbc-now-line" />
       <span className="planevo-rbc-now-badge tabular-nums">
@@ -41,10 +58,12 @@ export function CalendarNowIndicator({
   rbcRootRef,
 }: CalendarNowIndicatorProps) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null)
+  const [containerHeightPx, setContainerHeightPx] = useState(0)
 
   useEffect(() => {
     if (!visible || !rbcRootRef.current) {
       setMountNode(null)
+      setContainerHeightPx(0)
       return
     }
 
@@ -76,9 +95,28 @@ export function CalendarNowIndicator({
 
     observer.observe(root, { childList: true, subtree: true })
     return () => observer.disconnect()
-  }, [visible, rbcRootRef, now, preferSingleDaySlot])
+  }, [visible, rbcRootRef, preferSingleDaySlot])
+
+  useEffect(() => {
+    if (!mountNode) {
+      setContainerHeightPx(0)
+      return
+    }
+
+    const updateHeight = () => {
+      setContainerHeightPx(mountNode.getBoundingClientRect().height)
+    }
+
+    updateHeight()
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(mountNode)
+    return () => observer.disconnect()
+  }, [mountNode])
 
   if (!visible || !mountNode) return null
 
-  return createPortal(<NowIndicatorMarkup now={now} />, mountNode)
+  return createPortal(
+    <NowIndicatorMarkup now={now} containerHeightPx={containerHeightPx} />,
+    mountNode,
+  )
 }

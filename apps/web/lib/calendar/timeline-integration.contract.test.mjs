@@ -5,7 +5,7 @@ import { calendarNavTransition } from "./calendar-nav-motion.ts"
 import { PRESET_CONFIGS } from "./view-config.ts"
 import { resolveRenderer } from "./view-registry.ts"
 
-test("Classic and Flow resolve inside the same grid engine boundary", async () => {
+test("Classic resolves inside the grid engine boundary", async () => {
   const [gridSource, productSource] = await Promise.all([
     readFile(
       new URL(
@@ -24,12 +24,10 @@ test("Classic and Flow resolve inside the same grid engine boundary", async () =
   ])
 
   assert.equal(resolveRenderer(PRESET_CONFIGS.classic).id, "rbc-time-grid")
-  assert.equal(resolveRenderer(PRESET_CONFIGS.flow).id, "timeline")
   assert.match(gridSource, /resolveRenderer\(effectiveViewConfig\)/)
-  assert.match(gridSource, /isTimelineView \? \(/)
-  assert.match(gridSource, /<TimelineGrid/)
   assert.match(productSource, /<CalendarViewTransition[\s\S]*<CalendarGridEngine/)
-  assert.match(productSource, /viewConfig=\{activeSavedViewConfig\}/)
+  assert.doesNotMatch(productSource, /viewConfig=\{activeSavedViewConfig\}/)
+  assert.doesNotMatch(productSource, /CalendarSavedViewMenu/)
 })
 
 test("timeline keeps shared interactions and every item in the roving grid", async () => {

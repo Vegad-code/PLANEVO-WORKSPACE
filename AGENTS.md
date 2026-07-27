@@ -79,6 +79,9 @@ user asks for planning or the task is explicitly being handled in planning mode.
 
 ## Working style
 
+- **Hosted Supabase for this repo is always `aixvpsmpiucticxutngp`.** Never target a
+  different project/ref for migrations, SQL, advisors, or MCP unless the founder
+  explicitly names another. (`supabase/config.toml` and `apps/web/.env.local` match.)
 - Work directly in the active Planevo checkout at all times. Never create or switch to a
   separate Git worktree, temporary clone, or branch-specific checkout unless the user explicitly
   requests it.

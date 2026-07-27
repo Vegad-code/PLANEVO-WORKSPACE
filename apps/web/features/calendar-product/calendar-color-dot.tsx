@@ -18,6 +18,14 @@ export const CALENDAR_COLOR_BLOCK_CLASS: Record<CalendarColor, string> = {
   ocean: "bg-ocean-tint",
 };
 
+export const CALENDAR_EVENT_BLOCK_CLASS: Record<CalendarColor, string> = {
+  slate: "calendar-event-block--slate",
+  marigold: "calendar-event-block--marigold",
+  meadow: "calendar-event-block--meadow",
+  brick: "calendar-event-block--brick",
+  ocean: "calendar-event-block--ocean",
+};
+
 export const CALENDAR_COLOR_BORDER_CLASS: Record<CalendarColor, string> = {
   slate: "border-slate",
   marigold: "border-marigold",

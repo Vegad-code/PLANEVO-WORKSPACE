@@ -11,6 +11,7 @@ import {
 import { openMonthDayFromAgenda } from "@/lib/calendar/month-day-open"
 import { getMonthDayAgendaPosition } from "@/lib/calendar/month-day-agenda-position"
 import { cn } from "@/lib/utils"
+import { CALENDAR_EVENT_BLOCK_CLASS } from "./calendar-color-dot"
 import { formatTimeLabel } from "./time-axis"
 
 type MonthDayAgendaPopoverProps = {
@@ -192,8 +193,8 @@ export function MonthDayAgendaPopover({
                 <button
                   type="button"
                   className={cn(
-                    "calendar-month-agenda-event flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-surface-raised focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink",
-                    `planevo-rbc-event--${item.calendarColor}`,
+                    "calendar-event-block calendar-month-agenda-event flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:brightness-95 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink",
+                    CALENDAR_EVENT_BLOCK_CLASS[item.calendarColor],
                   )}
                   onClick={(clickEvent) =>
                     onSelectEvent(item.event, clickEvent.currentTarget)

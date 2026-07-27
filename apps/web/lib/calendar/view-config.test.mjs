@@ -7,23 +7,23 @@ import {
   resolveRenderer,
 } from "./view-registry.ts"
 
-test("resolves a known preset to its full config", () => {
-  // Arrange / Act / Assert
-  assert.deepEqual(resolveViewConfig("planner", null), PRESET_CONFIGS.planner)
-  assert.equal(resolveViewConfig("flow", {}).layout, "single-timeline")
+test("resolves Classic to its full config", () => {
+  assert.deepEqual(resolveViewConfig("classic", null), PRESET_CONFIGS.classic)
+})
+
+test("retired Planner and Flow presets degrade to Classic", () => {
+  assert.deepEqual(resolveViewConfig("planner", null), PRESET_CONFIGS.classic)
+  assert.deepEqual(resolveViewConfig("flow", {}), PRESET_CONFIGS.classic)
 })
 
 test("stored overrides win over the preset base", () => {
-  // Arrange / Act — a view records only what it changes.
   const config = resolveViewConfig("classic", { dayCount: 3 })
 
-  // Assert
   assert.equal(config.dayCount, 3)
   assert.equal(config.sidebarMode, PRESET_CONFIGS.classic.sidebarMode)
 })
 
 test("a malformed row degrades to the base instead of throwing", () => {
-  // Arrange / Act / Assert — a bad config must never blank the calendar.
   assert.deepEqual(
     resolveViewConfig("classic", { layout: "not-a-layout" }),
     PRESET_CONFIGS.classic,
@@ -33,7 +33,6 @@ test("a malformed row degrades to the base instead of throwing", () => {
 })
 
 test("registry picks the renderer, and day-count 1 pages by day", () => {
-  // Arrange / Act / Assert
   assert.equal(resolveRenderer(configForLegacyView("week")).id, "rbc-time-grid")
   assert.equal(resolveRenderer(configForLegacyView("month")).id, "month-grid")
   assert.equal(
@@ -46,10 +45,9 @@ test("registry picks the renderer, and day-count 1 pages by day", () => {
   )
 })
 
-test("Planner and Flow resolve through the registered timeline renderer", () => {
-  // Arrange / Act / Assert
-  assert.equal(isLayoutImplemented("single-timeline"), true)
+test("Classic Day/Week/Month are the implemented product layouts", () => {
   assert.equal(isLayoutImplemented("grid-columns"), true)
-  assert.equal(resolveRenderer(PRESET_CONFIGS.flow).id, "timeline")
-  assert.equal(resolveRenderer(PRESET_CONFIGS.planner).navigationUnit, "day")
+  assert.equal(isLayoutImplemented("month-cells"), true)
+  assert.equal(isLayoutImplemented("single-timeline"), true)
+  assert.equal(resolveRenderer(PRESET_CONFIGS.classic).id, "rbc-time-grid")
 })

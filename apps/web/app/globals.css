@@ -39,6 +39,21 @@
   --color-slate-tint: #eae4f2;
   --color-ocean-tint: #ddebf1;
 
+  /*
+   * Calendar grid event fills — opaque GCal-style blocks. Scoped here so pills,
+   * AI surfaces, and other tint consumers stay independent.
+   */
+  --color-calendar-event-fill-slate: var(--color-slate-tint);
+  --color-calendar-event-fill-marigold: var(--color-marigold-tint);
+  --color-calendar-event-fill-meadow: var(--color-meadow-tint);
+  --color-calendar-event-fill-brick: var(--color-brick-tint);
+  --color-calendar-event-fill-ocean: var(--color-ocean-tint);
+  --color-calendar-event-fill-slate-past: color-mix(in srgb, var(--color-slate) 20%, var(--color-paper));
+  --color-calendar-event-fill-marigold-past: color-mix(in srgb, var(--color-marigold) 20%, var(--color-paper));
+  --color-calendar-event-fill-meadow-past: color-mix(in srgb, var(--color-meadow) 20%, var(--color-paper));
+  --color-calendar-event-fill-brick-past: color-mix(in srgb, var(--color-brick) 20%, var(--color-paper));
+  --color-calendar-event-fill-ocean-past: color-mix(in srgb, var(--color-ocean) 20%, var(--color-paper));
+
   /* Fonts (loaded via next/font in app/layout.tsx) */
   --font-sans: var(--font-general-sans), ui-sans-serif, system-ui, sans-serif;
   --font-product: var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont,
@@ -170,6 +185,11 @@
   --size-calendar-month-agenda-width: 18rem;
   --size-calendar-month-agenda-narrow-max-height: 20rem;
   --spacing-calendar-month-agenda-inset: 0.75rem;
+  /* Event popover callout beak — chevron tip; overlap tucks under panel edge. */
+  --size-event-popover-callout-beak-width: 1.25rem;
+  --size-event-popover-callout-beak-height: 1.5rem;
+  --size-event-popover-callout-beak-half-height: 0.75rem;
+  --size-event-popover-callout-beak-overlap: 0.5rem;
 
   /* Month grid — CSS Grid engine. Ocean is the only chrome accent here. */
   --size-calendar-month-date-header: 1.5rem;
@@ -216,6 +236,10 @@
   --sidebar-motion-duration-peek-exit: 200ms;
   --sidebar-motion-ease-out: cubic-bezier(0, 0, 0.2, 1);
   --sidebar-motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Product rail boot defaults — overridden by beforeInteractive localStorage scripts */
+  --planning-rail-width: 320px;
+  --library-rail-width: 288px;
 
   /* Spotlight overlay — Apple-style glass (overlay-only founder override) */
   --color-spotlight-backdrop: rgba(0, 0, 0, 0.42);
@@ -287,6 +311,18 @@
   --color-brick-tint: #594141;
   --color-slate-tint: #443f57;
   --color-ocean-tint: #364954;
+
+  /* Calendar grid event fills — saturated opaque mixes (not translucent tints). */
+  --color-calendar-event-fill-slate: color-mix(in srgb, var(--color-slate) 70%, var(--color-paper));
+  --color-calendar-event-fill-marigold: color-mix(in srgb, var(--color-marigold) 70%, var(--color-paper));
+  --color-calendar-event-fill-meadow: color-mix(in srgb, var(--color-meadow) 70%, var(--color-paper));
+  --color-calendar-event-fill-brick: color-mix(in srgb, var(--color-brick) 70%, var(--color-paper));
+  --color-calendar-event-fill-ocean: color-mix(in srgb, var(--color-ocean) 70%, var(--color-paper));
+  --color-calendar-event-fill-slate-past: color-mix(in srgb, var(--color-slate) 40%, var(--color-paper));
+  --color-calendar-event-fill-marigold-past: color-mix(in srgb, var(--color-marigold) 40%, var(--color-paper));
+  --color-calendar-event-fill-meadow-past: color-mix(in srgb, var(--color-meadow) 40%, var(--color-paper));
+  --color-calendar-event-fill-brick-past: color-mix(in srgb, var(--color-brick) 40%, var(--color-paper));
+  --color-calendar-event-fill-ocean-past: color-mix(in srgb, var(--color-ocean) 40%, var(--color-paper));
 
   /* Calendar today — solid cornflower (GCal-adjacent, opaque on dark) */
   --color-calendar-today-disc: #7eb0f5;
@@ -406,6 +442,30 @@ body {
   [data-sidebar-view="peek"] {
     animation: none;
   }
+}
+
+/*
+ * Pre-hydration product rails — beforeInteractive boot scripts set
+ * data-planning-collapsed / --planning-rail-width /
+ * data-library-collapsed / --library-rail-width.
+ * React removes these classes after useLayoutEffect prefs restore and applies
+ * inline width (which wins over these rules).
+ */
+.planning-rail-boot {
+  width: var(--planning-rail-width, 0px);
+}
+
+html[data-planning-collapsed="true"] .planning-rail-boot {
+  width: 0;
+}
+
+.library-rail-boot {
+  /* Boot script always sets this; 0 fallback avoids SSR open flash if script lags. */
+  width: var(--library-rail-width, 0px);
+}
+
+html[data-library-collapsed="true"] .library-rail-boot {
+  width: 0;
 }
 
 /* Lumis create-task modal fine detail — token-only dot grid */
@@ -549,15 +609,81 @@ body {
   border-color: var(--color-border-strong);
 }
 
-/* Event popover — liquid glass shell + directional callout arrow. */
+/* Event popover — CSS backdrop-filter glass. Same recipe used by both the
+   popover body and the callout arrow so they form one continuous glass surface.
+
+   .event-popover-glass-body: standard translucent glass with a ::before ring
+   whose mask-image cuts a gap on the arrow side, hiding the border exactly
+   where the arrow base meets the panel. The arrow's own SVG stroke re-closes
+   that gap to produce a single seamless outline.
+
+   .event-popover-glass-fallback: reduced-transparency solid fallback (same
+   shape but no backdrop-filter, no masked border — just a solid panel). */
+
+.event-popover-glass-body,
 .event-popover-glass-fallback {
+  position: relative;
+  border-radius: 1rem;
   background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
-  border: 1px solid var(--color-border-strong);
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   backdrop-filter: blur(28px) saturate(160%);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+/*
+  The border lives on a ::before pseudo-element so we can apply mask-image to
+  it independently. The mask punches a transparent rectangle over the arrow
+  attachment point, width = beak-overlap + 2px, height = beak-height.
+  Arrow Y centre comes in via --arrow-y (set by EventDetailPopover on the
+  shell's style prop). Which side to punch is --arrow-side ("left" | "right").
+*/
+.event-popover-glass-body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--color-ink) 22%, transparent);
+  pointer-events: none;
+  z-index: 1;
+
+  /* Default: no slit ("centered" placement has no arrow). */
+  --_gap-y: var(--arrow-y, -9999px);
+  --_gap-half: var(--arrow-half-h, var(--size-event-popover-callout-beak-half-height));
+  --_gap-top: calc(var(--_gap-y) - var(--_gap-half));
+  --_gap-bot: calc(var(--_gap-y) + var(--_gap-half));
+  --_slit-w: calc(var(--size-event-popover-callout-beak-overlap) + 2px);
+
+  /*
+    mask-image paints the border except in a thin rectangle at the attachment.
+    Two linear-gradients: one for the main body (always visible), one for a
+    slit rect of width --_slit-w on the correct edge that is transparent so
+    the border is erased there.
+
+    The slit rect spans from --_gap-top to --_gap-bot vertically and covers
+    only the first --_slit-w pixels from the correct edge.
+  */
+  mask-image:
+    linear-gradient(black, black),
+    linear-gradient(black, black);
+  mask-size: 100% 100%, var(--_slit-w) calc(var(--_gap-bot) - var(--_gap-top));
+  mask-position: 0 0, var(--arrow-side, left) var(--_gap-top);
+  mask-repeat: no-repeat, no-repeat;
+  mask-composite: exclude;
+  -webkit-mask-composite: destination-out;
+}
+
+.event-popover-glass-fallback::before {
+  /* Solid border ring, no slit needed (arrow uses same solid fill). */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--color-ink) 22%, transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Event card interior — one solid dish of liquid glass. The popover shell around
@@ -627,82 +753,69 @@ body {
   color: var(--color-event-capture-assumed-foreground);
 }
 
+/* (liquid-glass-react host CSS removed — popover now uses native CSS glass) */
+
 /*
-  liquid-glass-react containment for side-anchored popovers.
-  The library emits overlay <div>/<span> siblings + a GlassContainer as a
-  Fragment. Those overlays are position:relative with full glass height, so
-  they stack and explode the popover. Pin overlays absolute; let the glass
-  node define height. Kill transform/transition so only the frost UI remains.
+  Callout beak — matches the popover glass recipe exactly so the two layers
+  appear as one continuous surface. The ::before border on the glass body has
+  a slit cut at the arrow's position; the SVG stroke re-closes that slit so
+  the combined silhouette reads as a single clean outline.
+
+  No seam plug needed: the overlap simply extends the backdrop-filter layer
+  underneath the panel border, and the panel's masked border hides the join.
 */
-.event-popover-liquid-host {
-  position: relative;
-  width: 100%;
-  isolation: isolate;
-}
-
-.event-popover-liquid-host > div,
-.event-popover-liquid-host > span {
-  position: absolute !important;
-  inset: 0 !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  transform: none !important;
-  transition: none !important;
-  margin: 0 !important;
-  pointer-events: none;
-}
-
-.event-popover-liquid-host > .event-popover-liquid-glass {
-  position: relative !important;
-  inset: auto !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: auto !important;
-  transform: none !important;
-  transition: none !important;
-  pointer-events: auto;
-}
-
-.event-popover-liquid-glass .glass {
-  display: flex !important;
-  width: 100%;
-  align-items: stretch;
-  gap: 0 !important;
-  transition: none !important;
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-}
-
-.event-popover-liquid-glass .glass > div,
-.event-popover-liquid-content {
-  width: 100%;
-  color: var(--color-ink) !important;
-  text-shadow: none !important;
-  font: inherit !important;
-}
-
 .event-popover-callout-arrow {
-  width: 12px;
-  height: 12px;
+  width: var(--size-event-popover-callout-beak-width);
+  height: var(--size-event-popover-callout-beak-height);
+  overflow: visible;
+  /* Centre the beak on the arrow Y coordinate */
+  transform: translateY(-50%);
+  /* Sit in front of the glass body */
+  z-index: 1;
+}
+
+/* Glass fill — same backdrop-filter recipe as .event-popover-glass-body */
+.event-popover-callout-arrow__glass {
+  position: absolute;
+  inset: 0;
   background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 2px;
-  box-shadow:
-    -2px 2px 8px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  transform: translateY(-50%) rotate(45deg);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  backdrop-filter: blur(28px) saturate(160%);
+  /* No box-shadow: the panel body shadow provides the overall depth */
 }
 
+/* SVG container — tip-only stroke closes the border slit */
+.event-popover-callout-arrow__stroke-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.event-popover-callout-arrow__stroke {
+  stroke: color-mix(in srgb, var(--color-ink) 22%, transparent);
+  stroke-width: 1px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Points-left: arrow base is on the left edge of the popover */
 .event-popover-callout-arrow--points-left {
-  left: -6px;
+  left: calc(
+    -1 * var(--size-event-popover-callout-beak-width) +
+      var(--size-event-popover-callout-beak-overlap)
+  );
 }
 
+/* Points-right: arrow base is on the right edge; flip the shape */
 .event-popover-callout-arrow--points-right {
-  right: -6px;
+  right: calc(
+    -1 * var(--size-event-popover-callout-beak-width) +
+      var(--size-event-popover-callout-beak-overlap)
+  );
+  transform: translateY(-50%) scaleX(-1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -728,9 +841,20 @@ body {
 
   .calendar-rail-glass,
   .calendar-panel-glass,
-  .calendar-event-glass,
-  .event-popover-glass-fallback,
-  .event-popover-callout-arrow {
+  .calendar-event-glass {
+    background: var(--color-surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .event-popover-glass-body,
+  .event-popover-glass-fallback {
+    background: var(--color-surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .event-popover-callout-arrow__glass {
     background: var(--color-surface-raised);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -1224,54 +1348,104 @@ body {
   min-height: 100%;
   border-left-width: 3px;
   border-left-style: solid;
-  background: var(--planevo-rbc-event-bg, var(--color-slate-tint));
+  background: var(--planevo-rbc-event-bg, var(--color-calendar-event-fill-slate));
   border-left-color: var(--planevo-rbc-event-accent, var(--color-slate));
 }
 
 .planevo-rbc .planevo-rbc-event--slate {
-  --planevo-rbc-event-bg: var(--color-slate-tint);
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-slate);
   --planevo-rbc-event-accent: var(--color-slate);
 }
 
 .planevo-rbc .planevo-rbc-event--marigold {
-  --planevo-rbc-event-bg: var(--color-marigold-tint);
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-marigold);
   --planevo-rbc-event-accent: var(--color-marigold);
 }
 
 .planevo-rbc .planevo-rbc-event--meadow {
-  --planevo-rbc-event-bg: var(--color-meadow-tint);
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-meadow);
   --planevo-rbc-event-accent: var(--color-meadow);
 }
 
 .planevo-rbc .planevo-rbc-event--brick {
-  --planevo-rbc-event-bg: var(--color-brick-tint);
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-brick);
   --planevo-rbc-event-accent: var(--color-brick);
 }
 
 .planevo-rbc .planevo-rbc-event--ocean {
-  --planevo-rbc-event-bg: var(--color-ocean-tint);
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-ocean);
   --planevo-rbc-event-accent: var(--color-ocean);
 }
 
-/* GCal-like fills — saturated mix on dark so blocks stay visible. */
-[data-theme="dark"] .planevo-rbc .planevo-rbc-event--slate {
-  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-slate) 55%, var(--color-paper));
+.planevo-rbc .planevo-rbc-event--past.planevo-rbc-event--slate {
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-slate-past);
 }
 
-[data-theme="dark"] .planevo-rbc .planevo-rbc-event--marigold {
-  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-marigold) 55%, var(--color-paper));
+.planevo-rbc .planevo-rbc-event--past.planevo-rbc-event--marigold {
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-marigold-past);
 }
 
-[data-theme="dark"] .planevo-rbc .planevo-rbc-event--meadow {
-  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-meadow) 55%, var(--color-paper));
+.planevo-rbc .planevo-rbc-event--past.planevo-rbc-event--meadow {
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-meadow-past);
 }
 
-[data-theme="dark"] .planevo-rbc .planevo-rbc-event--brick {
-  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-brick) 55%, var(--color-paper));
+.planevo-rbc .planevo-rbc-event--past.planevo-rbc-event--brick {
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-brick-past);
 }
 
-[data-theme="dark"] .planevo-rbc .planevo-rbc-event--ocean {
-  --planevo-rbc-event-bg: color-mix(in srgb, var(--color-ocean) 55%, var(--color-paper));
+.planevo-rbc .planevo-rbc-event--past.planevo-rbc-event--ocean {
+  --planevo-rbc-event-bg: var(--color-calendar-event-fill-ocean-past);
+}
+
+/* Shared opaque event blocks — timeline, month agenda, and RBC use the same fills. */
+.calendar-event-block {
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
+.calendar-event-block--slate {
+  background: var(--color-calendar-event-fill-slate);
+  border-left-color: var(--color-slate);
+}
+
+.calendar-event-block--marigold {
+  background: var(--color-calendar-event-fill-marigold);
+  border-left-color: var(--color-marigold);
+}
+
+.calendar-event-block--meadow {
+  background: var(--color-calendar-event-fill-meadow);
+  border-left-color: var(--color-meadow);
+}
+
+.calendar-event-block--brick {
+  background: var(--color-calendar-event-fill-brick);
+  border-left-color: var(--color-brick);
+}
+
+.calendar-event-block--ocean {
+  background: var(--color-calendar-event-fill-ocean);
+  border-left-color: var(--color-ocean);
+}
+
+.calendar-event-block--past.calendar-event-block--slate {
+  background: var(--color-calendar-event-fill-slate-past);
+}
+
+.calendar-event-block--past.calendar-event-block--marigold {
+  background: var(--color-calendar-event-fill-marigold-past);
+}
+
+.calendar-event-block--past.calendar-event-block--meadow {
+  background: var(--color-calendar-event-fill-meadow-past);
+}
+
+.calendar-event-block--past.calendar-event-block--brick {
+  background: var(--color-calendar-event-fill-brick-past);
+}
+
+.calendar-event-block--past.calendar-event-block--ocean {
+  background: var(--color-calendar-event-fill-ocean-past);
 }
 
 .planevo-rbc .rbc-event:focus {
@@ -1352,8 +1526,20 @@ body {
   white-space: nowrap;
 }
 
+/* Near the top of the grid the above-line badge clips into the day header. */
+.planevo-rbc-now-indicator--badge-below .planevo-rbc-now-badge {
+  top: var(--size-calendar-now-line);
+  border-radius: 0 0 var(--radius-calendar-now-badge) var(--radius-calendar-now-badge);
+  transform: none;
+}
+
 .planevo-rbc-now-indicator--extends-gutter .planevo-rbc-now-badge {
   transform: translateY(-100%);
+}
+
+.planevo-rbc-now-indicator--extends-gutter.planevo-rbc-now-indicator--badge-below
+  .planevo-rbc-now-badge {
+  transform: none;
 }
 
 .planevo-rbc .rbc-slot-selection {
@@ -1361,14 +1547,9 @@ body {
 }
 
 .planevo-rbc .planevo-rbc-event--draft {
-  opacity: 0.96;
   outline: 1px dashed
     color-mix(in srgb, var(--planevo-rbc-event-accent) 45%, transparent);
   outline-offset: -1px;
-}
-
-.planevo-rbc .planevo-rbc-event--past {
-  opacity: 0.72;
 }
 
 .planevo-rbc .planevo-rbc-event--read-only {

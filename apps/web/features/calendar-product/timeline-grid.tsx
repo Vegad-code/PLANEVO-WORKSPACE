@@ -18,8 +18,7 @@ import {
 import type { ViewConfig } from "@/lib/calendar/view-config";
 import { cn } from "@/lib/utils";
 import {
-  CALENDAR_COLOR_BLOCK_CLASS,
-  CALENDAR_COLOR_BORDER_CLASS,
+  CALENDAR_EVENT_BLOCK_CLASS,
 } from "./calendar-color-dot";
 import { formatTimeLabel } from "./time-axis";
 
@@ -126,9 +125,8 @@ function TimelineItemButton({
       data-event-id={item.eventId}
       data-timeline-item-id={item.id}
       className={cn(
-        "flex h-full w-full min-w-0 items-start gap-2 rounded-[var(--radius-calendar-control)] border-l-2 px-3 py-2 text-left outline-none hover:brightness-95 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink",
-        CALENDAR_COLOR_BLOCK_CLASS[item.calendarColor],
-        CALENDAR_COLOR_BORDER_CLASS[item.calendarColor],
+        "calendar-event-block flex h-full w-full min-w-0 items-start gap-2 rounded-[var(--radius-calendar-control)] px-3 py-2 text-left outline-none hover:brightness-95 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink",
+        CALENDAR_EVENT_BLOCK_CLASS[item.calendarColor],
       )}
       onFocus={onFocus}
       onKeyDown={onKeyDown}

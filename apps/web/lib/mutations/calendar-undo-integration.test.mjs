@@ -27,6 +27,13 @@ const monthMutations = readFileSync(
   ),
   "utf8",
 )
+const mutations = readFileSync(
+  new URL(
+    "../../features/calendar-product/use-calendar-mutations.ts",
+    import.meta.url,
+  ),
+  "utf8",
+)
 
 test("shared calendar chrome offers Undo for delete, unschedule, move, and resize", () => {
   assert.match(view, /function offerUndo\(/)
@@ -42,10 +49,14 @@ test("shared calendar chrome offers Undo for delete, unschedule, move, and resiz
 test("Undo restores soft-deleted events atomically and exact prior times", () => {
   assert.match(actions, /restoreCalendarEventUndo\(/)
   assert.match(view, /restoreCalendarEventAction\(\{ eventId: payload\.eventId \}\)/)
+  // The view hands the full prior state to the shared mutation hook, which
+  // calls the restore action. Restoring only the UTC pair would desync
+  // starts_at_local/duration_minutes and leave a linked task's due date moved.
   assert.match(
     view,
-    /restoreCalendarEventTimesAction\(\{[\s\S]*startsAt: payload\.startsAt,[\s\S]*endsAt: payload\.endsAt,[\s\S]*startsAtLocal: payload\.startsAtLocal,[\s\S]*durationMinutes: payload\.durationMinutes/,
+    /restoreEventTimes\(\{[\s\S]*startsAt: payload\.startsAt,[\s\S]*endsAt: payload\.endsAt,[\s\S]*startsAtLocal: payload\.startsAtLocal,[\s\S]*endsAtLocal: payload\.endsAtLocal,[\s\S]*durationMinutes: payload\.durationMinutes/,
   )
+  assert.match(mutations, /restoreCalendarEventTimesAction\(input\)/)
   assert.match(view, /restoreRecurringCalendarMutationAction\(/)
 })
 
@@ -55,5 +66,5 @@ test("every renderer reports the committed interaction kind to shared chrome", (
     grid,
     /onEventResize=\{\(info\) => handleEventTimes\(info, "resize"\)\}/,
   )
-  assert.match(monthMutations, /onEventMoveCommitted\(move\)/)
+  assert.match(monthMutations, /applyMove\(move, \{[\s\S]*onEventMoveCommitted/)
 })

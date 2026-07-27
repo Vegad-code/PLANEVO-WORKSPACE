@@ -50,14 +50,10 @@ type EditorDraft = {
 
 const PRESET_LABELS: Record<SavedViewPreset, string> = {
   classic: "Classic",
-  planner: "Planner",
-  flow: "Flow",
 };
 
 const PRESET_DESCRIPTIONS: Record<SavedViewPreset, string> = {
   classic: "Familiar calendar grid",
-  planner: "One-day plan with tasks",
-  flow: "Vertical daily timeline",
 };
 
 const TIME_AXIS_MODES = [

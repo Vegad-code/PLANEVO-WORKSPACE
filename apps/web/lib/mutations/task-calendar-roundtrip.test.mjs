@@ -10,9 +10,9 @@ const panelSource = readFileSync(
   new URL("../../features/calendar-product/event-detail-panel.tsx", import.meta.url),
   "utf8",
 );
-const viewSource = readFileSync(
+const mutationsSource = readFileSync(
   new URL(
-    "../../features/calendar-product/calendar-product-view.tsx",
+    "../../features/calendar-product/use-calendar-mutations.ts",
     import.meta.url,
   ),
   "utf8",
@@ -63,6 +63,7 @@ test("linked task event controls explain completion and unscheduling", () => {
     panelSource,
     /The task stays in Tasks and returns to the backlog\./,
   );
-  assert.match(viewSource, /completeTaskLinkedEventAction/);
-  assert.match(viewSource, /unscheduleTaskLinkedEventAction/);
+  // Both actions are wired in the shared mutation hook, not the view.
+  assert.match(mutationsSource, /completeTaskLinkedEventAction/);
+  assert.match(mutationsSource, /unscheduleTaskLinkedEventAction/);
 });

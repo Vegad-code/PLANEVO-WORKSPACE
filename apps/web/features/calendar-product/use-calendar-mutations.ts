@@ -12,6 +12,7 @@ import {
   createCalendarEventAction,
   deleteCalendarEventAction,
   quickAddTaskAction,
+  restoreCalendarEventTimesAction,
   scheduleTaskFromDragAction,
   setTaskStatusAction,
   unscheduleTaskLinkedEventAction,
@@ -62,6 +63,16 @@ type MutationContext = {
   scope: CalendarScope
   view: CalendarView
   anchor: Date
+}
+
+/** Full prior state of a moved/resized event, as captured before the change. */
+type RestoreEventTimesInput = {
+  eventId: string
+  startsAt: string
+  endsAt: string
+  startsAtLocal: string | null
+  endsAtLocal: string | null
+  durationMinutes: number | null
 }
 
 type OptimisticMutationInput<T> = {
@@ -174,6 +185,34 @@ export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
       runOptimistic({
         patch: (payload) => patchEventTimes(payload, input),
         action: () => updateEventTimesAction(input),
+        eventWindow: {
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+        },
+        entityKey: `event:${input.eventId}`,
+        touchToday: false,
+      })
+    },
+    [runOptimistic],
+  )
+
+  /**
+   * Undo for a move/resize. Unlike `moveEventTimes`, this restores the authored
+   * wall clock and duration too — `starts_at`/`ends_at` are a derived cache of
+   * `starts_at_local` + `timezone`, so putting back only the UTC pair leaves the
+   * row internally inconsistent. The action also re-syncs a linked task's due
+   * date, which the forward move path changed on the way in.
+   */
+  const restoreEventTimes = useCallback(
+    (input: RestoreEventTimesInput) => {
+      runOptimistic({
+        patch: (payload) =>
+          patchEventTimes(payload, {
+            eventId: input.eventId,
+            startsAt: input.startsAt,
+            endsAt: input.endsAt,
+          }),
+        action: () => restoreCalendarEventTimesAction(input),
         eventWindow: {
           startsAt: input.startsAt,
           endsAt: input.endsAt,
@@ -563,6 +602,7 @@ export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
 
   return {
     moveEventTimes,
+    restoreEventTimes,
     moveTaskDueDate,
     applyMonthMove,
     createEvent,

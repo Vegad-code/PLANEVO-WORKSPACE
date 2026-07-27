@@ -7,19 +7,16 @@ import {
   viewOverridesForPreset,
 } from "./saved-view-form.ts";
 
-test("a saved-view draft resolves partial config over its preset", () => {
-  // Arrange / Act
-  const draft = resolveSavedViewDraft("planner", {
+test("a saved-view draft resolves partial config over Classic", () => {
+  const draft = resolveSavedViewDraft("classic", {
     cardDensity: "minimal",
   });
 
-  // Assert
-  assert.equal(draft.layout, PRESET_CONFIGS.planner.layout);
+  assert.equal(draft.layout, PRESET_CONFIGS.classic.layout);
   assert.equal(draft.cardDensity, "minimal");
 });
 
 test("submitting a customized preset stores only changed axes", () => {
-  // Arrange
   const draft = {
     ...PRESET_CONFIGS.classic,
     dayCount: 5,
@@ -27,17 +24,15 @@ test("submitting a customized preset stores only changed axes", () => {
     interactionSet: [...PRESET_CONFIGS.classic.interactionSet],
   };
 
-  // Act
   const overrides = viewOverridesForPreset("classic", draft);
 
-  // Assert
   assert.deepEqual(overrides, { dayCount: 5 });
   assert.deepEqual(resolveViewConfig("classic", overrides), draft);
 });
 
-test("invalid persisted preset names degrade to Classic", () => {
-  // Arrange / Act / Assert
+test("invalid and retired preset names degrade to Classic", () => {
   assert.equal(presetForSavedView("custom"), "classic");
   assert.equal(presetForSavedView("unknown"), "classic");
-  assert.equal(presetForSavedView("flow"), "flow");
+  assert.equal(presetForSavedView("flow"), "classic");
+  assert.equal(presetForSavedView("planner"), "classic");
 });

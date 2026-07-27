@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   useTransition,
@@ -28,7 +29,6 @@ import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/planevo-icon";
 import { toast } from "@/components/ui/toast";
 import { useSidebarLayout } from "@/features/shell/sidebar-layout-context";
-import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
 import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 import {
@@ -43,7 +43,9 @@ import {
 } from "@/app/(workspace)/files/actions";
 import {
   DEFAULT_LIBRARY_WIDTH,
+  getLibraryCollapsed,
   getLibraryWidth,
+  setLibraryCollapsed,
 } from "@/lib/files/library-prefs";
 import {
   getFilesScope,
@@ -330,8 +332,6 @@ export function FilesProductView({
   const searchParams = useSearchParams();
   const { showRevealChrome } = useSidebarLayout();
   const prefersReducedMotion = usePrefersReducedMotion();
-  const libraryLayoutTransition =
-    getShellLayoutTransition(prefersReducedMotion);
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -340,6 +340,9 @@ export function FilesProductView({
   const [libraryWidth, setLibraryWidthState] = useState(DEFAULT_LIBRARY_WIDTH);
   const [isLibraryResizing, setIsLibraryResizing] = useState(false);
   const [libraryWidthRestored, setLibraryWidthRestored] = useState(false);
+  // Width/chrome springs only after an explicit user collapse/expand — never on
+  // mount or prefs restore (those must stay instant).
+  const [libraryMotionEnabled, setLibraryMotionEnabled] = useState(false);
   const [activeSideTab, setActiveSideTab] = useState<SideTab>("folders");
   const [search, setSearch] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -396,13 +399,27 @@ export function FilesProductView({
     return () => window.clearTimeout(syncTimer);
   }, [initialFiles, searchParams]);
 
-  useEffect(() => {
-    const restoreTimer = window.setTimeout(() => {
-      setLibraryWidthState(getLibraryWidth());
-      setLibraryWidthRestored(true);
-    }, 0);
-    return () => window.clearTimeout(restoreTimer);
+  // Restore before paint so the first painted frame matches the loading
+  // skeleton. Do not arm width motion here — that was the hard-refresh open
+  // spring (DEFAULT → stored width). Re-write the cookie so SSR loading HTML
+  // stays in sync if localStorage was the only source.
+  useLayoutEffect(() => {
+    const collapsed = getLibraryCollapsed();
+    setSidebarCollapsed(collapsed);
+    setLibraryWidthState(getLibraryWidth());
+    setLibraryWidthRestored(true);
+    setLibraryCollapsed(collapsed);
   }, []);
+
+  function setSidebarCollapsedFromUser(collapsed: boolean) {
+    setLibraryMotionEnabled(true);
+    setSidebarCollapsed(collapsed);
+  }
+
+  useEffect(() => {
+    if (!libraryWidthRestored) return;
+    setLibraryCollapsed(sidebarCollapsed);
+  }, [libraryWidthRestored, sidebarCollapsed]);
 
   function handleLibraryWidthChange(nextWidth: number) {
     setLibraryWidthState(nextWidth);
@@ -686,20 +703,33 @@ export function FilesProductView({
           showRevealChrome && "md:pl-[length:var(--sidebar-reveal-safe-inset)]",
         )}
       >
-        <motion.aside
-          initial={false}
-          animate={{ width: sidebarCollapsed ? 0 : libraryWidth }}
-          transition={
-            isLibraryResizing || !libraryWidthRestored
-              ? { duration: 0 }
-              : libraryLayoutTransition
-          }
+        {/*
+          Plain aside (not motion): restoring width while libraryWidthRestored
+          flipped true armed the shell spring (DEFAULT → stored) on every load.
+          Static width + CSS transition only after user toggle.
+          Until restore, library-rail-boot uses the beforeInteractive script.
+        */}
+        <aside
           aria-hidden={sidebarCollapsed}
           inert={sidebarCollapsed}
           className={cn(
             "hidden shrink-0 overflow-hidden bg-files-bg lg:flex lg:flex-col",
+            !libraryWidthRestored && "library-rail-boot",
             sidebarCollapsed && "pointer-events-none",
           )}
+          style={
+            libraryWidthRestored
+              ? {
+                  width: sidebarCollapsed ? 0 : libraryWidth,
+                  transition:
+                    libraryMotionEnabled &&
+                    !isLibraryResizing &&
+                    !prefersReducedMotion
+                      ? "width var(--sidebar-motion-duration-enter) var(--sidebar-motion-ease-out)"
+                      : "none",
+                }
+              : undefined
+          }
         >
           <div
             className="relative flex h-full shrink-0 flex-col border-r border-files-border"
@@ -711,7 +741,7 @@ export function FilesProductView({
                 onTabChange={setActiveSideTab}
                 search={search}
                 onSearchChange={setSearch}
-                onCollapse={() => setSidebarCollapsed(true)}
+                onCollapse={() => setSidebarCollapsedFromUser(true)}
                 folders={folders}
                 selectedFolderId={selectedFolderId}
                 onSelectFolder={handleSelectFolder}
@@ -745,12 +775,12 @@ export function FilesProductView({
             <LibraryResizeHandle
               width={libraryWidth}
               onWidthChange={handleLibraryWidthChange}
-              onCollapse={() => setSidebarCollapsed(true)}
+              onCollapse={() => setSidebarCollapsedFromUser(true)}
               onResizeStart={() => setIsLibraryResizing(true)}
               onResizeEnd={() => setIsLibraryResizing(false)}
             />
           </div>
-        </motion.aside>
+        </aside>
 
         <div className="flex min-w-0 flex-1 overflow-hidden">
           <div
@@ -763,14 +793,14 @@ export function FilesProductView({
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <AnimatePresence initial={false}>
-                    {sidebarCollapsed ? (
+                    {libraryWidthRestored && sidebarCollapsed ? (
                       <motion.button
                         key="show-library"
                         type="button"
                         aria-label="Show library panel"
-                        onClick={() => setSidebarCollapsed(false)}
+                        onClick={() => setSidebarCollapsedFromUser(false)}
                         initial={
-                          prefersReducedMotion
+                          prefersReducedMotion || !libraryMotionEnabled
                             ? false
                             : { opacity: 0, scale: 0.92 }
                         }
@@ -781,7 +811,7 @@ export function FilesProductView({
                             : { opacity: 0, scale: 0.92 }
                         }
                         transition={
-                          prefersReducedMotion
+                          prefersReducedMotion || !libraryMotionEnabled
                             ? { duration: 0 }
                             : LIBRARY_TOGGLE_TRANSITION
                         }

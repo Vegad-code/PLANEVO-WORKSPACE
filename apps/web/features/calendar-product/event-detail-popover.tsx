@@ -175,13 +175,25 @@ export function EventDetailPopover({
       }}
     >
       <div className="relative w-full">
+        <EventPopoverGlassShell
+          style={
+            position && position.placement !== "centered"
+              ? ({
+                  "--arrow-y": `${position.arrowOffsetY}px`,
+                  "--arrow-side": position.placement === "right" ? "left" : "right",
+                  "--arrow-half-h": "var(--size-event-popover-callout-beak-half-height)",
+                } as React.CSSProperties)
+              : undefined
+          }
+        >
+          {children}
+        </EventPopoverGlassShell>
         {position ? (
           <EventPopoverCalloutArrow
             placement={position.placement}
             arrowOffsetY={position.arrowOffsetY}
           />
         ) : null}
-        <EventPopoverGlassShell>{children}</EventPopoverGlassShell>
       </div>
     </motion.div>
   )

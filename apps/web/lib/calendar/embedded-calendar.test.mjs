@@ -21,10 +21,10 @@ function view(overrides = {}) {
   }
 }
 
-test("an embedded Flow lens requests exactly one shared-renderer day", () => {
+test("a retired Flow preset degrades to the Classic week request", () => {
   assert.deepEqual(
     embeddedCalendarRequest(view({ preset: "flow" }), now),
-    { date: "2026-07-26", view: "day" },
+    { date: "2026-07-26", view: "week" },
   )
 })
 

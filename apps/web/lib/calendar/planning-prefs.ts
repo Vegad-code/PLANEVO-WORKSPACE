@@ -63,3 +63,9 @@ export function setPlanningCollapsed(collapsed: boolean): void {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }
 }
+
+/**
+ * Runs before hydration so hard-refresh loading HTML matches stored Agenda
+ * open/closed width (avoids DEFAULT-open flash when collapsed).
+ */
+export const PLANNING_RAIL_BOOT_SCRIPT = `(function(){try{var c=localStorage.getItem(${JSON.stringify(CALENDAR_PLANNING_COLLAPSED_KEY)});var w=localStorage.getItem(${JSON.stringify(CALENDAR_PLANNING_WIDTH_KEY)});var r=document.documentElement;var collapsed=c==="true";r.dataset.planningCollapsed=collapsed?"true":"false";var n=w==null?NaN:parseInt(w,10);if(!Number.isFinite(n))n=${DEFAULT_PLANNING_WIDTH};n=Math.min(${MAX_PLANNING_WIDTH},Math.max(${MIN_PLANNING_WIDTH},Math.round(n)));r.style.setProperty("--planning-rail-width",(collapsed?0:n)+"px");}catch(e){}})();`;

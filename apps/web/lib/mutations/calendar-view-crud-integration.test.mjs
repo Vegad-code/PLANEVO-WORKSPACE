@@ -17,6 +17,13 @@ const productView = readFileSync(
   ),
   "utf8",
 );
+const toolbar = readFileSync(
+  new URL(
+    "../../features/calendar-product/calendar-toolbar.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("calendar view actions expose the complete owner-scoped CRUD surface", () => {
   for (const actionName of [
@@ -47,15 +54,12 @@ test("calendar page data carries saved views beside the full event pool", () => 
   assert.match(loader, /events: CalendarDisplayEvent\[\]/);
 });
 
-test("saved view selection synchronizes its query range and filters every drawn event surface", () => {
-  assert.match(
-    productView,
-    /handleViewChange\(activeSavedToolbarView\)/,
-  );
-  assert.equal(
-    productView.match(/events=\{visibleContent\.events\}/g)?.length,
-    3,
-  );
+test("product Calendar is Classic Day/Week/Month only — no saved-view paradigm UI", () => {
+  assert.doesNotMatch(productView, /CalendarSavedViewMenu/);
+  assert.doesNotMatch(productView, /activeSavedViewConfig/);
+  assert.doesNotMatch(productView, /visibleContent/);
+  assert.doesNotMatch(toolbar, /CalendarSavedViewMenu/);
+  assert.match(toolbar, /CalendarViewMenu/);
   assert.match(
     productView,
     /const events = calendarQuery\.data\?\.events \?\? \[\]/,

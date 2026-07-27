@@ -3,10 +3,10 @@ import {
   resolveViewConfig,
   viewConfigSchema,
   type ViewConfig,
-  type ViewPreset,
 } from "./view-config.ts";
 
-export const SAVED_VIEW_PRESETS = ["classic", "planner", "flow"] as const;
+/** Product Calendar only creates Classic saved views. */
+export const SAVED_VIEW_PRESETS = ["classic"] as const;
 export type SavedViewPreset = (typeof SAVED_VIEW_PRESETS)[number];
 
 export function isSavedViewPreset(value: string): value is SavedViewPreset {
@@ -44,8 +44,7 @@ export function viewOverridesForPreset(
   return viewConfigSchema.partial().parse(overrides);
 }
 
+/** Retired planner/flow names (and anything else) degrade to Classic. */
 export function presetForSavedView(value: string): SavedViewPreset {
-  return isSavedViewPreset(value)
-    ? value
-    : ("classic" satisfies Exclude<ViewPreset, "custom">);
+  return isSavedViewPreset(value) ? value : "classic";
 }

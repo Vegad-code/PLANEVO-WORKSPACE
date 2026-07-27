@@ -34,24 +34,19 @@ import {
   setCalendarScope,
   type CalendarScope,
 } from "@/lib/calendar/scope-prefs";
-import { getShellLayoutTransition } from "@/lib/motion/shell-spring";
 import { usePrefersReducedMotion } from "@/lib/motion/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 import {
   createCalendarAction,
-  createCalendarViewAction,
-  deleteCalendarViewAction,
   deleteRecurringEventAction,
   restoreCalendarEventAction,
   restoreRecurringCalendarMutationAction,
   type RecurrenceMutationScope,
   setDefaultCalendarAction,
-  setDefaultCalendarViewAction,
   subscribeIcsCalendarAction,
   syncCalendarConnectionAction,
   toggleCalendarVisibilityAction,
   updateCalendarDetailsAction,
-  updateCalendarViewAction,
   updateRecurringEventAction,
 } from "@/app/(workspace)/calendar/actions";
 import {
@@ -66,13 +61,6 @@ import {
   type CalendarUndoPayload,
   type RestoreEventTimesUndoPayload,
 } from "@/lib/calendar/undo-stack";
-import {
-  filterCalendarViewContent,
-  initialCalendarViewId,
-  nextCalendarViewIdAfterDelete,
-  toolbarViewForSavedConfig,
-} from "@/lib/calendar/view-crud";
-import { resolveViewConfig } from "@/lib/calendar/view-config";
 import { EventDetailPopover } from "./event-detail-popover";
 import { CalendarDndContext } from "./calendar-dnd-context";
 import { useMonthMutations } from "./use-month-mutations";
@@ -83,12 +71,10 @@ import type { IcsCalendarSubscriptionInput } from "./calendar-sources-section";
 import { CalendarResizeHandle } from "./calendar-resize-handle";
 import { CalendarShortcutsCheatSheet } from "./calendar-shortcuts-cheat-sheet";
 import { CalendarToolbar } from "./calendar-toolbar";
-import type { CalendarSavedViewInput } from "./calendar-saved-view-menu";
 import {
   EventDetailPanel,
   type EventPanelSavePayload,
-} from "./event-detail-panel";
-import {
+} from "./event-detail-panel";import {
   EventCrossLinkDialogs,
   type EventCrossLinkPanel,
 } from "./event-cross-links";
@@ -217,8 +203,6 @@ function CalendarProductViewInner({
 }: CalendarProductViewProps) {
   const { showRevealChrome } = useSidebarLayout();
   const prefersReducedMotion = usePrefersReducedMotion();
-  const planningLayoutTransition =
-    getShellLayoutTransition(prefersReducedMotion);
   const [recurrencePending, startRecurrenceTransition] = useTransition();
   const [metaPending, startMetaTransition] = useTransition();
   const invalidateCalendar = useInvalidateCalendarData();
@@ -257,9 +241,6 @@ function CalendarProductViewInner({
   const [crossLinkPanel, setCrossLinkPanel] =
     useState<EventCrossLinkPanel | null>(null);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
-  const [selectedSavedViewId, setSelectedSavedViewId] = useState<
-    string | null | undefined
-  >(undefined);
   const [planningDrawerOpen, setPlanningDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [planningWidth, setPlanningWidthState] = useState(
@@ -267,60 +248,32 @@ function CalendarProductViewInner({
   );
   const [isPlanningResizing, setIsPlanningResizing] = useState(false);
   const [planningPrefsRestored, setPlanningPrefsRestored] = useState(false);
-  // Enter/exit chrome motion only after restore has painted — otherwise the
-  // "Show agenda" control fades in on every refresh when the rail was closed.
-  const [planningChromeMotionReady, setPlanningChromeMotionReady] =
-    useState(false);
+  // Width/chrome springs only after an explicit user collapse/expand — never on
+  // mount, prefs restore, or skeleton→ready handoff (those must stay instant).
+  const [planningMotionEnabled, setPlanningMotionEnabled] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const undoStackRef = useRef(createUndoStack());
 
   const calendars = calendarQuery.data?.calendars ?? [];
   const events = calendarQuery.data?.events ?? [];
   const taskDues = calendarQuery.data?.taskDues ?? [];
-  const savedViews = calendarQuery.data?.views ?? [];
   const todayTasks = calendarQuery.data?.todayTasks ?? [];
-  const defaultSavedViewId =
-    savedViews.find(({ is_default }) => is_default)?.id ?? null;
-  const activeSavedViewId =
-    selectedSavedViewId === undefined
-      ? initialCalendarViewId(savedViews)
-      : selectedSavedViewId === null ||
-          savedViews.some(({ id }) => id === selectedSavedViewId)
-        ? selectedSavedViewId
-        : initialCalendarViewId(savedViews);
-  const activeSavedView =
-    savedViews.find(({ id }) => id === activeSavedViewId) ?? null;
-  const activeSavedViewConfig = activeSavedView
-    ? resolveViewConfig(activeSavedView.preset, activeSavedView.config)
-    : null;
-  const activeSavedToolbarView = activeSavedViewConfig
-    ? toolbarViewForSavedConfig(activeSavedViewConfig)
-    : null;
   const createCalendarId = defaultCalendarId(calendars);
-  const visibleContent = filterCalendarViewContent({
-    events,
-    taskDues,
-    view: activeSavedView,
-  });
   const isFetchingNewRange = calendarQuery.isRangeFetching;
 
-  useEffect(() => {
-    if (!activeSavedToolbarView || activeSavedToolbarView === view) return;
-    handleViewChange(activeSavedToolbarView);
-  }, [activeSavedToolbarView, handleViewChange, view]);
-
-  // Restore before paint, then mount the rail at the saved width. Mounting only
-  // after restore avoids Framer springing open→closed on every refresh.
+  // Restore before paint so the first painted frame matches the loading
+  // skeleton. The aside stays mounted (width 0 when collapsed) — unmounting
+  // until restore caused a visible rail flash on soft-nav handoff.
   useLayoutEffect(() => {
     setSidebarCollapsed(getPlanningCollapsed());
     setPlanningWidthState(getPlanningWidth());
     setPlanningPrefsRestored(true);
   }, []);
 
-  useEffect(() => {
-    if (!planningPrefsRestored) return;
-    setPlanningChromeMotionReady(true);
-  }, [planningPrefsRestored]);
+  function setSidebarCollapsedFromUser(collapsed: boolean) {
+    setPlanningMotionEnabled(true);
+    setSidebarCollapsed(collapsed);
+  }
 
   useEffect(() => {
     if (!planningPrefsRestored) return;
@@ -453,65 +406,11 @@ function CalendarProductViewInner({
   function handleStandardViewChange(
     nextView: "day" | "week" | "month" | "year",
   ) {
-    setSelectedSavedViewId(null);
     handleViewChange(nextView);
   }
 
   function handleStandardSelectDay(day: Date) {
-    setSelectedSavedViewId(null);
     handleSelectDay(day);
-  }
-
-  function handleSavedViewSelect(viewId: string | null) {
-    setSelectedSavedViewId(viewId);
-  }
-
-  async function handleSavedViewCreate(input: CalendarSavedViewInput) {
-    const result = await createCalendarViewAction(input);
-    if (!result.ok) {
-      toast(result.error, { tone: "error" });
-      throw new Error(result.error);
-    }
-    setSelectedSavedViewId(result.data.viewId);
-    toast("View created");
-    invalidateMeta(scope);
-  }
-
-  async function handleSavedViewUpdate(
-    viewId: string,
-    input: CalendarSavedViewInput,
-  ) {
-    const result = await updateCalendarViewAction({ viewId, ...input });
-    if (!result.ok) {
-      toast(result.error, { tone: "error" });
-      throw new Error(result.error);
-    }
-    toast("View updated");
-    invalidateMeta(scope);
-  }
-
-  async function handleSavedViewDelete(viewId: string) {
-    const result = await deleteCalendarViewAction({ viewId });
-    if (!result.ok) {
-      toast(result.error, { tone: "error" });
-      throw new Error(result.error);
-    }
-    if (activeSavedViewId === viewId) {
-      setSelectedSavedViewId(nextCalendarViewIdAfterDelete(savedViews, viewId));
-    }
-    toast("View deleted");
-    invalidateMeta(scope);
-  }
-
-  async function handleSavedViewSetDefault(viewId: string) {
-    const result = await setDefaultCalendarViewAction({ viewId });
-    if (!result.ok) {
-      toast(result.error, { tone: "error" });
-      throw new Error(result.error);
-    }
-    setSelectedSavedViewId(viewId);
-    toast("Default view updated");
-    invalidateMeta(scope);
   }
 
   async function executeUndo(id: string) {
@@ -525,11 +424,17 @@ function CalendarProductViewInner({
     const payload = popped.entry.payload;
 
     // Optimistic inverse for time restores — no full invalidate.
+    // Must restore the authored wall clock and duration, not just the UTC pair:
+    // starts_at/ends_at are derived from starts_at_local + timezone, and the
+    // forward move also shifted any linked task's due date.
     if (payload.kind === "restore-times") {
-      calendarMutations.moveEventTimes({
+      calendarMutations.restoreEventTimes({
         eventId: payload.eventId,
         startsAt: payload.startsAt,
         endsAt: payload.endsAt,
+        startsAtLocal: payload.startsAtLocal,
+        endsAtLocal: payload.endsAtLocal,
+        durationMinutes: payload.durationMinutes,
       });
       toast("Change undone");
       return;
@@ -1177,7 +1082,7 @@ function CalendarProductViewInner({
   const planningSidebar = (
     <CalendarPlanningSidebar
       calendars={calendars}
-      events={visibleContent.events}
+      events={events}
       todayTasks={todayTasks}
       weekStart={visibleWeekStart}
       onSelectDay={handleStandardSelectDay}
@@ -1189,7 +1094,7 @@ function CalendarProductViewInner({
       onSyncConnection={handleSyncConnection}
       onToggleTask={handleToggleTask}
       onQuickAddTask={handleQuickAddTask}
-      onCollapse={() => setSidebarCollapsed(true)}
+      onCollapse={() => setSidebarCollapsedFromUser(true)}
       clearRevealChrome={showRevealChrome}
     />
   );
@@ -1209,37 +1114,52 @@ function CalendarProductViewInner({
             if (event) void handleUnscheduleLinkedTask(event);
           }}
         >
-          {planningPrefsRestored ? (
-            <motion.aside
-              initial={{ width: sidebarCollapsed ? 0 : planningWidth }}
-              animate={{ width: sidebarCollapsed ? 0 : planningWidth }}
-              transition={
-                isPlanningResizing ? { duration: 0 } : planningLayoutTransition
-              }
-              aria-hidden={sidebarCollapsed}
-              inert={sidebarCollapsed}
-              className={cn(
-                "hidden shrink-0 overflow-hidden bg-calendar-chrome lg:flex lg:flex-col",
-                sidebarCollapsed && "pointer-events-none",
-              )}
+          {/*
+            Plain aside (not motion): Framer width animate applies on a later
+            frame than React useLayoutEffect, so skeleton→ready and hard-refresh
+            remounts painted DEFAULT then sprang/snapped open. Static width +
+            CSS transition only after user toggle keeps load instant.
+            Until prefs restore, planning-rail-boot uses the beforeInteractive
+            localStorage script so SSR/loading HTML is not stuck at DEFAULT.
+          */}
+          <aside
+            aria-hidden={sidebarCollapsed}
+            inert={sidebarCollapsed}
+            className={cn(
+              "hidden shrink-0 overflow-hidden bg-calendar-chrome lg:flex lg:flex-col",
+              !planningPrefsRestored && "planning-rail-boot",
+              sidebarCollapsed && "pointer-events-none",
+            )}
+            style={
+              planningPrefsRestored
+                ? {
+                    width: sidebarCollapsed ? 0 : planningWidth,
+                    transition:
+                      planningMotionEnabled &&
+                      !isPlanningResizing &&
+                      !prefersReducedMotion
+                        ? "width var(--sidebar-motion-duration-enter) var(--sidebar-motion-ease-out)"
+                        : "none",
+                  }
+                : undefined
+            }
+          >
+            <div
+              className="relative flex h-full shrink-0 flex-col overflow-hidden"
+              style={{ width: planningWidth }}
             >
-              <div
-                className="relative flex h-full shrink-0 flex-col overflow-hidden"
-                style={{ width: planningWidth }}
-              >
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  {planningSidebar}
-                </div>
-                <CalendarResizeHandle
-                  width={planningWidth}
-                  onWidthChange={handlePlanningWidthChange}
-                  onCollapse={() => setSidebarCollapsed(true)}
-                  onResizeStart={() => setIsPlanningResizing(true)}
-                  onResizeEnd={() => setIsPlanningResizing(false)}
-                />
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {planningSidebar}
               </div>
-            </motion.aside>
-          ) : null}
+              <CalendarResizeHandle
+                width={planningWidth}
+                onWidthChange={handlePlanningWidthChange}
+                onCollapse={() => setSidebarCollapsedFromUser(true)}
+                onResizeStart={() => setIsPlanningResizing(true)}
+                onResizeEnd={() => setIsPlanningResizing(false)}
+              />
+            </div>
+          </aside>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-calendar-chrome">
             <div
@@ -1258,9 +1178,9 @@ function CalendarProductViewInner({
                         key="show-planning"
                         type="button"
                         aria-label="Show agenda"
-                        onClick={() => setSidebarCollapsed(false)}
+                        onClick={() => setSidebarCollapsedFromUser(false)}
                         initial={
-                          prefersReducedMotion || !planningChromeMotionReady
+                          prefersReducedMotion || !planningMotionEnabled
                             ? false
                             : { opacity: 0, scale: 0.92 }
                         }
@@ -1271,7 +1191,7 @@ function CalendarProductViewInner({
                             : { opacity: 0, scale: 0.92 }
                         }
                         transition={
-                          prefersReducedMotion || !planningChromeMotionReady
+                          prefersReducedMotion || !planningMotionEnabled
                             ? { duration: 0 }
                             : PLANNING_TOGGLE_TRANSITION
                         }
@@ -1303,16 +1223,7 @@ function CalendarProductViewInner({
                   scope={scope}
                   navMotion={navMotion}
                   prefersReducedMotion={prefersReducedMotion}
-                  calendars={calendars}
-                  savedViews={savedViews}
-                  activeSavedViewId={activeSavedViewId}
-                  defaultSavedViewId={defaultSavedViewId}
                   onViewChange={handleStandardViewChange}
-                  onSavedViewSelect={handleSavedViewSelect}
-                  onSavedViewCreate={handleSavedViewCreate}
-                  onSavedViewUpdate={handleSavedViewUpdate}
-                  onSavedViewDelete={handleSavedViewDelete}
-                  onSavedViewSetDefault={handleSavedViewSetDefault}
                   onScopeChange={changeScope}
                   onNavigatePrevious={handleNavigatePrevious}
                   onNavigateNext={handleNavigateNext}
@@ -1344,9 +1255,8 @@ function CalendarProductViewInner({
                     view={view}
                     anchor={anchorDate}
                     calendars={calendars}
-                    events={visibleContent.events}
-                    taskDues={visibleContent.taskDues}
-                    viewConfig={activeSavedViewConfig}
+                    events={events}
+                    taskDues={taskDues}
                     draftCreateEvent={draftCreateEvent}
                     overlayPendingMoves={overlayPendingMoves}
                     pendingMovesClearToken={pendingMovesClearToken}
@@ -1394,7 +1304,7 @@ function CalendarProductViewInner({
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <CalendarPlanningSidebar
                     calendars={calendars}
-                    events={visibleContent.events}
+                    events={events}
                     todayTasks={todayTasks}
                     weekStart={visibleWeekStart}
                     onSelectDay={(day) => {
