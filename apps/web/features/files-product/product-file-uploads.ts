@@ -7,6 +7,7 @@ import {
   PRODUCT_FILES_BUCKET,
   requireProductFileSize,
 } from "@/lib/files/product-files";
+import { readLocalFile } from "./local-file-mirror";
 
 // Only re-encode raster images that actually shrink. Already-compressed formats
 // (PDF, video, Office/zip) and vector/animated images (SVG, GIF) are left alone.
@@ -137,4 +138,62 @@ export async function uploadProductFiles(files: File[]): Promise<number> {
   }
 
   return uploadedCount;
+}
+
+export async function syncLocalProductFile(
+  fileSourceId: string,
+): Promise<void> {
+  const local = await readLocalFile(fileSourceId);
+  if (local.state !== "available") {
+    throw new Error(
+      local.state === "permission-needed"
+        ? `Reconnect ${local.name} before syncing.`
+        : local.state === "missing"
+          ? `${local.name} was moved or deleted.`
+          : "This browser cannot reopen local files.",
+    );
+  }
+  requireProductFileSize(local.file.size);
+  const response = await fetch(`/api/product-files/${fileSourceId}/sync`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: local.file.name,
+      mimeType: local.file.type || null,
+      sizeBytes: local.file.size,
+    }),
+  });
+  const target = (await response.json().catch(() => null)) as
+    | { path?: string; token?: string; error?: string }
+    | null;
+  if (!response.ok || !target?.path || !target.token) {
+    throw new Error(target?.error ?? "Could not prepare local file sync.");
+  }
+  const client = createClient();
+  const { error } = await client.storage
+    .from(PRODUCT_FILES_BUCKET)
+    .uploadToSignedUrl(target.path, target.token, local.file, {
+      contentType: local.file.type || "application/octet-stream",
+      upsert: false,
+    });
+  if (error) throw error;
+  const finalize = await fetch(`/api/product-files/${fileSourceId}/sync`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      path: target.path,
+      sizeBytes: local.file.size,
+    }),
+  });
+  if (!finalize.ok) {
+    await fetch(`/api/product-files/${fileSourceId}/sync`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: target.path }),
+    });
+    const payload = (await finalize.json().catch(() => null)) as
+      | { error?: string }
+      | null;
+    throw new Error(payload?.error ?? "Could not finish local file sync.");
+  }
 }

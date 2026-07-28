@@ -1,0 +1,135 @@
+# Clipwise scenario — mirrors flows/onboarding-create-task.mjs
+# Onboarding is optional: waitForFunction clicks the first organizing card only when /onboarding is shown.
+name: "Planevo — onboarding → create task"
+description: "First-run onboarding (if shown), Tasks product, create a task with a visible title."
+
+viewport:
+  width: 1280
+  height: 800
+
+effects:
+  deviceFrame:
+    enabled: true
+    type: browser
+  background:
+    type: solid
+    value: var(--color-sidebar, #f7f6f3)
+    padding: 40
+    borderRadius: 14
+    shadow: true
+  cursor:
+    enabled: true
+    speed: normal
+    clickEffect: true
+    highlight: true
+  zoom:
+    enabled: true
+    intensity: light
+    easing: spring
+
+output:
+  format: mp4
+  filename: onboarding-create-task
+  width: 1280
+  height: 800
+  fps: 30
+  preset: social
+
+steps:
+  - name: "Open Planevo home"
+    captureDelay: 100
+    holdDuration: 1200
+    actions:
+      - action: navigate
+        url: "http://localhost:3000"
+        waitUntil: networkidle
+
+  - name: "Complete onboarding if shown"
+    captureDelay: 100
+    holdDuration: 1000
+    actions:
+      - action: waitForFunction
+        expression: >
+          (() => {
+            if (!window.location.pathname.startsWith('/onboarding')) return true;
+            const btn = document.querySelector('[role="group"][aria-label="What are you organizing?"] button');
+            if (btn && !window.__planevoOnboardingClicked) {
+              window.__planevoOnboardingClicked = true;
+              btn.click();
+              return false;
+            }
+            return !window.location.pathname.startsWith('/onboarding');
+          })()
+        timeout: 30000
+        captureWhileWaiting: true
+
+  - name: "Go to Tasks"
+    captureDelay: 100
+    holdDuration: 1000
+    actions:
+      - action: navigate
+        url: "http://localhost:3000/tasks"
+        waitUntil: networkidle
+
+  - name: "Open create task"
+    captureDelay: 80
+    holdDuration: 800
+    actions:
+      - action: waitForFunction
+        expression: >
+          (() => {
+            const buttons = [...document.querySelectorAll('button[aria-haspopup="dialog"]')];
+            const create = buttons.find((btn) => /create task/i.test(btn.textContent || ''));
+            if (!create) return false;
+            create.click();
+            return true;
+          })()
+        timeout: 15000
+
+  - name: "Wait for modal"
+    captureDelay: 50
+    holdDuration: 800
+    actions:
+      - action: waitForSelector
+        selector: "dialog[open]"
+        state: visible
+        timeout: 10000
+
+  - name: "Type task title"
+    captureDelay: 50
+    holdDuration: 600
+    actions:
+      - action: click
+        selector: 'dialog[open] input[maxlength="500"]'
+        timeout: 10000
+      - action: type
+        selector: 'dialog[open] input[maxlength="500"]'
+        text: "Hello world from Planevo demo"
+        delay: 45
+
+  - name: "Submit task"
+    captureDelay: 80
+    holdDuration: 400
+    actions:
+      - action: click
+        selector: 'dialog[open] button[type="submit"]'
+        timeout: 15000
+
+  - name: "Confirm created task"
+    captureDelay: 100
+    holdDuration: 2500
+    actions:
+      - action: waitForFunction
+        expression: >
+          (() => {
+            const needle = 'Hello world from Planevo demo';
+            const el = [...document.querySelectorAll('*')].find(
+              (node) => node.childElementCount === 0 && node.textContent?.includes(needle)
+            );
+            if (el) {
+              el.scrollIntoView({ block: 'center', behavior: 'instant' });
+              return true;
+            }
+            return false;
+          })()
+        timeout: 15000

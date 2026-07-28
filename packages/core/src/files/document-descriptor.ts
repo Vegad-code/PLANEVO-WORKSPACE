@@ -21,7 +21,7 @@ export type DocumentDescriptor = {
   contentHash: string | null;
   indexedVersion: number | null;
   capabilities: DocumentCapabilities;
-  canonicalSource: "planevo" | "storage";
+  canonicalSource: "planevo" | "storage" | "local";
 };
 
 export function documentFormatForFile(input: {

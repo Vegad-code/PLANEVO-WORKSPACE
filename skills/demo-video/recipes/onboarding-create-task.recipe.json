@@ -1,0 +1,33 @@
+{
+  "version": 0,
+  "app_url": "http://127.0.0.1:3000",
+  "music_track": "daybreak",
+  "scenes": [
+    {
+      "name": "tasks-create",
+      "priority": 1,
+      "entry": { "url": "http://127.0.0.1:3000/tasks", "prelude": [] },
+      "depends_on": [],
+      "actions": [
+        {
+          "kind": "click",
+          "selector": "button:has-text(\"Create task\")",
+          "duration_ms": 1400
+        },
+        {
+          "kind": "type",
+          "selector": "[role=\"dialog\"] input[name=\"title\"]",
+          "text": "Hello world from Planevo demo",
+          "duration_ms": 2200
+        },
+        {
+          "kind": "click",
+          "selector": "[role=\"dialog\"] button[type=\"submit\"]",
+          "focus_selector": "[role=\"dialog\"]",
+          "duration_ms": 1500
+        }
+      ],
+      "hold_ms": 2500
+    }
+  ]
+}

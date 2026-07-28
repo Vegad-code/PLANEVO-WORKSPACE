@@ -135,7 +135,44 @@
   --color-files-storage-pdfs: #2383e2;
   --color-files-storage-documents: #ff9f0a;
   --color-files-storage-available: #e9e9e7;
-  --radius-files-card: 12px;
+  --color-files-editor-glass: rgba(255, 255, 255, 0.88);
+  --color-files-editor-glass-strong: rgba(255, 255, 255, 0.94);
+  --color-files-editor-solid: #ffffff;
+  --color-files-editor-overlay: rgba(247, 246, 243, 0.84);
+  --color-files-editor-focus: rgba(35, 131, 226, 0.42);
+
+  /*
+   * Document prose. Separate from the --text-h* product scale on purpose: those size headings
+   * inside tables and panels, this sizes a document being read. Measure and block padding are
+   * Cursor's shipped values (800px column, 32px/64px) rather than guesses.
+   */
+  --text-doc-h1: 32px;
+  --text-doc-h1--line-height: 1.25;
+  --text-doc-h1--font-weight: 600;
+  --text-doc-h2: 22px;
+  --text-doc-h2--line-height: 1.3;
+  --text-doc-h2--font-weight: 600;
+  --text-doc-h3: 17px;
+  --text-doc-h3--line-height: 1.4;
+  --text-doc-h3--font-weight: 600;
+  --text-doc-body: 16px;
+  --text-doc-body--line-height: 1.65;
+  --files-doc-measure: 50rem;
+  --files-doc-pad-top: 32px;
+  --files-doc-pad-bottom: 64px;
+  --files-doc-pad-inline: 16px;
+  --color-files-doc-selection: rgba(55, 53, 47, 0.14);
+  --color-files-doc-code-bg: rgba(55, 53, 47, 0.08);
+  --color-files-doc-rule: rgba(55, 53, 47, 0.12);
+  --color-files-doc-syntax: rgba(55, 53, 47, 0.38);
+  --color-files-bubble-bg: #ffffff;
+  --color-files-bubble-border: rgba(55, 53, 47, 0.12);
+  --color-files-bubble-icon: rgba(55, 53, 47, 0.65);
+  --color-files-bubble-hover: rgba(55, 53, 47, 0.07);
+  --color-files-bubble-active: rgba(55, 53, 47, 0.13);
+  --shadow-files-bubble: 0 8px 24px rgba(0, 0, 0, 0.14),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+    --radius-files-card: 12px;
   --radius-files-modal: 24px;
 
   /* Calendar product — Maximal soft (GCal-adjacent craft) */

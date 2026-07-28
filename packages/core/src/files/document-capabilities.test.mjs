@@ -12,7 +12,7 @@ test("free keeps core editing available without paid document powers", () => {
     editTextDocuments: true,
     automaticIndexing: false,
     createCommentThreads: false,
-    localMirror: false,
+    localMirror: true,
     pdfAnnotations: false,
   });
   assert.equal(revisionRetentionDaysForPlan("free"), 7);

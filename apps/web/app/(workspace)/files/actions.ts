@@ -31,6 +31,7 @@ import {
   removeStorageObjects,
   type DeleteResult,
 } from "@/lib/mutations/delete-entities";
+import { markdownToPlanevoBlocks } from "@/lib/files/markdown-to-planevo";
 
 export type FilesActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -63,6 +64,13 @@ const importDocumentSchema = z.object({
   sourceFileId: z.string().uuid(),
   title: z.string().trim().min(1).max(200),
   text: z.string().max(1_000_000),
+  format: z.enum(["plain", "markdown"]).optional().default("plain"),
+});
+
+const registerLocalFileSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  mimeType: z.string().max(255).nullable(),
+  sizeBytes: z.number().int().nonnegative().max(2_097_152),
 });
 
 const createFolderSchema = z.object({
@@ -254,6 +262,7 @@ export async function createProductDocumentAction(input?: {
         created_by: access.ownerId,
         user_id: access.ownerId,
         storage_path: `page:${document.pageId}`,
+        storage_kind: "page",
         name: title,
         mime_type: "application/x-planevo-page",
         ingestion_status: "ready",
@@ -277,10 +286,63 @@ export async function createProductDocumentAction(input?: {
   }
 }
 
+export async function registerLocalProductFileAction(input: {
+  name: string;
+  mimeType: string | null;
+  sizeBytes: number;
+}): Promise<FilesActionResult<{ fileSourceId: string }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "files:local-register", RATE_LIMITS.mutate);
+    const parsed = registerLocalFileSchema.safeParse(input);
+    if (!parsed.success || !/\.(md|markdown|txt)$/i.test(parsed.data.name)) {
+      return {
+        ok: false,
+        error: "Choose a Markdown or text file up to 2 MB.",
+      };
+    }
+    const current = await getCurrentWorkspace();
+    if (!current || current.access.ownerId !== access.ownerId) {
+      return {
+        ok: false,
+        error: "Open a workspace before adding a local file.",
+      };
+    }
+    const fileSourceId = randomUUID();
+    const { error } = await access.client.from("file_sources").insert({
+      id: fileSourceId,
+      workspace_id: current.workspace.id,
+      created_by: access.ownerId,
+      user_id: access.ownerId,
+      storage_path: `local:${fileSourceId}`,
+      storage_kind: "local",
+      name: parsed.data.name,
+      mime_type: parsed.data.mimeType,
+      size_bytes: parsed.data.sizeBytes,
+      ingestion_status: "local_only",
+      metadata_json: {
+        source_kind: "local-file",
+        local_only: true,
+      },
+    });
+    if (error) throw error;
+    await linkResourceToWorkspace(access.client, access.ownerId, {
+      workspaceId: current.workspace.id,
+      resourceType: "file",
+      resourceId: fileSourceId,
+    });
+    revalidatePath("/files");
+    return { ok: true, data: { fileSourceId } };
+  } catch (cause) {
+    return filesActionError(cause, "Could not add the local file.");
+  }
+}
+
 export async function importProductDocumentAction(input: {
   sourceFileId: string;
   title: string;
   text: string;
+  format?: "plain" | "markdown";
 }): Promise<FilesActionResult<{ fileSourceId: string }>> {
   try {
     const access = await requireMutationDataAccess();
@@ -312,21 +374,24 @@ export async function importProductDocumentAction(input: {
       workspaceId: current.workspace.id,
       title: parsed.data.title,
     });
-    const blocks = parsed.data.text
-      .split(/\n{2,}/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean)
-      .slice(0, 5000)
-      .map((paragraph) => ({
-        type: "paragraph",
-        content: [
-          {
-            type: "text",
-            text: paragraph,
-            styles: {},
-          },
-        ],
-      }));
+    const blocks =
+      parsed.data.format === "markdown"
+        ? markdownToPlanevoBlocks(parsed.data.text)
+        : parsed.data.text
+            .split(/\n{2,}/)
+            .map((paragraph) => paragraph.trim())
+            .filter(Boolean)
+            .slice(0, 5000)
+            .map((paragraph) => ({
+              type: "paragraph",
+              content: [
+                {
+                  type: "text",
+                  text: paragraph,
+                  styles: {},
+                },
+              ],
+            }));
     const { error: contentError } = await access.client
       .from("pages")
       .update({ content_json: blocks })
@@ -341,6 +406,7 @@ export async function importProductDocumentAction(input: {
         created_by: access.ownerId,
         user_id: access.ownerId,
         storage_path: `page:${document.pageId}`,
+        storage_kind: "page",
         name: parsed.data.title,
         mime_type: "application/x-planevo-page",
         ingestion_status: "ready",

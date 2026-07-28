@@ -24,7 +24,7 @@ const DOCUMENT_CAPABILITIES_BY_PLAN = {
     editTextDocuments: true,
     automaticIndexing: false,
     createCommentThreads: false,
-    localMirror: false,
+    localMirror: true,
     pdfAnnotations: false,
   },
   plus: PAID_DOCUMENT_CAPABILITIES,

@@ -117,6 +117,7 @@ export function FilesUploadModal({
     setIsUploading(true)
     onUploadingChange?.(true)
     let uploadedCount = 0
+    let failedCount = 0
 
     for (const item of pending) {
       updateItem(item.id, { status: "uploading", progress: 0, error: undefined })
@@ -127,6 +128,7 @@ export function FilesUploadModal({
         updateItem(item.id, { status: "uploaded", progress: 100 })
         uploadedCount += 1
       } catch (cause) {
+        failedCount += 1
         updateItem(item.id, {
           status: "failed",
           error: cause instanceof Error ? cause.message : "Upload failed.",
@@ -137,6 +139,14 @@ export function FilesUploadModal({
     setIsUploading(false)
     onUploadingChange?.(false)
     if (uploadedCount > 0) onUploadComplete()
+    // Dismiss so the library/preview isn't blocked behind the dialog.
+    // Keep open when anything failed so the user can retry.
+    // Call onClose directly — handleClose would no-op here because
+    // isUploading is still true in this render's closure.
+    if (uploadedCount > 0 && failedCount === 0) {
+      setQueue([])
+      onClose()
+    }
   }
 
   const handleBrowseClick = () => {

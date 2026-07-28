@@ -4,6 +4,9 @@
 # Dependencies
 node_modules/
 
+# Demo-video optional vendors (supercut, auto_demo)
+.vendor/
+
 # Next.js
 .next/
 out/
@@ -25,6 +28,9 @@ supabase/.temp/
 
 # Deep research skill outputs (outline / JSON / reports)
 research/
+
+# Local-only Files feature editor test fixtures (never push)
+docs/files-feature-test-docs/
 
 # Apple emoji TTF (loaded via CDN; do not commit 111MB binary)
 apps/web/public/fonts/apple-color-emoji/

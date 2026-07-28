@@ -7,58 +7,27 @@ export type DocumentRecoveryDraft = {
   updatedAt: string;
 };
 
-const DATABASE_NAME = "planevo-files";
-const DATABASE_VERSION = 3;
-const STORE_NAME = "document-recovery";
-const MIRROR_STORE_NAME = "local-file-mirrors";
-const DELETION_STORE_NAME = "file-deletion-tombstones";
+import {
+  FILES_STORES,
+  filesDatabaseAvailable,
+  openFilesDatabase,
+  withFilesStore,
+} from "./files-database";
 
-function openRecoveryDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: "fileSourceId" });
-      }
-      if (!database.objectStoreNames.contains(MIRROR_STORE_NAME)) {
-        database.createObjectStore(MIRROR_STORE_NAME, {
-          keyPath: "fileSourceId",
-        });
-      }
-      if (!database.objectStoreNames.contains(DELETION_STORE_NAME)) {
-        database.createObjectStore(DELETION_STORE_NAME, {
-          keyPath: "fileSourceId",
-        });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
+const STORE_NAME = FILES_STORES.documentRecovery;
+const DELETION_STORE_NAME = FILES_STORES.deletionTombstones;
 
-async function withStore<T>(
+function withStore<T>(
   mode: IDBTransactionMode,
   operation: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
-  const database = await openRecoveryDatabase();
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const transaction = database.transaction(STORE_NAME, mode);
-      const request = operation(transaction.objectStore(STORE_NAME));
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-      transaction.onerror = () => reject(transaction.error);
-    });
-  } finally {
-    database.close();
-  }
+  return withFilesStore({ store: STORE_NAME, mode, operation });
 }
 
 export async function readDocumentRecoveryDraft(
   fileSourceId: string,
 ): Promise<DocumentRecoveryDraft | null> {
-  if (typeof indexedDB === "undefined") return null;
+  if (!filesDatabaseAvailable()) return null;
   try {
     return (
       (await withStore<DocumentRecoveryDraft | undefined>("readonly", (store) =>
@@ -73,8 +42,16 @@ export async function readDocumentRecoveryDraft(
 export async function writeDocumentRecoveryDraft(
   draft: DocumentRecoveryDraft,
 ): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  const database = await openRecoveryDatabase();
+  if (!filesDatabaseAvailable()) return;
+  // Opening has to be inside the try: callers invoke this as `void write…()` on every idle
+  // keystroke burst, so a rejection here surfaces as an unhandled rejection rather than a
+  // recoverable failure. Recovery drafts are best-effort — the canonical save is the real one.
+  let database: IDBDatabase;
+  try {
+    database = await openFilesDatabase();
+  } catch {
+    return;
+  }
   try {
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(
@@ -103,7 +80,7 @@ export async function writeDocumentRecoveryDraft(
 export async function clearDocumentRecoveryDraft(
   fileSourceId: string,
 ): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
+  if (!filesDatabaseAvailable()) return;
   try {
     await deleteDocumentRecoveryDraft(fileSourceId);
   } catch {
@@ -114,6 +91,6 @@ export async function clearDocumentRecoveryDraft(
 export async function deleteDocumentRecoveryDraft(
   fileSourceId: string,
 ): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
+  if (!filesDatabaseAvailable()) return;
   await withStore("readwrite", (store) => store.delete(fileSourceId));
 }

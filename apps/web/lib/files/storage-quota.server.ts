@@ -32,10 +32,12 @@ export class StorageQuotaError extends Error {
 export async function loadUsedStorageBytes(access: DataAccess): Promise<number> {
   const { data, error } = await access.client
     .from("file_sources")
-    .select("size_bytes")
+    .select("size_bytes,storage_path")
     .eq("user_id", access.ownerId);
   if (error) throw error;
-  return summarizeStorageBytes(data ?? []);
+  return summarizeStorageBytes(
+    (data ?? []).filter((file) => !file.storage_path.startsWith("local:")),
+  );
 }
 
 /**

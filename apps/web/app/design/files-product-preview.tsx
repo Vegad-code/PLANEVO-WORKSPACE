@@ -57,6 +57,7 @@ function previewFile(
     operation_key: null,
     reservation_expires_at: null,
     storage_path: `design-workspace/${overrides.id}`,
+    storage_kind: "cloud",
     mime_type: "application/pdf",
     size_bytes: 1_200_000,
     ingestion_status: "ready",

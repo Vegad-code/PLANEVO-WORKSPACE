@@ -21,6 +21,18 @@ type PlanevoFileHandle = {
   }>;
 };
 
+export type PickedLocalFile = {
+  handle: PlanevoFileHandle;
+  file: File;
+  bytes: Uint8Array;
+};
+
+export type LocalFileReadResult =
+  | { state: "available"; file: File; bytes: Uint8Array }
+  | { state: "permission-needed"; name: string }
+  | { state: "missing"; name: string }
+  | { state: "unsupported" };
+
 type LocalMirrorRecord = {
   fileSourceId: string;
   handle: PlanevoFileHandle;
@@ -35,6 +47,7 @@ export type LocalDocumentDeletionSnapshot = {
   fileSourceId: string;
   recoveryDraft?: unknown;
   mirrorRecord?: LocalMirrorRecord;
+  localSidecar?: unknown;
 };
 
 export type LocalMirrorStatus =
@@ -51,11 +64,12 @@ export class LocalMirrorConflictError extends Error {
   }
 }
 
-const DATABASE_NAME = "planevo-files";
-const DATABASE_VERSION = 3;
-const RECOVERY_STORE_NAME = "document-recovery";
-const STORE_NAME = "local-file-mirrors";
-const DELETION_STORE_NAME = "file-deletion-tombstones";
+import { FILES_STORES, openFilesDatabase } from "./files-database";
+
+const RECOVERY_STORE_NAME = FILES_STORES.documentRecovery;
+const STORE_NAME = FILES_STORES.localFileMirrors;
+const DELETION_STORE_NAME = FILES_STORES.deletionTombstones;
+const LOCAL_DOCUMENT_STORE_NAME = FILES_STORES.localDocumentSidecars;
 
 function pickerWindow(): Window & {
   showOpenFilePicker?: (options?: {
@@ -88,29 +102,78 @@ export function supportsLocalFileMirror(): boolean {
   );
 }
 
-function openMirrorDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(RECOVERY_STORE_NAME)) {
-        database.createObjectStore(RECOVERY_STORE_NAME, {
-          keyPath: "fileSourceId",
-        });
-      }
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: "fileSourceId" });
-      }
-      if (!database.objectStoreNames.contains(DELETION_STORE_NAME)) {
-        database.createObjectStore(DELETION_STORE_NAME, {
-          keyPath: "fileSourceId",
-        });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+export async function pickLocalEditableFile(): Promise<PickedLocalFile> {
+  const picker = pickerWindow().showOpenFilePicker;
+  if (!supportsLocalFileMirror() || !picker) {
+    throw new Error(
+      "Opening local files requires a secure desktop browser with file access.",
+    );
+  }
+  const [handle] = await picker({
+    multiple: false,
+    types: [
+      {
+        description: "Markdown and text documents",
+        accept: {
+          "text/plain": [".txt", ".md", ".markdown"],
+          "text/markdown": [".md", ".markdown"],
+        },
+      },
+    ],
+  });
+  if (!handle) throw new DOMException("No file selected.", "AbortError");
+  const permission = await handle.requestPermission({ mode: "readwrite" });
+  if (permission !== "granted") {
+    throw new Error("Planevo needs permission to save back to this file.");
+  }
+  const file = await handle.getFile();
+  return {
+    handle,
+    file,
+    bytes: new Uint8Array(await file.arrayBuffer()),
+  };
+}
+
+export async function attachPickedLocalFile(
+  fileSourceId: string,
+  picked: PickedLocalFile,
+): Promise<void> {
+  await writeRecord({
+    fileSourceId,
+    handle: picked.handle,
+    name: picked.file.name,
+    size: picked.file.size,
+    lastModified: picked.file.lastModified,
+    contentHash: await fileHash(picked.file),
+    updatedAt: new Date().toISOString(),
   });
 }
+
+export async function readLocalFile(
+  fileSourceId: string,
+): Promise<LocalFileReadResult> {
+  if (!supportsLocalFileMirror()) return { state: "unsupported" };
+  const record = await readRecord(fileSourceId);
+  if (!record) return { state: "missing", name: "Local file" };
+  try {
+    const permission = await record.handle.queryPermission({ mode: "readwrite" });
+    if (permission !== "granted") {
+      return { state: "permission-needed", name: record.name };
+    }
+    const file = await record.handle.getFile();
+    return {
+      state: "available",
+      file,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    };
+  } catch (cause) {
+    return (cause as { name?: string })?.name === "NotFoundError"
+      ? { state: "missing", name: record.name }
+      : { state: "permission-needed", name: record.name };
+  }
+}
+
+const openMirrorDatabase = openFilesDatabase;
 
 async function readRecord(
   fileSourceId: string,
@@ -346,25 +409,33 @@ async function detachLocalDocumentStateTransaction(
   try {
     return await new Promise((resolve, reject) => {
       const transaction = database.transaction(
-        [RECOVERY_STORE_NAME, STORE_NAME, DELETION_STORE_NAME],
+        [
+          RECOVERY_STORE_NAME,
+          STORE_NAME,
+          DELETION_STORE_NAME,
+          LOCAL_DOCUMENT_STORE_NAME,
+        ],
         "readwrite",
       );
       const recoveryStore = transaction.objectStore(RECOVERY_STORE_NAME);
       const mirrorStore = transaction.objectStore(STORE_NAME);
+      const sidecarStore = transaction.objectStore(LOCAL_DOCUMENT_STORE_NAME);
       transaction.objectStore(DELETION_STORE_NAME).put({
         fileSourceId,
         startedAt: new Date().toISOString(),
       });
       const recoveryRequest = recoveryStore.get(fileSourceId);
       const mirrorRequest = mirrorStore.get(fileSourceId);
+      const sidecarRequest = sidecarStore.get(fileSourceId);
       const snapshot: LocalDocumentDeletionSnapshot = { fileSourceId };
       let readsCompleted = 0;
 
       function deleteAfterReads() {
         readsCompleted += 1;
-        if (readsCompleted !== 2) return;
+        if (readsCompleted !== 3) return;
         recoveryStore.delete(fileSourceId);
         mirrorStore.delete(fileSourceId);
+        sidecarStore.delete(fileSourceId);
       }
 
       recoveryRequest.onsuccess = () => {
@@ -376,6 +447,12 @@ async function detachLocalDocumentStateTransaction(
       mirrorRequest.onsuccess = () => {
         if (mirrorRequest.result !== undefined) {
           snapshot.mirrorRecord = mirrorRequest.result as LocalMirrorRecord;
+        }
+        deleteAfterReads();
+      };
+      sidecarRequest.onsuccess = () => {
+        if (sidecarRequest.result !== undefined) {
+          snapshot.localSidecar = sidecarRequest.result;
         }
         deleteAfterReads();
       };
@@ -413,7 +490,12 @@ export async function restoreLocalDocumentStateAfterFailedDeletion(
   try {
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(
-        [RECOVERY_STORE_NAME, STORE_NAME, DELETION_STORE_NAME],
+        [
+          RECOVERY_STORE_NAME,
+          STORE_NAME,
+          DELETION_STORE_NAME,
+          LOCAL_DOCUMENT_STORE_NAME,
+        ],
         "readwrite",
       );
       transaction
@@ -426,6 +508,11 @@ export async function restoreLocalDocumentStateAfterFailedDeletion(
       }
       if (snapshot.mirrorRecord !== undefined) {
         transaction.objectStore(STORE_NAME).put(snapshot.mirrorRecord);
+      }
+      if (snapshot.localSidecar !== undefined) {
+        transaction
+          .objectStore(LOCAL_DOCUMENT_STORE_NAME)
+          .put(snapshot.localSidecar);
       }
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);

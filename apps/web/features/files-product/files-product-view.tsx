@@ -10,7 +10,14 @@ import {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { FolderOpen, PanelLeft, Plus, Upload, X } from "lucide-react";
+import {
+  FileText,
+  FolderOpen,
+  PanelLeft,
+  Plus,
+  Upload,
+  X,
+} from "lucide-react";
 import {
   DndContext,
   KeyboardSensor,
@@ -37,6 +44,7 @@ import {
   deleteFolderAction,
   deleteProductFileAction,
   moveFileToFolderAction,
+  registerLocalProductFileAction,
   renameFileAction,
   renameFolderAction,
   updateProductFileTagsAction,
@@ -64,7 +72,9 @@ import {
   type FileCrossLinkTarget,
 } from "./file-cross-link-dialog";
 import {
+  attachPickedLocalFile,
   detachLocalDocumentStateForDeletion,
+  pickLocalEditableFile,
   restoreLocalDocumentStateAfterFailedDeletion,
   type LocalDocumentDeletionSnapshot,
 } from "./local-file-mirror";
@@ -73,6 +83,10 @@ import {
   DocumentEditorPanel,
   type DocumentEditorMode,
 } from "./document-editor-panel";
+import {
+  getFileEditorPreferences,
+  parseDocumentEditorMode,
+} from "@/lib/files/editor-prefs";
 import { FilesBreadcrumbHeader } from "./files-breadcrumb-header";
 import { FilesFolderCards } from "./files-folder-cards";
 import { FilesKnowledgeSidebar } from "./files-knowledge-sidebar";
@@ -334,6 +348,7 @@ export function FilesProductView({
   const prefersReducedMotion = usePrefersReducedMotion();
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
+  const [isOpeningLocal, setIsOpeningLocal] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [createDocumentOpen, setCreateDocumentOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -354,7 +369,9 @@ export function FilesProductView({
       : null,
   );
   const [editorMode, setEditorMode] = useState<DocumentEditorMode>(() =>
-    searchParams.get("editor") === "full" ? "full" : "panel",
+    searchParams.has("editor")
+      ? parseDocumentEditorMode(searchParams.get("editor"))
+      : getFileEditorPreferences().mode,
   );
   const [fileToDelete, setFileToDelete] = useState<ProductFileItem | null>(
     null,
@@ -394,7 +411,11 @@ export function FilesProductView({
           ? nextFileId
           : null,
       );
-      setEditorMode(searchParams.get("editor") === "full" ? "full" : "panel");
+      setEditorMode(
+        searchParams.has("editor")
+          ? parseDocumentEditorMode(searchParams.get("editor"))
+          : getFileEditorPreferences().mode,
+      );
     }, 0);
     return () => window.clearTimeout(syncTimer);
   }, [initialFiles, searchParams]);
@@ -475,18 +496,19 @@ export function FilesProductView({
   function openFile(file: ProductFileItem) {
     if (file.id === selectedFileId) {
       setSelectedFileId(null);
-      setEditorMode("panel");
+      setEditorMode(getFileEditorPreferences().mode);
       replaceFilesUrl({ fileId: null, editor: null });
       return;
     }
     setSelectedFileId(file.id);
-    setEditorMode("panel");
-    replaceFilesUrl({ fileId: file.id, editor: "panel" });
+    const preferredMode = getFileEditorPreferences().mode;
+    setEditorMode(preferredMode);
+    replaceFilesUrl({ fileId: file.id, editor: preferredMode });
   }
 
   function closeFile() {
     setSelectedFileId(null);
-    setEditorMode("panel");
+    setEditorMode(getFileEditorPreferences().mode);
     replaceFilesUrl({ fileId: null, editor: null });
   }
 
@@ -531,6 +553,50 @@ export function FilesProductView({
       toast(cause instanceof Error ? cause.message : "Upload failed.", {
         tone: "error",
       });
+    }
+  }
+
+  async function handleOpenLocalFile() {
+    setIsOpeningLocal(true);
+    try {
+      const picked = await pickLocalEditableFile();
+      const result = await registerLocalProductFileAction({
+        name: picked.file.name,
+        mimeType: picked.file.type || null,
+        sizeBytes: picked.file.size,
+      });
+      if (!result.ok) {
+        toast(result.error, { tone: "error" });
+        return;
+      }
+      try {
+        await attachPickedLocalFile(result.data.fileSourceId, picked);
+      } catch (cause) {
+        await deleteProductFileAction({
+          fileSourceId: result.data.fileSourceId,
+        });
+        throw cause;
+      }
+      const preferredMode = getFileEditorPreferences().mode;
+      setSelectedFileId(result.data.fileSourceId);
+      setEditorMode(preferredMode);
+      replaceFilesUrl({
+        fileId: result.data.fileSourceId,
+        editor: preferredMode,
+      });
+      toast("Local file opened. Its content stays on this device.");
+      router.refresh();
+    } catch (cause) {
+      if ((cause as { name?: string })?.name !== "AbortError") {
+        toast(
+          cause instanceof Error
+            ? cause.message
+            : "Could not open the local file.",
+          { tone: "error" },
+        );
+      }
+    } finally {
+      setIsOpeningLocal(false);
     }
   }
 
@@ -668,10 +734,11 @@ export function FilesProductView({
       setCreateDocumentOpen(false);
       toast("Document created");
       setSelectedFileId(result.data.fileSourceId);
-      setEditorMode("panel");
+      const preferredMode = getFileEditorPreferences().mode;
+      setEditorMode(preferredMode);
       replaceFilesUrl({
         fileId: result.data.fileSourceId,
-        editor: "panel",
+        editor: preferredMode,
       });
       router.refresh();
     });
@@ -762,7 +829,9 @@ export function FilesProductView({
                 <StorageMeter
                   usedBytes={usedBytes}
                   capBytes={capBytes}
-                  files={initialFiles}
+                  files={initialFiles.filter(
+                    (file) => file.storage_kind !== "local",
+                  )}
                   onDeleteFile={(file) => {
                     const match = initialFiles.find(
                       (candidate) => candidate.id === file.id,
@@ -782,7 +851,7 @@ export function FilesProductView({
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 overflow-hidden">
+        <div className="relative flex min-w-0 flex-1 overflow-hidden">
           <div
             className={cn(
               "min-w-0 flex-1 flex-col overflow-y-auto bg-files-bg",
@@ -850,6 +919,15 @@ export function FilesProductView({
                     scope={initialScope}
                     onScopeChange={changeScope}
                   />
+                  <button
+                    type="button"
+                    disabled={isOpeningLocal}
+                    onClick={() => void handleOpenLocalFile()}
+                    className="flex items-center gap-1.5 rounded-files-card border border-files-border bg-files-surface px-3 py-2 text-product-body font-medium text-files-text outline-none hover:bg-files-surface-muted focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <FileText aria-hidden="true" className="size-4" />
+                    {isOpeningLocal ? "Opening…" : "Open local"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setCreateDocumentOpen(true)}
@@ -938,10 +1016,12 @@ export function FilesProductView({
               onRenameFile={handleRenameFile}
               onImportedDocument={(fileSourceId) => {
                 setSelectedFileId(fileSourceId);
-                setEditorMode("panel");
-                replaceFilesUrl({ fileId: fileSourceId, editor: "panel" });
+                const preferredMode = getFileEditorPreferences().mode;
+                setEditorMode(preferredMode);
+                replaceFilesUrl({ fileId: fileSourceId, editor: preferredMode });
                 router.refresh();
               }}
+              onFileSynchronized={() => router.refresh()}
             />
           ) : selectedFile ? (
             <FilePreviewPanel

@@ -50,7 +50,12 @@ function FileTypeIcon({ mimeType }: { mimeType: string | null }) {
 
 function IngestionBadge({ status }: { status: string }) {
   if (status === "ready") return null;
-  const label = status === "failed" ? "Failed" : "Processing";
+  const label =
+    status === "local_only"
+      ? "On this device"
+      : status === "failed"
+        ? "Failed"
+        : "Processing";
   return (
     <Badge variant={status === "failed" ? "destructive" : "secondary"}>
       {label}

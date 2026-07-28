@@ -1,6 +1,12 @@
 import type { Database } from "./database.types";
 
 export type FileSourceRow = Database["public"]["Tables"]["file_sources"]["Row"];
+export type FileStorageKind = FileSourceRow["storage_kind"];
+export type LocalFileAvailability =
+  | "available"
+  | "permission-needed"
+  | "missing"
+  | "unsupported";
 
 export const FILE_FILTER_TABS = ["all", "documents", "pdfs", "images"] as const;
 export type FileFilterTab = (typeof FILE_FILTER_TABS)[number];

@@ -35,6 +35,7 @@ import { RecordPeekPreview } from "./record-peek-preview";
 import { RecordSurfacePreview } from "./record-surface-preview";
 import { CalendarProductPreview } from "./calendar-product-preview";
 import { FilesProductPreview } from "./files-product-preview";
+import { FilesEditorPreview } from "./files-editor-preview";
 import { TasksProductPreview } from "./tasks-product-preview";
 import { WorkspacePreview } from "./workspace-preview";
 
@@ -486,6 +487,10 @@ export default function DesignPage() {
             initialSection="appearance"
           />
         </div>
+      </Section>
+
+      <Section title="Files editor — layouts / glass / solid">
+        <FilesEditorPreview />
       </Section>
 
       <Section title="Record board — configured, orphan, and no-status lanes">

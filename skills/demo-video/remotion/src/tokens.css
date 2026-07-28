@@ -1,0 +1,21 @@
+/*
+ * Planevo demo-video Remotion tokens — mirrors apps/web/app/globals.css @theme names.
+ * Compositions use var(--color-*) only; no raw hex in TSX.
+ */
+:root {
+  --color-paper: #ffffff;
+  --color-ink: #37352f;
+  --color-marigold: #2383e2;
+  --color-marigold-foreground: #ffffff;
+  --color-sidebar: #f7f6f3;
+  --color-surface-raised: #f1f1ef;
+  --color-border: rgba(55, 53, 47, 0.09);
+  --color-text-secondary: #787774;
+  --color-text-muted: #9b9a97;
+
+  --text-h1: 27px;
+  --text-h2: 20px;
+  --text-body: 14.5px;
+  --text-label: 11.5px;
+  --radius-card: 14px;
+}

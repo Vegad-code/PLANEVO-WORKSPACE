@@ -1,0 +1,103 @@
+{
+  "name": "onboarding-create-task",
+  "description": "Planevo Tasks: open composer, type a title, submit, hold on the new task. Mirrors flows/onboarding-create-task.mjs for the tasks-only path (assumes dev user already completed onboarding). For first-run onboarding, use the .mjs flow or re-record after seeding.",
+  "startUrl": "http://127.0.0.1:3000/tasks",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "record": {
+    "enabled": true,
+    "size": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "timing": {
+    "speed": 1,
+    "moveMs": 180,
+    "clickPauseMs": 160,
+    "zoomMs": 360
+  },
+  "polish": {
+    "cursor": {
+      "style": "modern",
+      "accentColor": "#E8A838"
+    },
+    "actionRail": {
+      "enabled": false
+    },
+    "captions": {
+      "enabled": true,
+      "position": "bottom"
+    },
+    "zoom": {
+      "defaultScale": 1.06,
+      "durationMs": 360,
+      "resetMs": 260
+    }
+  },
+  "steps": [
+    {
+      "action": "pause",
+      "ms": 1000,
+      "label": "Let the Tasks view settle"
+    },
+    {
+      "action": "caption",
+      "text": "Create a task in Planevo — fast and manual-first.",
+      "ms": 1200,
+      "label": "Opening caption"
+    },
+    {
+      "action": "focus",
+      "selector": "button:has-text(\"Create task\")",
+      "label": "Frame the primary CTA"
+    },
+    {
+      "action": "click",
+      "selector": "button:has-text(\"Create task\")",
+      "label": "Open create-task composer"
+    },
+    {
+      "action": "waitForSelector",
+      "selector": "[role=\"dialog\"]",
+      "label": "Wait for composer dialog"
+    },
+    {
+      "action": "pause",
+      "ms": 800,
+      "label": "Hold on the modal"
+    },
+    {
+      "action": "fill",
+      "selector": "[role=\"dialog\"] input[name=\"title\"]",
+      "value": "Hello world from Planevo demo",
+      "label": "Type the task title"
+    },
+    {
+      "action": "pause",
+      "ms": 600,
+      "label": "Pause after typing"
+    },
+    {
+      "action": "click",
+      "selector": "[role=\"dialog\"] button[type=\"submit\"]",
+      "label": "Submit the new task"
+    },
+    {
+      "action": "waitForText",
+      "text": "Hello world from Planevo demo",
+      "label": "Confirm the task appears in the list"
+    },
+    {
+      "action": "resetZoom",
+      "label": "Return to full board context"
+    },
+    {
+      "action": "pause",
+      "ms": 2500,
+      "label": "Hold on the created task"
+    }
+  ]
+}

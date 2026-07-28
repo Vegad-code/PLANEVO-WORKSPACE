@@ -32,6 +32,7 @@ export async function createFileSourceRecord(
       created_by: userId,
       user_id: userId,
       storage_path: input.storagePath,
+      storage_kind: "cloud",
       name: input.name,
       mime_type: input.mimeType,
       size_bytes: input.sizeBytes,

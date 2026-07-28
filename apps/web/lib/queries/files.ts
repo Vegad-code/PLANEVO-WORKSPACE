@@ -38,7 +38,9 @@ export async function loadFilesData(): Promise<FilesData> {
   const fileRows = (rows ?? []).filter((row) =>
     isVisibleFileSourceMetadata(row.metadata_json),
   );
-  const storageRows = fileRows.filter((row) => !row.page_id);
+  const storageRows = fileRows.filter(
+    (row) => !row.page_id && !row.storage_path.startsWith("local:"),
+  );
   const signedUrls = new Map<string, string>();
   if (storageRows.length) {
     const { data: signed, error: signedError } = await access.client.storage

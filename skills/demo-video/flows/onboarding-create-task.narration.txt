@@ -1,0 +1,7 @@
+# Narration cues for flows/onboarding-create-task.demo.json
+# Format: start_sec | duration_sec | text
+0 | 3 | Planevo Tasks keeps capture manual-first — let's add a task in seconds.
+3 | 3 | Open the composer from the Tasks toolbar.
+6 | 4 | Give it a clear title — no AI required.
+10 | 3 | Submit, and the task lands on your board immediately.
+13 | 4 | That's the full loop: open, type, done.

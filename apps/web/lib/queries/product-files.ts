@@ -96,10 +96,12 @@ function ownerDisplayFromUser(user: AuthUser): OwnerDisplay {
 async function loadUsedBytes(access: DataAccess): Promise<number> {
   const { data, error } = await access.client
     .from("file_sources")
-    .select("size_bytes")
+    .select("size_bytes,storage_path")
     .eq("user_id", access.ownerId);
   if (error) throw error;
-  return summarizeStorageBytes(data ?? []);
+  return summarizeStorageBytes(
+    (data ?? []).filter((file) => !file.storage_path.startsWith("local:")),
+  );
 }
 
 /** Server loader for the Files product cabinet. */
@@ -129,7 +131,11 @@ export async function loadFilesPageData(
   const owner = ownerDisplayFromUser(authUser);
 
   // Page-backed rows use virtual "page:" paths — no storage object to sign.
-  const storageBacked = files.filter((file) => !file.storage_path.startsWith("page:"));
+  const storageBacked = files.filter(
+    (file) =>
+      !file.storage_path.startsWith("local:") &&
+      !file.storage_path.startsWith("page:"),
+  );
   const signedUrls = new Map<string, string>();
   if (storageBacked.length > 0) {
     const { data: signed, error } = await access.client.storage
