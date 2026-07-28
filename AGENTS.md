@@ -222,3 +222,60 @@ with `never` default.
   already decides the default ("closest to Lumis / GCal / Apple").
 - Do not stop mid-implementation to wait for approval, invent a new planning ceremony, or
   end a build session early while todos remain.
+
+## Cursor Cloud specific instructions
+
+Durable notes for Cursor Cloud agents. The startup layer already runs `npm install`
+(root; `patch-package` postinstall applied automatically). Node 22+ is required
+(`node --experimental-strip-types` powers the `.test.mjs` suites).
+
+Standard commands (already defined in `package.json`): `npm test` (pure-logic tests, no
+DB — currently 242 passing), `npm run lint` (eslint; the repo ships with pre-existing lint
+errors — do not treat them as environment breakage), `npm run dev` (Next.js app on
+`http://localhost:3000`).
+
+### Backend: run a LOCAL Supabase stack (no hosted access in Cloud)
+
+The founder-pinned hosted project `aixvpsmpiucticxutngp` is NOT reachable from Cloud
+(the Supabase MCP only sees a different, legacy-schema project — do not target it, and do
+not push this repo's migrations to it). For anything beyond `/design` (which renders
+standalone), stand up a local Supabase stack. Docker is a system dependency, so it is NOT
+in the update script — install/start it per session:
+
+1. Install Docker (DinD): for Docker 29 use `fuse-overlayfs` storage-driver AND
+   `"features": { "containerd-snapshotter": false }` in `/etc/docker/daemon.json`, set
+   `iptables`/`ip6tables` to the legacy alternatives, then run `sudo dockerd` (background,
+   e.g. a tmux session) and `sudo chmod 666 /var/run/docker.sock`.
+2. `npx supabase start` from the repo root (applies all `supabase/migrations/`). Containers
+   are named `supabase_*_aixvpsmpiucticxutngp` (the project_id in `config.toml`). Note the
+   printed `API_URL`, `ANON_KEY`, and `SERVICE_ROLE_KEY`.
+3. Grant `service_role` table access (dev mode uses it and the migrations only grant DML to
+   `authenticated`, so reads fail with `permission denied for table ...` without this):
+   ```sql
+   -- docker exec -i supabase_db_aixvpsmpiucticxutngp psql -U postgres -d postgres
+   grant all on all tables in schema public to service_role;
+   grant all on all sequences in schema public to service_role;
+   grant all on all functions in schema public to service_role;
+   alter default privileges in schema public grant all on tables to service_role;
+   alter default privileges in schema public grant all on sequences to service_role;
+   ```
+4. Create `apps/web/.env.local` (gitignored) pointing at the local stack. Use the LEGACY
+   JWT keys, not the new `sb_publishable_`/`sb_secret_` keys — local PostgREST only accepts
+   the JWTs, otherwise requests silently fall back to the `anon` role:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=<ANON_KEY from `supabase start`>
+   SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY from `supabase start`>
+   PLANEVO_DEV_MODE=1
+   PLANEVO_DEV_OWNER_ID=b0000000-0000-4000-8000-000000000001
+   ```
+
+### Gotchas
+
+- Dev mode (`PLANEVO_DEV_MODE=1` + `PLANEVO_DEV_OWNER_ID` + a server secret key, non-prod
+  build only) impersonates a fixed owner via the service_role client and bypasses RLS. It
+  lazily creates the dev auth user on first request. It is hard-disabled in production.
+- `.env.local` changes require a dev-server restart (Next.js reads env at boot).
+- Workspace routes (`/`, `/tasks`, `/calendar`, `/files`, `/workspace`) redirect to
+  `/onboarding` until you answer the "What are you organizing?" question once; that seeds a
+  starter workspace. `/design` never needs the DB.
