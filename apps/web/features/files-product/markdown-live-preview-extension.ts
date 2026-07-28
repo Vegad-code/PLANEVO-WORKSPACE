@@ -8,6 +8,8 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import {
+  MAX_FRONTMATTER_LINES,
+  frontmatterLineCount,
   isCollapsibleRange,
   isMarkdownSyntaxMark,
   markdownNodeClass,
@@ -56,16 +58,61 @@ function markEndWithTrailingSpace(
   return end > from ? end : to;
 }
 
-function buildDecorations(view: EditorView): DecorationSet {
+/**
+ * Two sets, deliberately.
+ *
+ * `decorations` is everything — prose marks plus the collapsed syntax. `atomic` holds ONLY the
+ * collapsed ranges, and is the one handed to EditorView.atomicRanges.
+ *
+ * Passing the full set as atomic (which this once did) makes every styled range indivisible to
+ * the selection, so dragging across a table or a blockquote snaps to the whole block instead of
+ * selecting words — because md-table and md-quote span entire blocks. Atomicity is only ever
+ * wanted for hidden text, where there is genuinely nothing to put a cursor inside of.
+ */
+type LivePreviewSets = { decorations: DecorationSet; atomic: DecorationSet };
+
+function buildDecorations(view: EditorView): LivePreviewSets {
   const { state } = view;
-  if (state.doc.length > MAX_LIVE_PREVIEW_BYTES) return Decoration.none;
+  if (state.doc.length > MAX_LIVE_PREVIEW_BYTES) {
+    return { decorations: Decoration.none, atomic: Decoration.none };
+  }
 
   const ranges: Array<Range<Decoration>> = [];
+  const atomicRanges: Array<Range<Decoration>> = [];
   const selection = state.selection.main;
   const tree = syntaxTree(state);
 
+  // Front matter is claimed before the tree walk. The markdown parser has no notion of it and
+  // reads the block plus its closing `---` as a Setext heading, which renders a file's metadata
+  // as a giant bold title. Paint it as metadata and skip every node inside it.
+  const headLines: string[] = [];
+  for (
+    let n = 1;
+    n <= Math.min(state.doc.lines, MAX_FRONTMATTER_LINES);
+    n += 1
+  ) {
+    headLines.push(state.doc.line(n).text);
+  }
+  const frontmatterLines = frontmatterLineCount(headLines);
+  const frontmatterEnd =
+    frontmatterLines > 0 ? state.doc.line(frontmatterLines).to : 0;
+  if (frontmatterEnd > 0) {
+    ranges.push(
+      Decoration.mark({ class: "md-frontmatter" }).range(0, frontmatterEnd),
+    );
+  }
+
   tree.iterate({
     enter(node) {
+      if (frontmatterEnd > 0) {
+        // Prune only nodes lying WHOLLY inside front matter. Testing `from` alone would match the
+        // root Document node, which also starts at 0, and pruning that discards the entire tree —
+        // every `#`, `**`, and `>` in the file stops collapsing.
+        if (node.to <= frontmatterEnd) return false;
+        // Straddles the fence: descend to reach real content, but style nothing at this level.
+        if (node.from < frontmatterEnd) return;
+      }
+
       const className = markdownNodeClass(node.name);
       if (className && isCollapsibleRange({ from: node.from, to: node.to })) {
         ranges.push(
@@ -95,13 +142,19 @@ function buildDecorations(view: EditorView): DecorationSet {
           ? markEndWithTrailingSpace(line.text, line.from, node.from, node.to)
           : node.to;
       if (!isCollapsibleRange({ from: node.from, to })) return;
-      ranges.push(Decoration.replace({}).range(node.from, to));
+      const collapsed = Decoration.replace({}).range(node.from, to);
+      ranges.push(collapsed);
+      // Only hidden text is atomic — see the note on LivePreviewSets.
+      atomicRanges.push(collapsed);
     },
   });
 
   // Sorting is delegated to Decoration.set: a parent node and its first child share a `from`,
   // and RangeSetBuilder would reject them in tree-iteration order.
-  return Decoration.set(ranges, true);
+  return {
+    decorations: Decoration.set(ranges, true),
+    atomic: Decoration.set(atomicRanges, true),
+  };
 }
 
 /** The span of lines the selection touches — the only part of the selection decorations care about. */
@@ -115,10 +168,13 @@ function revealedLineSpan(view: EditorView): string {
 const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    atomic: DecorationSet;
     private lineSpan: string;
 
     constructor(view: EditorView) {
-      this.decorations = buildDecorations(view);
+      const built = buildDecorations(view);
+      this.decorations = built.decorations;
+      this.atomic = built.atomic;
       this.lineSpan = revealedLineSpan(view);
     }
 
@@ -134,15 +190,19 @@ const livePreviewPlugin = ViewPlugin.fromClass(
 
       if (!needsRebuild) return;
       this.lineSpan = nextSpan;
-      this.decorations = buildDecorations(update.view);
+      const built = buildDecorations(update.view);
+      this.decorations = built.decorations;
+      this.atomic = built.atomic;
     }
   },
   {
     decorations: (plugin) => plugin.decorations,
-    // Without this, arrow keys land the caret inside collapsed `**` and appear to stall.
+    // `atomic`, NOT `decorations`. Feeding the full set here makes every styled range
+    // indivisible and selection snaps across whole tables and blockquotes. Collapsed syntax
+    // still needs it so arrow keys do not stall inside hidden `**`.
     provide: (plugin) =>
       EditorView.atomicRanges.of(
-        (view) => view.plugin(plugin)?.decorations ?? Decoration.none,
+        (view) => view.plugin(plugin)?.atomic ?? Decoration.none,
       ),
   },
 );

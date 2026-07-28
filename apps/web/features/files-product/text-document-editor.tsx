@@ -9,7 +9,7 @@ import {
 } from "@codemirror/commands";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
@@ -244,7 +244,11 @@ function CodeMirrorTextEditor({
           EditorView.lineWrapping,
           baseTheme,
           isDocument ? documentTheme : sourceTheme,
-          ...(markdownMode ? [markdown()] : []),
+          // `base` matters: bare markdown() parses CommonMark only, which has no tables, no
+          // strikethrough, and no task lists — so those nodes never appear in the tree and the
+          // md-table / md-strike / md-task-marker classes never fire. markdownLanguage is the
+          // GFM-enabled base, which is what people actually write.
+          ...(markdownMode ? [markdown({ base: markdownLanguage })] : []),
           ...(isDocument && markdownMode ? [markdownLivePreview()] : []),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {

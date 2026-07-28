@@ -58,6 +58,31 @@ export function markdownNodeClass(nodeName: string): string | null {
   return MARKDOWN_NODE_CLASS[nodeName] ?? null;
 }
 
+/** Front matter never runs on for pages; only scan the head of the document for the closing fence. */
+export const MAX_FRONTMATTER_LINES = 200;
+
+/**
+ * Number of leading lines that form a YAML front-matter block, including both `---` fences, or 0.
+ *
+ * This exists because @lezer/markdown has no concept of front matter: it sees the `key: value`
+ * lines followed by the closing `---` and parses the whole thing as a Setext H2, so an untreated
+ * document renders its metadata as a giant bold heading with `tags: [a, b]` styled as a link.
+ * Detecting the block lets the view plugin paint it as metadata instead.
+ *
+ * Requires the opening fence on line 1 (per YAML/Jekyll convention) and a closing `---` or `...`.
+ * An unterminated block returns 0 — a lone `---` at the top of a file is a horizontal rule, and
+ * treating the entire document as front matter would blank the whole view.
+ */
+export function frontmatterLineCount(lines: readonly string[]): number {
+  if (lines.length < 2 || lines[0]?.trim() !== "---") return 0;
+  const limit = Math.min(lines.length, MAX_FRONTMATTER_LINES);
+  for (let index = 1; index < limit; index += 1) {
+    const text = lines[index]?.trim();
+    if (text === "---" || text === "...") return index + 1;
+  }
+  return 0;
+}
+
 export function isMarkdownSyntaxMark(nodeName: string): boolean {
   return MARKDOWN_SYNTAX_MARKS.has(nodeName);
 }

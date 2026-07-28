@@ -214,11 +214,17 @@ export function MarkdownBubbleToolbar({
         // Hidden rather than unmounted until measured, so offsetWidth is readable on first pass.
         visibility: placement ? "visible" : "hidden",
       }}
-      className="files-bubble absolute z-30"
+      // Utilities rather than a semantic class: the surrounding chrome is styled this way, and
+      // the tokens below resolve per theme through globals.css.
+      className="absolute z-30 flex items-center gap-0.5 rounded-[10px] border border-files-bubble-border bg-files-bubble-bg p-1 shadow-md"
     >
       {ENTRIES.map((entry) =>
         entry.kind === "divider" ? (
-          <span key={entry.id} className="files-bubble__divider" />
+          <span
+            key={entry.id}
+            aria-hidden="true"
+            className="mx-1 h-[18px] w-px shrink-0 bg-files-bubble-border"
+          />
         ) : (
           <button
             key={entry.command}
@@ -229,7 +235,7 @@ export function MarkdownBubbleToolbar({
             // Keeps the document selection alive through the click, so the command has a range.
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onRunCommand(entry.command)}
-            className="files-bubble__button"
+            className="flex size-7 shrink-0 items-center justify-center rounded-md text-files-bubble-icon outline-none transition-colors hover:bg-files-bubble-hover hover:text-files-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-files-editor-focus aria-pressed:bg-files-bubble-active aria-pressed:text-files-text motion-reduce:transition-none"
           >
             {entry.icon}
           </button>

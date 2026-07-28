@@ -34,3 +34,9 @@ docs/files-feature-test-docs/
 
 # Apple emoji TTF (loaded via CDN; do not commit 111MB binary)
 apps/web/public/fonts/apple-color-emoji/
+
+# Serena code-index cache and agent memories (~49MB of .pkl, machine-local)
+.serena/
+
+# Demo-video renders (~5.5MB of .mp4/.webm; regenerated, not source)
+artifacts/

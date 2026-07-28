@@ -98,3 +98,27 @@ test("refuses zero-length and inverted ranges so CodeMirror never gets a bad dec
   assert.equal(isCollapsibleRange({ from: 4, to: 4 }), false);
   assert.equal(isCollapsibleRange({ from: 6, to: 4 }), false);
 });
+
+test("reads a YAML front-matter block so it is not parsed as a Setext heading", async () => {
+  const { frontmatterLineCount } = await loadModule();
+  assert.equal(
+    frontmatterLineCount(["---", "title: A", "tags: [x, y]", "---", "# Body"]),
+    4,
+  );
+  assert.equal(frontmatterLineCount(["---", "title: A", "..."]), 3);
+});
+
+test("ignores a leading rule that never closes, so a whole file is never swallowed", async () => {
+  const { frontmatterLineCount } = await loadModule();
+  // A lone `---` at the top is a horizontal rule, not an unterminated front-matter block.
+  assert.equal(frontmatterLineCount(["---", "# Heading", "body"]), 0);
+  assert.equal(frontmatterLineCount(["---"]), 0);
+  assert.equal(frontmatterLineCount([]), 0);
+  assert.equal(frontmatterLineCount(["# Heading", "---"]), 0);
+});
+
+test("stops scanning past the front-matter line cap", async () => {
+  const { frontmatterLineCount, MAX_FRONTMATTER_LINES } = await loadModule();
+  const runaway = ["---", ...Array(MAX_FRONTMATTER_LINES + 50).fill("k: v"), "---"];
+  assert.equal(frontmatterLineCount(runaway), 0);
+});

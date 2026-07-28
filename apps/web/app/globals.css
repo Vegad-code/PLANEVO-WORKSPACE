@@ -395,6 +395,24 @@
   --color-files-storage-documents: #ff9f0a;
   --color-files-storage-available: #373737;
 
+  /* Document editor, dark. These have to exist or the editor surface falls back
+     to the light :root values — a white canvas in a dark app, and dark-tinted
+     code chips and rules that vanish against it. The canvas sits one step
+     lighter than --color-files-bg so the document reads as a sheet on the app. */
+  --color-files-editor-solid: #1e1e1e;
+  --color-files-editor-glass: rgba(30, 30, 30, 0.88);
+  --color-files-editor-glass-strong: rgba(30, 30, 30, 0.94);
+  --color-files-editor-overlay: rgba(25, 25, 25, 0.84);
+  --color-files-doc-selection: rgba(255, 255, 255, 0.16);
+  --color-files-doc-code-bg: rgba(255, 255, 255, 0.09);
+  --color-files-doc-rule: rgba(255, 255, 255, 0.16);
+  --color-files-doc-syntax: rgba(255, 255, 255, 0.4);
+  --color-files-bubble-bg: #2a2a2a;
+  --color-files-bubble-border: rgba(255, 255, 255, 0.12);
+  --color-files-bubble-icon: rgba(255, 255, 255, 0.7);
+  --color-files-bubble-hover: rgba(255, 255, 255, 0.08);
+  --color-files-bubble-active: rgba(255, 255, 255, 0.14);
+
   --color-spotlight-backdrop: rgba(0, 0, 0, 0.58);
   --color-spotlight-glass: rgba(44, 44, 46, 0.82);
   --color-spotlight-glass-border: rgba(255, 255, 255, 0.16);
@@ -2087,4 +2105,170 @@ html[data-library-collapsed="true"] .library-rail-boot {
 .planevo-rbc .rbc-time-view-resources .rbc-time-header-gutter {
   border-right: 1px solid var(--color-border);
   background-color: var(--color-calendar-grid);
+}
+
+/* ===========================================================================
+ * Files — document editor surface
+ *
+ * Two things live here and neither can move into a component.
+ *
+ * 1. The paper ink lock. The editor canvas is always paper-white, including in
+ *    dark mode, but [data-theme="dark"] rebinds --color-files-text to near-white
+ *    for the surrounding library chrome. That inherits into the editor and
+ *    renders white text on a white page — the document looks completely blank.
+ *    Declaring the token ON .files-editor-shell wins for that subtree
+ *    regardless of specificity, because an element's own custom-property
+ *    declaration always beats one inherited from an ancestor.
+ *
+ * 2. The prose paint layer. CodeMirror creates the .md-* spans at runtime, so
+ *    Tailwind's scanner never sees those names in source and would purge any
+ *    utility equivalent. Mark decorations are INLINE spans inside .cm-line, so
+ *    size/weight/colour/background apply but block margins do not. Do not add
+ *    absolutely-positioned pseudo-elements here: they perturb CodeMirror's line
+ *    height measurement and bring back scroll judder.
+ * ======================================================================== */
+
+/*
+ * The editor follows the app theme — dark canvas in dark mode, paper in light.
+ * It deliberately does NOT pin light ink: an earlier version re-bound every
+ * token to paper values here, which forced a white sheet inside a dark app.
+ * Both modes now work because [data-theme="dark"] defines the editor tokens
+ * above; without those this rule would fall back to the light :root values.
+ */
+.files-editor-shell {
+  background: var(--color-files-editor-solid);
+  color: var(--color-files-text);
+}
+
+.files-doc-prose .cm-content {
+  font-family: var(--font-sans);
+  font-size: var(--text-doc-body);
+  color: var(--color-files-text);
+  max-width: var(--files-doc-measure);
+  margin-inline: auto;
+  padding: var(--files-doc-pad-top) var(--files-doc-pad-inline)
+    var(--files-doc-pad-bottom);
+}
+
+/* YAML front matter, claimed before the tree walk — metadata, not content. */
+.files-doc-prose .md-frontmatter {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--color-files-text-muted);
+}
+
+/* Raw `**` or `#`, revealed only on the line holding the caret. */
+.files-doc-prose .md-syntax {
+  color: var(--color-files-doc-syntax);
+  font-family: var(--font-mono);
+}
+
+.files-doc-prose .md-h1 {
+  font-size: var(--text-doc-h1);
+  line-height: var(--text-doc-h1--line-height);
+  font-weight: var(--text-doc-h1--font-weight);
+}
+
+.files-doc-prose .md-h2 {
+  font-size: var(--text-doc-h2);
+  line-height: var(--text-doc-h2--line-height);
+  font-weight: var(--text-doc-h2--font-weight);
+}
+
+.files-doc-prose .md-h3,
+.files-doc-prose .md-h4 {
+  font-size: var(--text-doc-h3);
+  line-height: var(--text-doc-h3--line-height);
+  font-weight: var(--text-doc-h3--font-weight);
+}
+
+.files-doc-prose .md-strong {
+  font-weight: 600;
+}
+
+.files-doc-prose .md-em {
+  font-style: italic;
+}
+
+.files-doc-prose .md-strike {
+  text-decoration: line-through;
+  color: var(--color-files-text-muted);
+}
+
+.files-doc-prose .md-code-inline,
+.files-doc-prose .md-code-block {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-files-doc-code-bg);
+}
+
+.files-doc-prose .md-code-inline {
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+
+.files-doc-prose .md-link {
+  color: var(--color-files-cta);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* One span per line, so the left rule reads as one continuous quote bar. */
+.files-doc-prose .md-quote {
+  border-left: 3px solid var(--color-files-doc-rule);
+  padding-left: 0.75em;
+  color: var(--color-files-text-muted);
+}
+
+/* Tinted characters, not a drawn line — see the pseudo-element warning above. */
+.files-doc-prose .md-rule {
+  color: var(--color-files-doc-rule);
+  letter-spacing: 0.2em;
+}
+
+.files-doc-prose .md-table {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.files-doc-prose .md-table-header {
+  font-weight: 600;
+}
+
+.files-doc-prose .md-task-marker {
+  color: var(--color-files-cta);
+  font-weight: 600;
+}
+
+/* md-list and md-list-item are mapped in markdown-live-preview.ts but carry no
+   rule on purpose — not a missing block. ListMark is never collapsed, so the
+   `-` and `1.` still render and the text already reads as a list. A hanging
+   indent is the one thing worth adding and cannot work here: these are inline
+   spans, so wrapped lines cannot be pushed clear of the marker. */
+
+/* The selection toolbar is styled with Tailwind utilities in
+   markdown-bubble-toolbar.tsx, not here — it only consumes the
+   --color-files-bubble-* tokens defined above. */
+
+/* Editor chrome. The look comes from Tailwind utilities at each call site;
+   these add only motion and a consistent focus ring. */
+.files-editor-control,
+.files-editor-resize {
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.files-editor-control:focus-visible,
+.files-editor-resize:focus-visible,
+.files-editor-utility:focus-visible {
+  outline: 2px solid var(--color-files-editor-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .files-editor-control,
+  .files-editor-resize {
+    transition: none;
+  }
 }
