@@ -17,8 +17,9 @@ out/
 .vercel
 .turbo
 
-# Supabase CLI local state (project refs, pooler URLs)
+# Supabase CLI local state (project refs, pooler URLs, local branch state)
 supabase/.temp/
+supabase/.branches/
 
 # Cursor local settings
 .cursor/
