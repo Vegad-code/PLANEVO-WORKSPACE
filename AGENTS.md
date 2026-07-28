@@ -279,3 +279,11 @@ in the update script — install/start it per session:
 - Workspace routes (`/`, `/tasks`, `/calendar`, `/files`, `/workspace`) redirect to
   `/onboarding` until you answer the "What are you organizing?" question once; that seeds a
   starter workspace. `/design` never needs the DB.
+
+## Skills
+
+Repo-local skills live in `skills/<name>/SKILL.md` (read the file when its trigger matches):
+
+- **`skills/demo-video`** — Use when you need a screen-recording / demo video of a web-UI
+  flow (feature walkthrough, PR artifact, bug repro) that works from both Cursor Cloud and
+  the desktop IDE. Portable Playwright recorder: `node skills/demo-video/record-flow.mjs`.
