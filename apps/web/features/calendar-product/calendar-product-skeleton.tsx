@@ -20,7 +20,9 @@ import { cn } from "@/lib/utils";
 
 const MINI_MONTH_CELLS = 35;
 const SKELETON_TASK_ROWS = 4;
-const SKELETON_CALENDAR_ROWS = 3;
+const SKELETON_TIME_ROWS = 8;
+const SKELETON_MONTH_ROWS = 6;
+const SKELETON_WEEK_COLUMNS = 7;
 
 function PlanningSectionHeader({ label }: { label: string }) {
   return (
@@ -125,24 +127,6 @@ function PlanningRailSkeleton({
               </div>
             </section>
 
-            <section>
-              <PlanningSectionHeader label="Calendars" />
-              <div className="flex flex-col gap-2 px-1 pb-3">
-                {Array.from({ length: SKELETON_CALENDAR_ROWS }).map(
-                  (_, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <span className="size-3 shrink-0 rounded-full bg-sidebar" />
-                      <Skeleton
-                        height={14}
-                        width={`${58 + (index % 3) * 12}%`}
-                        enableAnimation={false}
-                        containerClassName="leading-none"
-                      />
-                    </div>
-                  ),
-                )}
-              </div>
-            </section>
           </nav>
         </div>
       </div>
@@ -181,6 +165,168 @@ function ToolbarSkeleton() {
           <SlidersHorizontal aria-hidden="true" className="size-4" />
           Filter
         </span>
+      </div>
+    </div>
+  );
+}
+
+function GridPlaceholder({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "calendar-skeleton-placeholder block rounded-[var(--radius-calendar-event)] bg-paper",
+        compact ? "h-2.5 w-1/2" : "h-10 w-4/5 border-l-2 border-border-strong",
+      )}
+    />
+  );
+}
+
+export function CalendarGridSkeleton({
+  view = "week",
+  className,
+}: {
+  view?: "day" | "week" | "month";
+  className?: string;
+}) {
+  const columns = view === "day" ? 1 : SKELETON_WEEK_COLUMNS;
+
+  if (view === "month") {
+    return (
+      <div
+        aria-hidden="true"
+        className={cn(
+          "planevo-calendar-grid-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-calendar-grid",
+          className,
+        )}
+      >
+        <div
+          className="grid shrink-0 border-b border-border"
+          style={{
+            gridTemplateColumns: `repeat(${SKELETON_WEEK_COLUMNS}, minmax(0, 1fr))`,
+          }}
+        >
+          {Array.from({ length: SKELETON_WEEK_COLUMNS }).map((_, index) => (
+            <div
+              key={index}
+              className="flex h-10 items-center justify-center border-l border-border first:border-l-0"
+            >
+              <span className="calendar-skeleton-placeholder h-2.5 w-8 rounded-full bg-paper" />
+            </div>
+          ))}
+        </div>
+        <div
+          className="grid min-h-0 flex-1"
+          style={{
+            gridTemplateColumns: `repeat(${SKELETON_WEEK_COLUMNS}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${SKELETON_MONTH_ROWS}, minmax(0, 1fr))`,
+          }}
+        >
+          {Array.from({
+            length: SKELETON_MONTH_ROWS * SKELETON_WEEK_COLUMNS,
+          }).map((_, index) => (
+            <div
+              key={index}
+              className="flex min-h-0 flex-col gap-2 border-l border-t border-border p-2 first:border-l-0"
+            >
+              <span className="calendar-skeleton-placeholder ml-auto size-4 rounded-full bg-paper" />
+              {index % 5 === 1 || index % 11 === 4 ? (
+                <GridPlaceholder compact />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        "planevo-calendar-grid-shell flex min-h-0 flex-1 flex-col overflow-hidden bg-calendar-grid",
+        className,
+      )}
+    >
+      <div
+        className="grid shrink-0 border-b border-border"
+        style={{
+          gridTemplateColumns: `var(--size-calendar-time-gutter) repeat(${columns}, minmax(0, 1fr))`,
+        }}
+      >
+        <div />
+        {Array.from({ length: columns }).map((_, index) => (
+          <div
+            key={index}
+            className="flex h-[var(--size-calendar-day-header-row)] items-center justify-center border-l border-border"
+          >
+            <span className="calendar-skeleton-placeholder h-3 w-12 rounded-full bg-paper" />
+          </div>
+        ))}
+      </div>
+      <div
+        className="grid min-h-0 flex-1"
+        style={{
+          gridTemplateColumns: `var(--size-calendar-time-gutter) repeat(${columns}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${SKELETON_TIME_ROWS}, minmax(var(--size-calendar-day-header-row), 1fr))`,
+        }}
+      >
+        {Array.from({ length: SKELETON_TIME_ROWS }).flatMap((_, row) => [
+          <div
+            key={`time-${row}`}
+            className="flex items-start justify-end border-t border-border pr-2 pt-1"
+          >
+            <span className="calendar-skeleton-placeholder h-2 w-7 rounded-full bg-paper" />
+          </div>,
+          ...Array.from({ length: columns }).map((__, column) => {
+            const showEvent =
+              (row === 1 && column === Math.min(1, columns - 1)) ||
+              (row === 3 && column === Math.min(4, columns - 1)) ||
+              (row === 5 && column === 0);
+            return (
+              <div
+                key={`cell-${row}-${column}`}
+                className="min-h-0 border-l border-t border-border p-1.5"
+              >
+                {showEvent ? <GridPlaceholder /> : null}
+              </div>
+            );
+          }),
+        ])}
+      </div>
+    </div>
+  );
+}
+
+export function EmbeddedCalendarSkeleton({
+  view = "month",
+  height = "standard",
+}: {
+  view?: "day" | "week" | "month";
+  height?: "compact" | "standard" | "tall";
+}) {
+  return (
+    <div
+      role="status"
+      aria-label="Loading calendar"
+      className="calendar-embed"
+      data-height={height}
+    >
+      <div className="calendar-embed-header">
+        <div className="flex flex-col gap-2">
+          <span className="calendar-skeleton-placeholder h-3 w-28 rounded-full bg-sidebar" />
+          <span className="calendar-skeleton-placeholder h-2.5 w-20 rounded-full bg-sidebar" />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="calendar-skeleton-placeholder h-7 w-16 rounded-md bg-sidebar" />
+          <span className="calendar-skeleton-placeholder h-7 w-24 rounded-md bg-sidebar" />
+        </div>
+      </div>
+      <div className="calendar-embed-surface flex min-h-0">
+        <CalendarGridSkeleton view={view} />
       </div>
     </div>
   );
@@ -253,10 +399,7 @@ export function CalendarProductSkeleton() {
             </div>
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden pt-2">
-              <div
-                aria-hidden="true"
-                className="min-h-0 flex-1 bg-calendar-grid"
-              />
+              <CalendarGridSkeleton />
             </div>
           </div>
         </div>

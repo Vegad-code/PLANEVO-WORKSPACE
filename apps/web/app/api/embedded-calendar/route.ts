@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
-import { loadCalendarView } from "@planevo/core/queries/product-calendar"
 import { z } from "zod"
-import { embeddedCalendarRequest } from "@/lib/calendar/embedded-calendar"
+import { loadCalendars } from "@planevo/core/queries/product-calendar"
+import {
+  embeddedCalendarRequest,
+  parseCalendarEmbedTarget,
+} from "@/lib/calendar/embedded-calendar"
 import {
   fetchCalendarPageData,
   serializeCalendarQueryData,
@@ -9,16 +12,30 @@ import {
 import { mapTypedError } from "@/lib/api/typed-errors"
 import { getDataAccess } from "@/lib/data/access"
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit.server"
+import { parseCalendarDate } from "@/lib/calendar/calendar-range"
 
-const viewIdSchema = z.string().uuid()
+const viewSchema = z.enum(["day", "week", "month"])
+const calendarIdSchema = z.string().uuid()
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" }
 
 export async function GET(request: Request) {
-  const viewId = new URL(request.url).searchParams.get("viewId")
-  const parsedViewId = viewIdSchema.safeParse(viewId)
-  if (!parsedViewId.success) {
+  const url = new URL(request.url)
+  const target = parseCalendarEmbedTarget({
+    targetKind: url.searchParams.get("targetKind") ?? "",
+    calendarId: url.searchParams.get("calendarId") ?? undefined,
+  })
+  const parsedView = viewSchema.safeParse(url.searchParams.get("view"))
+  const anchor = parseCalendarDate(
+    url.searchParams.get("date") ?? undefined,
+  )
+  if (
+    !target ||
+    !parsedView.success ||
+    (target.kind === "calendar" &&
+      !calendarIdSchema.safeParse(target.calendarId).success)
+  ) {
     return NextResponse.json(
-      { error: "A valid calendar view is required." },
+      { error: "A valid calendar target is required." },
       { status: 400, headers: NO_STORE_HEADERS },
     )
   }
@@ -33,14 +50,13 @@ export async function GET(request: Request) {
 
   try {
     await enforceRateLimit(access, "embedded-calendar:get", RATE_LIMITS.read)
-    const view = await loadCalendarView(
-      access.client,
-      access.ownerId,
-      parsedViewId.data,
-    )
-    if (!view) {
+    const calendars = await loadCalendars(access.client, access.ownerId)
+    if (
+      target.kind === "calendar" &&
+      !calendars.some(({ id }) => id === target.calendarId)
+    ) {
       return NextResponse.json(
-        { error: "Calendar view not found." },
+        { error: "Calendar not found." },
         { status: 404, headers: NO_STORE_HEADERS },
       )
     }
@@ -49,12 +65,16 @@ export async function GET(request: Request) {
       access,
       null,
       "all",
-      embeddedCalendarRequest(view, new Date()),
+      embeddedCalendarRequest({
+        target,
+        view: parsedView.data,
+        now: anchor,
+      }),
     )
 
     return NextResponse.json(
       {
-        view,
+        target,
         data: serializeCalendarQueryData(ready),
       },
       { headers: NO_STORE_HEADERS },

@@ -9,6 +9,7 @@ import type { MonthDragData } from "@/lib/calendar/month-drag"
 import { localDateKey } from "@/lib/calendar/month-day-index"
 import { cn } from "@/lib/utils"
 import {
+  calendarColorStyle,
   CALENDAR_COLOR_BLOCK_CLASS,
   CALENDAR_COLOR_DOT_CLASS,
 } from "./calendar-color-dot"
@@ -92,6 +93,7 @@ export const MonthEventBar = memo(function MonthEventBar({
       style={{
         gridColumn: `${segment.columnStart + 1} / span ${segment.columnSpan}`,
         gridRow: segment.lane + 1,
+        ...calendarColorStyle(item.calendarColor),
       }}
       className={cn(
         "calendar-month-bar",

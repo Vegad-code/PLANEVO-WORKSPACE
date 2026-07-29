@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CALENDAR_COLORS } from "./calendar.ts";
+import { CALENDAR_PALETTE_KEYS } from "./calendar.ts";
 import {
   addWeeks,
   parseWeekParam,
@@ -8,9 +8,10 @@ import {
   weekRange,
 } from "../state/calendar-state.ts";
 
-test("CALENDAR_COLORS includes token keys", () => {
-  assert.ok(CALENDAR_COLORS.includes("slate"));
-  assert.ok(CALENDAR_COLORS.includes("marigold"));
+test("CALENDAR_PALETTE_KEYS exposes the user color spectrum", () => {
+  assert.equal(CALENDAR_PALETTE_KEYS.length, 16);
+  assert.ok(CALENDAR_PALETTE_KEYS.includes("graphite"));
+  assert.ok(CALENDAR_PALETTE_KEYS.includes("sky"));
 });
 
 test("weekRange returns Mon-Sun inclusive bounds", () => {

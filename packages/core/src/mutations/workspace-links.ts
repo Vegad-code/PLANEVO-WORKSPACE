@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../types/database.types";
 
-export type WorkspaceResourceType = "task" | "calendar_event" | "file";
+export type WorkspaceResourceType =
+  | "task"
+  | "calendar"
+  | "calendar_event"
+  | "file";
 
 export type WorkspaceLinkInput = {
   workspaceId: string;
@@ -22,7 +26,7 @@ export class WorkspaceLinkError extends Error {
 }
 
 /**
- * F-02: link an existing product resource (task/calendar_event/file) into a
+ * F-02: link an existing product resource into a
  * workspace. `workspace_links` has a unique(workspace_id, resource_type,
  * resource_id) constraint, so re-linking an already-linked resource is
  * treated as idempotent success rather than an error.

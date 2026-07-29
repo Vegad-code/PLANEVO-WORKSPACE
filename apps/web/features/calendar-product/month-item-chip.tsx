@@ -7,7 +7,10 @@ import type { MonthItem } from "@/lib/calendar/month-items"
 import type { MonthDragData } from "@/lib/calendar/month-drag"
 import { formatCompactMonthTime } from "@/lib/calendar/format-compact-month-time"
 import { cn } from "@/lib/utils"
-import { CALENDAR_COLOR_DOT_CLASS } from "./calendar-color-dot"
+import {
+  calendarColorStyle,
+  CALENDAR_COLOR_DOT_CLASS,
+} from "./calendar-color-dot"
 
 type MonthItemChipProps = {
   item: MonthItem
@@ -106,6 +109,7 @@ export const MonthItemChip = memo(function MonthItemChip({
   return (
     <button
       type="button"
+      style={calendarColorStyle(item.calendarColor)}
       ref={setNodeRef}
       {...listeners}
       {...attributes}

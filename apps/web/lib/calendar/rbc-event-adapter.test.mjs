@@ -11,8 +11,8 @@ const calendars = [
     id: "cal-1",
     user_id: "u1",
     name: "Work",
-    color: "ocean",
-    is_visible: true,
+    color: "blueberry",
+    is_included_in_main: true,
     position: 0,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -20,8 +20,8 @@ const calendars = [
     id: "cal-2",
     user_id: "u1",
     name: "Hidden",
-    color: "brick",
-    is_visible: false,
+    color: "tomato",
+    is_included_in_main: false,
     position: 1,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -62,12 +62,12 @@ const events = [
   },
 ]
 
-test("toRbcEvents filters hidden calendars and maps fields", () => {
+test("toRbcEvents maps the events supplied by the context query", () => {
   const mapped = toRbcEvents(events, calendars)
-  assert.equal(mapped.length, 1)
+  assert.equal(mapped.length, 2)
   assert.equal(mapped[0].id, "evt-1")
   assert.equal(mapped[0].planevoEventId, "evt-1")
-  assert.equal(mapped[0].color, "ocean")
+  assert.equal(mapped[0].color, "blueberry")
   assert.equal(mapped[0].title, "Standup")
   assert.equal(mapped[0].start.toISOString(), "2026-07-15T15:00:00.000Z")
   assert.equal(mapped[0].end.toISOString(), "2026-07-15T15:30:00.000Z")
@@ -76,7 +76,7 @@ test("toRbcEvents filters hidden calendars and maps fields", () => {
 test("getPlanevoEventId and getEventColor read adapter fields", () => {
   const [event] = toRbcEvents(events, calendars)
   assert.equal(getPlanevoEventId(event), "evt-1")
-  assert.equal(getEventColor(event), "ocean")
+  assert.equal(getEventColor(event), "blueberry")
 })
 
 test("marks every connected provider as read-only", () => {

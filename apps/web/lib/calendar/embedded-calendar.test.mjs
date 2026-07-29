@@ -1,53 +1,59 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { embeddedCalendarRequest } from "./embedded-calendar.ts"
+import {
+  embeddedCalendarRequest,
+  parseCalendarEmbedTarget,
+} from "./embedded-calendar.ts"
 
 const now = new Date(2026, 6, 26, 15, 30)
 
-function view(overrides = {}) {
-  return {
-    id: "view-1",
-    user_id: "user-1",
-    name: "Embedded",
-    preset: "classic",
-    config: {},
-    source_calendar_ids: [],
-    include_task_dues: true,
-    is_default: false,
-    position: 0,
-    created_at: "",
-    updated_at: "",
-    ...overrides,
-  }
-}
-
-test("a retired Flow preset degrades to the Classic week request", () => {
+test("embeds preserve Main and isolated canonical targets", () => {
   assert.deepEqual(
-    embeddedCalendarRequest(view({ preset: "flow" }), now),
-    { date: "2026-07-26", view: "week" },
+    parseCalendarEmbedTarget({ targetKind: "main" }),
+    { kind: "main" },
+  )
+  assert.deepEqual(
+    parseCalendarEmbedTarget({
+      targetKind: "calendar",
+      calendarId: "work",
+    }),
+    { kind: "calendar", calendarId: "work" },
   )
 })
 
-test("saved day-count overrides drive the same month and week request path", () => {
+test("missing and unavailable targets never broaden to Main", () => {
   assert.equal(
-    embeddedCalendarRequest(
-      view({ config: { dayCount: "month" } }),
+    parseCalendarEmbedTarget({
+      targetKind: "calendar",
+      calendarId: "",
+    }),
+    null,
+  )
+  assert.equal(
+    parseCalendarEmbedTarget({ targetKind: "unavailable" }),
+    null,
+  )
+})
+
+test("embed stores a local surface view and cannot use Year", () => {
+  assert.deepEqual(
+    embeddedCalendarRequest({
+      target: { kind: "main" },
+      view: "week",
       now,
-    ).view,
+    }),
+    {
+      context: { kind: "main" },
+      date: "2026-07-26",
+      view: "week",
+    },
+  )
+  assert.equal(
+    embeddedCalendarRequest({
+      target: { kind: "main" },
+      view: "year",
+      now,
+    }).view,
     "month",
-  )
-  assert.equal(
-    embeddedCalendarRequest(view({ config: { dayCount: 3 } }), now).view,
-    "week",
-  )
-})
-
-test("malformed saved config degrades to the built-in Classic request", () => {
-  assert.deepEqual(
-    embeddedCalendarRequest(
-      view({ preset: "unknown", config: { dayCount: "garbage" } }),
-      now,
-    ),
-    { date: "2026-07-26", view: "week" },
   )
 })

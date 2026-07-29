@@ -25,18 +25,16 @@ import {
   type PlanevoRbcEvent,
 } from "@/lib/calendar/rbc-event-adapter"
 import { isCalendarEventPast } from "@/lib/calendar/event-is-past"
+import {
+  contrastTextForCalendarColor,
+  isCustomCalendarColor,
+} from "@/lib/calendar/calendar-color"
 import { isPointOutsideRect } from "@/lib/calendar/task-event-unschedule-drop"
 import { calendarLocalizer } from "@/lib/calendar/rbc-localizer"
 import { startOfWeekSunday } from "@/lib/calendar/calendar-navigation"
 import { isCalendarToday } from "@/lib/calendar/day-header-model"
 import { defaultMonthCreateRange } from "@/lib/calendar/month-day-create"
 import { toMonthItems, type MonthItem } from "@/lib/calendar/month-items"
-import { toTimelineItems } from "@/lib/calendar/timeline-items"
-import {
-  configForLegacyView,
-  resolveRenderer,
-} from "@/lib/calendar/view-registry"
-import type { ViewConfig } from "@/lib/calendar/view-config"
 import { cn } from "@/lib/utils"
 import {
   elementToAnchorRect,
@@ -51,14 +49,13 @@ import {
 import { useCalendarDay } from "./calendar-now-context"
 import { MonthDayAgendaPopover } from "./month-day-agenda-popover"
 import { MonthGrid } from "./month-grid"
-import { TimelineGrid } from "./timeline-grid"
 import { CalendarNowIndicatorHost } from "./calendar-now-indicator-host"
 import { RbcDayHeader } from "./rbc-day-header"
 import { RbcNowIndicatorWrapper } from "./rbc-now-indicator-wrapper"
 import { RbcEventContent } from "./rbc-event-content"
 import { RbcPlanevoEventWrapper } from "./rbc-planevo-event-wrapper"
 import { RbcTimeGutterHeader } from "./rbc-time-gutter-header"
-import { DAY_START_HOUR, formatHourLabel, VISIBLE_HOURS } from "./time-axis"
+import { formatHourLabel } from "./time-axis"
 import "react-big-calendar/lib/css/react-big-calendar.css"
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
 
@@ -91,7 +88,6 @@ const DragAndDropCalendar = withDragAndDrop(
 
 type CalendarGridEngineProps = {
   view: "day" | "week" | "month"
-  viewConfig?: ViewConfig | null
   anchor: Date
   calendars: CalendarRow[]
   events: CalendarEventRow[]
@@ -154,7 +150,6 @@ function calendarSlotDataAttributes(date: Date) {
  */
 export function CalendarGridEngine({
   view,
-  viewConfig = null,
   anchor,
   calendars,
   events,
@@ -190,20 +185,8 @@ export function CalendarGridEngine({
     setPendingMoves(new Map())
   }, [pendingMovesClearToken])
 
-  // View goes through the registry rather than branching on the string directly,
-  // so a saved view's config picks the renderer by the same path the legacy
-  // toolbar does.
-  const effectiveViewConfig = useMemo(
-    () => viewConfig ?? configForLegacyView(view),
-    [view, viewConfig],
-  )
-  const renderer = useMemo(
-    () => resolveRenderer(effectiveViewConfig),
-    [effectiveViewConfig],
-  )
-  const isMonthView = renderer.id === "month-grid"
-  const isTimelineView = renderer.id === "timeline"
-  const rbcView: View = renderer.navigationUnit === "day" ? "day" : "week"
+  const isMonthView = view === "month"
+  const rbcView: View = view === "day" ? "day" : "week"
 
   const displayEvents = useMemo<CalendarDisplayEvent[]>(
     () =>
@@ -268,8 +251,10 @@ export function CalendarGridEngine({
   const draftRbcEvent = useMemo(() => {
     if (!draftCreateEvent) return null
     const color =
+      draftCreateEvent.color ??
       calendars.find((calendar) => calendar.id === draftCreateEvent.calendarId)
-        ?.color ?? "ocean"
+        ?.color ??
+      "graphite"
     return toDraftRbcEvent({ ...draftCreateEvent, color })
   }, [calendars, draftCreateEvent])
   const rbcEvents = useMemo(
@@ -291,10 +276,6 @@ export function CalendarGridEngine({
           })
     return toMonthItems(eventsForMonth, taskDues, calendars)
   }, [calendars, displayEvents, mergedPendingMoves, taskDues])
-  const timelineItems = useMemo(
-    () => toTimelineItems(displayEvents, taskDues, calendars, anchor),
-    [anchor, calendars, displayEvents, taskDues],
-  )
   const eventsById = useMemo(() => {
     const map = new Map<string, CalendarEventRow>()
     for (const event of events) map.set(event.id, event)
@@ -324,9 +305,9 @@ export function CalendarGridEngine({
   }, [anchor, now, view])
 
   const showNowIndicator = useMemo(() => {
-    if (isMonthView || isTimelineView || !todayInVisibleRange) return false
+    if (isMonthView || !todayInVisibleRange) return false
     return true
-  }, [isMonthView, isTimelineView, todayInVisibleRange])
+  }, [isMonthView, todayInVisibleRange])
 
   const timeGridComponents = useMemo(
     () => ({
@@ -428,7 +409,7 @@ export function CalendarGridEngine({
   // so the browser never emits `click` / onSelectEvent. Recover select from a
   // short pointer press (same 8px threshold as month dnd-kit chips).
   useEffect(() => {
-    if (isMonthView || isTimelineView) return
+    if (isMonthView) return
     const root = gridRef.current
     if (!root) return
 
@@ -488,7 +469,7 @@ export function CalendarGridEngine({
       document.removeEventListener("pointerup", onPointerUp)
       document.removeEventListener("pointercancel", onPointerCancel)
     }
-  }, [eventsById, isMonthView, isTimelineView, onEventSelect])
+  }, [eventsById, isMonthView, onEventSelect])
 
   const handleEventTimes = useCallback(
     (
@@ -539,12 +520,17 @@ export function CalendarGridEngine({
       return {
         className: cn(
           "planevo-rbc-event",
-          `planevo-rbc-event--${event.color}`,
           isDraft && "planevo-rbc-event--draft pointer-events-none",
           isPast && "planevo-rbc-event--past",
           event.isReadOnly && "planevo-rbc-event--read-only",
           event.isTaskComplete && "opacity-65",
         ),
+        style: {
+          "--planevo-rbc-event-accent": isCustomCalendarColor(event.color)
+            ? event.color
+            : `var(--color-calendar-${event.color})`,
+          "--planevo-rbc-event-text": `var(--color-${contrastTextForCalendarColor(event.color)})`,
+        } as React.CSSProperties,
         "data-event-id": event.id,
       }
     },
@@ -575,18 +561,13 @@ export function CalendarGridEngine({
           "planevo-calendar-grid min-h-0 h-full w-full overflow-hidden border border-border bg-calendar-grid",
           isMonthView
             ? "planevo-calendar-grid-shell"
-            : isTimelineView
-              ? "planevo-calendar-grid-shell"
-              : "planevo-rbc planevo-calendar-grid-shell",
+            : "planevo-rbc planevo-calendar-grid-shell",
           !hasAllDayEvents &&
             !isMonthView &&
-            !isTimelineView &&
             "planevo-rbc--no-allday",
           className,
         )}
-        data-calendar-grid={
-          isMonthView ? "month" : isTimelineView ? "timeline" : "rbc"
-        }
+        data-calendar-grid={isMonthView ? "month" : "rbc"}
         aria-label="Calendar grid"
       >
         {isMonthView ? (
@@ -599,26 +580,6 @@ export function CalendarGridEngine({
             onSelectItem={handleSelectMonthItem}
             onToggleTask={onToggleTask}
             onNavigateMonth={onNavigateMonth}
-          />
-        ) : isTimelineView ? (
-          <TimelineGrid
-            day={anchor}
-            items={timelineItems}
-            config={effectiveViewConfig}
-            now={now}
-            onSelectEvent={(event, anchorElement) =>
-              onEventSelect(event, elementToAnchorRect(anchorElement))
-            }
-            onCreateRange={({ startsAt, endsAt }, anchorElement) =>
-              onSlotSelect(
-                {
-                  startsAt: new Date(startsAt),
-                  endsAt: new Date(endsAt),
-                },
-                elementToAnchorRect(anchorElement),
-              )
-            }
-            onToggleTask={onToggleTask}
           />
         ) : (
           <div ref={gridRef} className="h-full min-h-0">

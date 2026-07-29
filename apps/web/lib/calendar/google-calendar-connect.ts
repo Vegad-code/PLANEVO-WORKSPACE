@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Database, Json } from "@planevo/core/types/database.types"
 import {
-  CALENDAR_COLORS,
+  CALENDAR_PALETTE_KEYS,
   type CalendarColor,
 } from "@planevo/core/types/calendar"
 import {
@@ -19,7 +19,9 @@ type CalendarAccount =
   Database["public"]["Tables"]["calendar_accounts"]["Row"]
 
 function connectionColor(index: number): CalendarColor {
-  return CALENDAR_COLORS[index % CALENDAR_COLORS.length] ?? "slate"
+  return (
+    CALENDAR_PALETTE_KEYS[index % CALENDAR_PALETTE_KEYS.length] ?? "graphite"
+  )
 }
 
 async function persistGoogleAccount(
@@ -114,7 +116,7 @@ async function createGoogleConnection(
       user_id: ownerId,
       name,
       color,
-      is_visible: true,
+      is_included_in_main: true,
       is_default: makeDefault,
       position,
     })

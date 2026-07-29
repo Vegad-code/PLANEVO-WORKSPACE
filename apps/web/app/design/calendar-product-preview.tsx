@@ -9,10 +9,14 @@ import type {
 import { useRef, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { CalendarGridEngine } from "@/features/calendar-product/calendar-grid-engine";
+import { CalendarColorPicker } from "@/features/calendar-product/calendar-color-picker";
 import { CalendarNowProvider } from "@/features/calendar-product/calendar-now-context";
 import { CalendarPlanningSidebar } from "@/features/calendar-product/calendar-planning-sidebar";
+import { CalendarGridSkeleton } from "@/features/calendar-product/calendar-product-skeleton";
+import { CalendarSelector } from "@/features/calendar-product/calendar-selector";
 import { CalendarShortcutsCheatSheet } from "@/features/calendar-product/calendar-shortcuts-cheat-sheet";
 import { CalendarTasksSection } from "@/features/calendar-product/calendar-tasks-section";
+import { CalendarViewMenu } from "@/features/calendar-product/calendar-view-menu";
 import { EventDetailPanel } from "@/features/calendar-product/event-detail-panel";
 import { EventQuickCaptureField } from "@/features/calendar-product/event-quick-capture-field";
 import { EventDetailPopover } from "@/features/calendar-product/event-detail-popover";
@@ -70,12 +74,30 @@ const DESIGN_TODAY_TASKS: TodayColumnTask[] = [
 
 export const DESIGN_CALENDARS: CalendarRow[] = [
   {
+    id: "cal-main",
+    user_id: "design-owner",
+    name: "Main",
+    color: "graphite",
+    color_mode: "inherit_override",
+    is_main: true,
+    is_included_in_main: true,
+    is_default: true,
+    deleted_at: null,
+    purge_after: null,
+    position: -1,
+    created_at: "2026-07-01T00:00:00.000Z",
+  },
+  {
     id: "cal-personal",
     user_id: "design-owner",
     name: "Personal",
-    color: "ocean",
-    is_visible: true,
-    is_default: true,
+    color: "sky",
+    color_mode: "inherit_override",
+    is_main: false,
+    is_included_in_main: true,
+    is_default: false,
+    deleted_at: null,
+    purge_after: null,
     position: 0,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -83,9 +105,13 @@ export const DESIGN_CALENDARS: CalendarRow[] = [
     id: "cal-work",
     user_id: "design-owner",
     name: "Work",
-    color: "slate",
-    is_visible: true,
+    color: "grape",
+    color_mode: "required_per_event",
+    is_main: false,
+    is_included_in_main: true,
     is_default: false,
+    deleted_at: null,
+    purge_after: null,
     position: 1,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -93,9 +119,13 @@ export const DESIGN_CALENDARS: CalendarRow[] = [
     id: "cal-holidays",
     user_id: "design-owner",
     name: "Holidays",
-    color: "meadow",
-    is_visible: false,
+    color: "basil",
+    color_mode: "inherit_override",
+    is_main: false,
+    is_included_in_main: false,
     is_default: false,
+    deleted_at: null,
+    purge_after: null,
     position: 2,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -386,6 +416,10 @@ function noop() {
   // Design previews render interactions inert.
 }
 
+async function noopCreateCalendar() {
+  return null;
+}
+
 function PlanningSidebarFrame({
   todayTasks = DESIGN_TODAY_TASKS,
   calendars = DESIGN_CALENDARS,
@@ -403,10 +437,6 @@ function PlanningSidebarFrame({
           now={DESIGN_NOW}
           weekStart={DESIGN_WEEK_START}
           onSelectDay={noop}
-          onToggleVisibility={noop}
-          onCreateCalendar={noop}
-          onUpdateCalendar={noop}
-          onSetDefaultCalendar={noop}
           onToggleTask={noop}
           onQuickAddTask={noop}
           onCollapse={noop}
@@ -492,7 +522,7 @@ function EventDetailPanelDemo({
       <figcaption className="mb-2 text-label uppercase text-text-muted">
         {label}
       </figcaption>
-      <div className="relative h-[36rem] overflow-hidden rounded-2xl border border-border bg-calendar-chrome">
+      <div className="relative h-[36rem] transform-gpu overflow-hidden rounded-2xl border border-border bg-calendar-chrome">
         <EventDetailPopover anchorRect={anchorRect} onClose={noop}>
           <EventDetailPanel
             mode={mode}
@@ -535,6 +565,8 @@ function DraftCreatePreview() {
     endsAt: new Date(2026, 6, 15, 10, 30).toISOString(),
     title: "New event",
     calendarId: DESIGN_CALENDARS[0]!.id,
+    allDay: false,
+    color: null,
   };
   const anchorRect = previewAnchorRect({
     left: 320,
@@ -548,7 +580,7 @@ function DraftCreatePreview() {
       <figcaption className="mb-2 text-label uppercase text-text-muted">
         Drag-create draft — solid card on grid + liquid glass popover with beak
       </figcaption>
-      <div className="relative h-[36rem] overflow-hidden rounded-xl bg-sidebar p-3">
+      <div className="relative h-[36rem] transform-gpu overflow-hidden rounded-xl bg-sidebar p-3">
         <div
           ref={gridContainerRef}
           className="calendar-panel-glass h-full overflow-hidden rounded-xl p-2"
@@ -663,7 +695,7 @@ export function CalendarProductPreview() {
     <div className="flex flex-wrap gap-8">
       <figure className="w-full">
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Two-pane product — Planning rail · react-big-calendar week grid
+          Calendar product — Agenda · multi-calendar toolbar · week grid
         </figcaption>
         <div className="flex h-[36rem] gap-3 overflow-hidden rounded-xl bg-sidebar p-3">
           <DndContext>
@@ -675,32 +707,65 @@ export function CalendarProductPreview() {
                 now={DESIGN_NOW}
                 weekStart={DESIGN_WEEK_START}
                 onSelectDay={noop}
-                onToggleVisibility={noop}
-                onCreateCalendar={noop}
-                onUpdateCalendar={noop}
-                onSetDefaultCalendar={noop}
                 onToggleTask={noop}
                 onQuickAddTask={noop}
                 onCollapse={noop}
               />
             </div>
-            <div className="calendar-panel-glass min-w-0 flex-1 overflow-hidden rounded-xl p-2">
-              <CalendarGridEngine
-                view="week"
-                anchor={DESIGN_WEEK_START}
-                calendars={DESIGN_CALENDARS}
-                events={DESIGN_EVENTS}
-                taskDues={[]}
-                now={DESIGN_NOW}
-                onSlotSelect={noop}
-                onEventSelect={noop}
-                onEventTimesChange={noop}
-                onToggleTask={noop}
-                onOpenDay={noop}
-                onNavigateMonth={noop}
-              />
+            <div className="calendar-panel-glass flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl p-2">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-1 pb-2">
+                <CalendarSelector
+                  context={{ kind: "main" }}
+                  anchor={DESIGN_WEEK_START}
+                  view="week"
+                  scope="all"
+                  calendars={DESIGN_CALENDARS}
+                  onToggleIncluded={noop}
+                  onCreateCalendar={noopCreateCalendar}
+                  onSetDefaultCalendar={noop}
+                />
+                <CalendarViewMenu
+                  view="week"
+                  views={["day", "week", "month", "year"]}
+                  onViewChange={noop}
+                />
+              </div>
+              <div className="min-h-0 flex-1 pt-2">
+                <CalendarGridEngine
+                  view="week"
+                  anchor={DESIGN_WEEK_START}
+                  calendars={DESIGN_CALENDARS}
+                  events={DESIGN_EVENTS}
+                  taskDues={[]}
+                  now={DESIGN_NOW}
+                  onSlotSelect={noop}
+                  onEventSelect={noop}
+                  onEventTimesChange={noop}
+                  onToggleTask={noop}
+                  onOpenDay={noop}
+                  onNavigateMonth={noop}
+                />
+              </div>
             </div>
           </DndContext>
+        </div>
+      </figure>
+
+      <CalendarPalettePreview />
+
+      <figure className="w-full">
+        <figcaption className="mb-2 text-label uppercase text-text-muted">
+          Calendar loading — day, week, and month geometry
+        </figcaption>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {(["day", "week", "month"] as const).map((loadingView) => (
+            <div
+              key={loadingView}
+              className="flex h-80 min-w-0 flex-col overflow-hidden rounded-xl border border-border"
+            >
+              <CalendarGridSkeleton view={loadingView} />
+            </div>
+          ))}
         </div>
       </figure>
 
@@ -765,7 +830,7 @@ export function CalendarProductPreview() {
 
       <figure>
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Planning rail — all sections open
+          Agenda — all sections open
         </figcaption>
         <div className="h-[32rem]">
           <PlanningSidebarFrame />
@@ -774,7 +839,7 @@ export function CalendarProductPreview() {
 
       <figure>
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Planning rail — empty tasks + empty calendars
+          Agenda — empty tasks
         </figcaption>
         <div className="h-[28rem]">
           <PlanningSidebarFrame todayTasks={[]} calendars={[]} />
@@ -839,10 +904,6 @@ export function CalendarProductPreview() {
                   now={DESIGN_NOW}
                   weekStart={DESIGN_WEEK_START}
                   onSelectDay={noop}
-                  onToggleVisibility={noop}
-                  onCreateCalendar={noop}
-                  onUpdateCalendar={noop}
-                  onSetDefaultCalendar={noop}
                   onToggleTask={noop}
                   onQuickAddTask={noop}
                   onCollapse={noop}
@@ -900,6 +961,21 @@ export function CalendarProductPreview() {
       </figure>
     </div>
     </CalendarNowProvider>
+  );
+}
+
+function CalendarPalettePreview() {
+  const [color, setColor] = useState<CalendarRow["color"]>("sky");
+
+  return (
+    <figure className="w-full max-w-2xl">
+      <figcaption className="mb-2 text-label uppercase text-text-muted">
+        Calendar palette — named spectrum, custom color, keyboard + validation
+      </figcaption>
+      <div className="rounded-xl border border-border bg-paper p-4">
+        <CalendarColorPicker value={color} onChange={setColor} />
+      </div>
+    </figure>
   );
 }
 

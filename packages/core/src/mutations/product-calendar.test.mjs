@@ -318,7 +318,7 @@ test("updateCalendarVisibility scopes by calendar id and user id", async () => {
     },
   };
   await updateCalendarVisibility(client, "u1", "c1", false);
-  assert.deepEqual(filters.patch, { is_visible: false });
+  assert.deepEqual(filters.patch, { is_included_in_main: false });
   assert.equal(filters.id, "c1");
   assert.equal(filters.user_id, "u1");
 });
@@ -327,7 +327,7 @@ test("scheduleTaskFromDrag creates a one-hour event linked to the task", async (
   let rpcArgs = null;
   const client = {
     rpc: async (name, args) => {
-      assert.equal(name, "schedule_task_idempotent");
+      assert.equal(name, "schedule_task_in_calendar_idempotent");
       rpcArgs = args;
       return {
         data: { id: "e1", task_id: args.p_task_id, starts_at: args.p_starts_at },
@@ -338,11 +338,13 @@ test("scheduleTaskFromDrag creates a one-hour event linked to the task", async (
   const event = await scheduleTaskFromDrag(client, "u1", {
     operationKey: "op-1",
     taskId: "t1",
+    calendarId: "c1",
     title: "Write launch email",
     startsAt: "2026-07-14T09:00:00.000Z",
   });
   assert.equal(event.task_id, "t1");
   assert.equal(rpcArgs.p_owner_id, "u1");
+  assert.equal(rpcArgs.p_calendar_id, "c1");
   assert.equal(rpcArgs.p_starts_at, "2026-07-14T09:00:00.000Z");
   assert.equal(rpcArgs.p_ends_at, "2026-07-14T10:00:00.000Z");
 });
@@ -351,7 +353,7 @@ test("scheduleTaskFromDrag honors the task estimate", async () => {
   let captured = null;
   const client = {
     async rpc(name, args) {
-      assert.equal(name, "schedule_task_idempotent");
+      assert.equal(name, "schedule_task_in_calendar_idempotent");
       captured = args;
       return {
         data: { id: "e1", task_id: args.p_task_id, ends_at: args.p_ends_at },
@@ -363,6 +365,7 @@ test("scheduleTaskFromDrag honors the task estimate", async () => {
   await scheduleTaskFromDrag(client, "u1", {
     operationKey: "op-1",
     taskId: "t1",
+    calendarId: "c1",
     title: "Deep work",
     startsAt: "2026-07-14T13:00:00.000Z",
     durationMinutes: 90,
@@ -376,6 +379,7 @@ test("scheduleTaskFromDrag rejects invalid task estimates", async () => {
     scheduleTaskFromDrag({}, "u1", {
       operationKey: "op-1",
       taskId: "t1",
+      calendarId: "c1",
       title: "Deep work",
       startsAt: "2026-07-14T13:00:00.000Z",
       durationMinutes: 0,

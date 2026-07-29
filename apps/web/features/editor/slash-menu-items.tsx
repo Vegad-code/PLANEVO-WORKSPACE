@@ -13,11 +13,15 @@ import { fuzzyMatch } from "@planevo/core/search/fuzzy";
 import {
   createDatabaseFromTemplateAction,
   createSubpage,
+  linkCalendarEmbedAction,
 } from "@/app/(workspace)/pages/[pageId]/actions";
 import type { PlanevoEditorInstance } from "@/features/editor/editor-types";
+import { toast } from "@/components/ui/toast";
 
 export type DatabaseOption = { id: string; name: string };
-export type CalendarViewOption = { id: string; name: string };
+export type CalendarOption =
+  | { kind: "main"; id: string; name: string }
+  | { kind: "calendar"; id: string; name: string };
 
 type Editor = PlanevoEditorInstance;
 
@@ -41,11 +45,25 @@ function insertDatabaseView(editor: Editor, databaseId: string) {
   });
 }
 
-function insertCalendarEmbed(editor: Editor, viewId: string) {
+async function insertCalendarEmbed(
+  editor: Editor,
+  pageId: string,
+  calendar: CalendarOption,
+) {
+  const result = await linkCalendarEmbedAction({
+    pageId,
+    calendarId: calendar.id,
+  });
+  if (!result.ok) {
+    toast(result.error ?? "Could not link the calendar.", { tone: "error" });
+    return;
+  }
   insertOrUpdateBlockForSlashMenu(editor, {
     type: "calendar_embed",
     props: {
-      viewId,
+      targetKind: calendar.kind,
+      calendarId: calendar.kind === "calendar" ? calendar.id : "",
+      view: "month",
       height: "standard",
     },
   });
@@ -73,7 +91,7 @@ export function getPlanevoSlashMenuItems(
   options: {
     pageId: string;
     databaseOptions: DatabaseOption[];
-    calendarViewOptions?: CalendarViewOption[];
+    calendarOptions?: CalendarOption[];
     onNavigate?: (href: string) => void;
   },
 ): DefaultReactSuggestionItem[] {
@@ -128,14 +146,16 @@ export function getPlanevoSlashMenuItems(
   );
 
   const calendarEmbedItems: DefaultReactSuggestionItem[] = (
-    options.calendarViewOptions ?? []
-  ).map((view) => ({
-    title: `Calendar · ${view.name}`,
-    subtext: "Embed this saved calendar view",
+    options.calendarOptions ?? []
+  ).map((calendar) => ({
+    title: `Calendar · ${calendar.name}`,
+    subtext: "Embed this live calendar",
     group: "Embed calendar",
-    aliases: ["calendar", "schedule", "embed calendar", view.name],
+    aliases: ["calendar", "schedule", "embed calendar", calendar.name],
     icon: <CalendarDaysIcon className="h-4 w-4" />,
-    onItemClick: () => insertCalendarEmbed(editor, view.id),
+    onItemClick: () => {
+      void insertCalendarEmbed(editor, options.pageId, calendar)
+    },
   }));
 
   return [

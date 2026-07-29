@@ -1,21 +1,35 @@
-import type { CalendarViewRow } from "@planevo/core/types/calendar"
+import type {
+  CalendarEmbedTarget,
+  CalendarSurfaceView,
+} from "@planevo/core/types/calendar"
 import { dateParam } from "./calendar-range.ts"
 import type { CalendarPageRequest } from "./fetch-calendar-page-data.ts"
-import { resolveViewConfig } from "./view-config.ts"
-import { toolbarViewForSavedConfig } from "./view-crud.ts"
 
-/**
- * Turns a persisted lens into the same URL-level request used by /calendar.
- * Keeping this decision shared prevents embeds from inventing a second range
- * model when a saved view is edited.
- */
-export function embeddedCalendarRequest(
-  view: CalendarViewRow,
-  now: Date,
-): Required<Pick<CalendarPageRequest, "date" | "view">> {
-  const config = resolveViewConfig(view.preset, view.config)
+export function parseCalendarEmbedTarget({
+  targetKind,
+  calendarId,
+}: {
+  targetKind: string
+  calendarId?: string
+}): CalendarEmbedTarget | null {
+  if (targetKind === "main") return { kind: "main" }
+  if (targetKind !== "calendar") return null
+  const id = calendarId?.trim()
+  return id ? { kind: "calendar", calendarId: id } : null
+}
+
+export function embeddedCalendarRequest({
+  target,
+  view,
+  now,
+}: {
+  target: CalendarEmbedTarget
+  view: CalendarSurfaceView
+  now: Date
+}): CalendarPageRequest {
   return {
+    context: target,
     date: dateParam(now),
-    view: toolbarViewForSavedConfig(config),
+    view: view === "year" ? "month" : view,
   }
 }

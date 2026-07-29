@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { recordRecentItem } from "@planevo/api/rpc";
-import { listCalendarViews } from "@planevo/core/queries/product-calendar";
+import { loadCalendars } from "@planevo/core/queries/product-calendar";
 import { getCurrentWorkspace } from "@/lib/data/current-workspace";
 import { readGettingStartedPageId } from "@/lib/onboarding/gate";
 import { PageChrome } from "@/features/editor/page-chrome";
@@ -46,7 +46,7 @@ export default async function PageRoute({
     .eq("workspace_id", workspace.id)
     .order("name", { ascending: true });
   if (databasesError) throw databasesError;
-  const calendarViews = await listCalendarViews(
+  const calendars = await loadCalendars(
     access.client,
     access.ownerId,
   );
@@ -80,10 +80,22 @@ export default async function PageRoute({
           pageId={page.id}
           initialContent={page.content_json}
           databaseOptions={databases ?? []}
-          calendarViewOptions={calendarViews.map(({ id, name }) => ({
-            id,
-            name,
-          }))}
+          calendarOptions={[
+            ...calendars
+              .filter(({ is_main }) => is_main)
+              .map(({ id }) => ({
+                kind: "main" as const,
+                id,
+                name: "Main Calendar",
+              })),
+            ...calendars
+              .filter(({ is_main }) => !is_main)
+              .map(({ id, name }) => ({
+                kind: "calendar" as const,
+                id,
+                name,
+              })),
+          ]}
           trackOnboardingChecklist={trackOnboardingChecklist}
         />
       </div>

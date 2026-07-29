@@ -5,7 +5,7 @@ import test from "node:test"
 const readWeb = (path) =>
   readFile(new URL(`../../${path}`, import.meta.url), "utf8")
 
-test("calendar_embed persists one saved lens identity and exports a fallback", async () => {
+test("calendar_embed persists a canonical target and block-local presentation", async () => {
   const schema = await readWeb("features/editor/schema.tsx")
   const calendarBlock = schema.match(
     /const createCalendarEmbed[\s\S]*?\n\);\n\n\/\*\*/,
@@ -13,50 +13,54 @@ test("calendar_embed persists one saved lens identity and exports a fallback", a
 
   assert.ok(calendarBlock)
   assert.match(calendarBlock, /type: "calendar_embed"/)
+  assert.match(calendarBlock, /targetKind: \{ default: "main" \}/)
+  assert.match(calendarBlock, /calendarId: \{ default: "" \}/)
   assert.match(calendarBlock, /viewId: \{ default: "" \}/)
+  assert.match(calendarBlock, /view: \{ default: "month" \}/)
   assert.match(calendarBlock, /height: \{ default: "standard" \}/)
-  assert.match(calendarBlock, /toExternalHTML/)
   assert.match(calendarBlock, /data-calendar-embed/)
-  assert.doesNotMatch(calendarBlock, /databaseId|calendarId|recordIds/)
-  assert.match(schema, /calendar_embed: createCalendarEmbed\(\)/)
+  assert.match(calendarBlock, /legacyViewId=\{block\.props\.viewId\}/)
 })
 
-test("slash menu inserts a selected saved view rather than copying its config", async () => {
+test("slash menu inserts Main and owned calendars without copying event data", async () => {
   const [slashMenu, editor, page] = await Promise.all([
     readWeb("features/editor/slash-menu-items.tsx"),
     readWeb("features/editor/planevo-editor.tsx"),
     readWeb("app/(workspace)/pages/[pageId]/page.tsx"),
   ])
 
-  assert.match(slashMenu, /type: "calendar_embed"/)
-  assert.match(slashMenu, /viewId,/)
-  assert.match(slashMenu, /Embed this saved calendar view/)
-  assert.match(editor, /calendarViewOptions/)
-  assert.match(page, /listCalendarViews/)
-  assert.match(page, /calendarViewOptions=/)
+  assert.match(slashMenu, /targetKind: calendar\.kind/)
+  assert.match(slashMenu, /calendarId:/)
+  assert.match(slashMenu, /Embed this live calendar/)
+  assert.match(editor, /calendarOptions/)
+  assert.match(page, /loadCalendars/)
+  assert.match(page, /kind: "main"/)
+  assert.doesNotMatch(page, /listCalendarViews/)
 })
 
-test("embed reloads the current view and delegates rendering to product surfaces", async () => {
+test("embed delegates navigation and editing to shared calendar surfaces", async () => {
   const component = await readWeb(
     "features/editor/embedded-calendar-view.tsx",
   )
 
   assert.match(component, /cache: "no-store"/)
   assert.match(component, /response\.status === 404/)
-  assert.match(component, /Calendar view unavailable/)
-  assert.match(component, /window\.addEventListener\("focus", handleRefresh\)/)
+  assert.match(component, /Calendar unavailable/)
   assert.match(component, /<CalendarGridEngine/)
-  assert.match(component, /<YearView/)
-  assert.match(component, /viewConfig=\{config\}/)
-  assert.doesNotMatch(component, /layoutIntervals|resolveRenderer/)
+  assert.match(component, /<EventDetailPanel/)
+  assert.match(component, /createCalendarEventAction/)
+  assert.match(component, /updateEventTimesAction/)
+  assert.doesNotMatch(component, /YearView|viewConfig|resolveRenderer/)
 })
 
-test("embedded API is owner-scoped, uncached, and uses calendar page loading", async () => {
+test("embedded API validates owner-scoped canonical targets", async () => {
   const route = await readWeb("app/api/embedded-calendar/route.ts")
 
-  assert.match(route, /loadCalendarView\([\s\S]*access\.ownerId/)
+  assert.match(route, /parseCalendarEmbedTarget/)
+  assert.match(route, /loadCalendars\(access\.client, access\.ownerId\)/)
   assert.match(route, /fetchCalendarPageData/)
   assert.match(route, /serializeCalendarQueryData/)
   assert.match(route, /private, no-store/)
   assert.match(route, /status: 404/)
+  assert.doesNotMatch(route, /loadCalendarView/)
 })

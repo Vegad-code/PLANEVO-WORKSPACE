@@ -1,44 +1,93 @@
-import type { CalendarColor } from "@planevo/core/types/calendar";
+import type {
+  CalendarColorValue,
+  CalendarPaletteKey,
+} from "@planevo/core/types/calendar"
+import { Check } from "lucide-react"
+import {
+  contrastTextForCalendarColor,
+  isCustomCalendarColor,
+} from "@/lib/calendar/calendar-color"
 
-/* Static class maps so Tailwind sees every literal (no template class names). */
+const DOT_CLASSES: Record<CalendarPaletteKey, string> = {
+  lavender: "bg-calendar-lavender",
+  sage: "bg-calendar-sage",
+  grape: "bg-calendar-grape",
+  flamingo: "bg-calendar-flamingo",
+  banana: "bg-calendar-banana",
+  tangerine: "bg-calendar-tangerine",
+  peacock: "bg-calendar-peacock",
+  graphite: "bg-calendar-graphite",
+  blueberry: "bg-calendar-blueberry",
+  basil: "bg-calendar-basil",
+  tomato: "bg-calendar-tomato",
+  rose: "bg-calendar-rose",
+  sky: "bg-calendar-sky",
+  teal: "bg-calendar-teal",
+  amber: "bg-calendar-amber",
+  plum: "bg-calendar-plum",
+}
 
-export const CALENDAR_COLOR_DOT_CLASS: Record<CalendarColor, string> = {
-  slate: "bg-slate",
-  marigold: "bg-marigold",
-  meadow: "bg-meadow",
-  brick: "bg-brick",
-  ocean: "bg-ocean",
-};
+export const CALENDAR_COLOR_DOT_CLASS: Record<string, string> = DOT_CLASSES
+export const CALENDAR_COLOR_BLOCK_CLASS: Record<string, string> =
+  Object.fromEntries(
+    Object.keys(DOT_CLASSES).map((key) => [
+      key,
+      `calendar-event-block--${key}`,
+    ]),
+  )
+export const CALENDAR_EVENT_BLOCK_CLASS = CALENDAR_COLOR_BLOCK_CLASS
+export const CALENDAR_COLOR_BORDER_CLASS: Record<string, string> =
+  Object.fromEntries(
+    Object.keys(DOT_CLASSES).map((key) => [
+      key,
+      `border-calendar-${key}`,
+    ]),
+  )
 
-export const CALENDAR_COLOR_BLOCK_CLASS: Record<CalendarColor, string> = {
-  slate: "bg-slate-tint",
-  marigold: "bg-marigold-tint",
-  meadow: "bg-meadow-tint",
-  brick: "bg-brick-tint",
-  ocean: "bg-ocean-tint",
-};
+export function calendarColorStyle(
+  color: CalendarColorValue,
+): React.CSSProperties {
+  return {
+    "--calendar-event-color": isCustomCalendarColor(color)
+      ? color
+      : `var(--color-calendar-${color})`,
+    "--calendar-event-text": `var(--color-${contrastTextForCalendarColor(color)})`,
+  } as React.CSSProperties
+}
 
-export const CALENDAR_EVENT_BLOCK_CLASS: Record<CalendarColor, string> = {
-  slate: "calendar-event-block--slate",
-  marigold: "calendar-event-block--marigold",
-  meadow: "calendar-event-block--meadow",
-  brick: "calendar-event-block--brick",
-  ocean: "calendar-event-block--ocean",
-};
-
-export const CALENDAR_COLOR_BORDER_CLASS: Record<CalendarColor, string> = {
-  slate: "border-slate",
-  marigold: "border-marigold",
-  meadow: "border-meadow",
-  brick: "border-brick",
-  ocean: "border-ocean",
-};
-
-export function CalendarColorDot({ color }: { color: CalendarColor }) {
+export function CalendarColorDot({
+  color,
+  size = "compact",
+  selected = false,
+}: {
+  color: CalendarColorValue
+  size?: "compact" | "picker"
+  selected?: boolean
+}) {
   return (
     <span
       aria-hidden="true"
-      className={`size-2.5 shrink-0 rounded-full ${CALENDAR_COLOR_DOT_CLASS[color]}`}
-    />
-  );
+      style={
+        isCustomCalendarColor(color)
+          ? { backgroundColor: color }
+          : undefined
+      }
+      className={`${size === "picker" ? "size-5" : "size-2.5"} flex shrink-0 items-center justify-center rounded-full ${
+        isCustomCalendarColor(color)
+          ? ""
+          : CALENDAR_COLOR_DOT_CLASS[color]
+      }`}
+    >
+      {selected ? (
+        <Check
+          className={`size-3 ${
+            contrastTextForCalendarColor(color) === "paper"
+              ? "text-paper"
+              : "text-ink"
+          }`}
+          strokeWidth={3}
+        />
+      ) : null}
+    </span>
+  )
 }

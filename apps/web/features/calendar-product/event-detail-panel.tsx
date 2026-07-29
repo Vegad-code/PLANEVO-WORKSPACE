@@ -7,6 +7,7 @@ import type {
   CalendarDisplayEvent,
   CalendarEventRow,
   CalendarRow,
+  CalendarColorValue,
 } from "@planevo/core/types/calendar";
 import { defaultCalendarId } from "@/lib/calendar/default-calendar";
 import { calendarEventDisplayRange } from "@/lib/calendar/calendar-event-display-range";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/calendar/event-form-state";
 import type { EventCapture } from "@/lib/calendar/parse-event-capture";
 import { CalendarColorDot } from "./calendar-color-dot";
+import { CalendarColorPicker } from "./calendar-color-picker";
 import {
   EventCaptureModeToggle,
   type EventCaptureMode,
@@ -47,6 +49,7 @@ export type EventPanelSavePayload = {
   description: string;
   reminderOffsetMinutes: number | null;
   allDay: boolean;
+  color: CalendarColorValue | null;
 };
 
 const UUID_PATTERN =
@@ -55,6 +58,7 @@ const UUID_PATTERN =
 type EventDetailPanelProps = {
   mode: "create" | "edit";
   calendars: CalendarRow[];
+  defaultCalendarId?: string;
   event?: CalendarDisplayEvent | CalendarEventRow | null;
   initialRange?: { startsAt: string; endsAt: string };
   onClose: (options?: { force?: boolean }) => void;
@@ -76,7 +80,12 @@ type EventDetailPanelProps = {
   onDraftChange?: (
     payload: Pick<
       EventPanelSavePayload,
-      "title" | "startsAt" | "endsAt" | "calendarId"
+      | "title"
+      | "startsAt"
+      | "endsAt"
+      | "calendarId"
+      | "allDay"
+      | "color"
     >,
   ) => void;
 };
@@ -116,6 +125,7 @@ function readOnlyEventTime(event: CalendarEventRow): string {
 export function EventDetailPanel({
   mode,
   calendars,
+  defaultCalendarId: requestedDefaultCalendarId,
   event = null,
   initialRange,
   onClose,
@@ -134,7 +144,11 @@ export function EventDetailPanel({
     () => calendars.filter((calendar) => !calendar.connection),
     [calendars],
   );
-  const createCalendarId = defaultCalendarId(writableCalendars);
+  const createCalendarId =
+    requestedDefaultCalendarId &&
+    writableCalendars.some(({ id }) => id === requestedDefaultCalendarId)
+      ? requestedDefaultCalendarId
+      : defaultCalendarId(writableCalendars);
   const reminderEventId = event?.id ?? null;
   const reminderEventSource = event?.source ?? null;
   const shouldLoadReminder =
@@ -157,8 +171,23 @@ export function EventDetailPanel({
       defaultCalendarId: createCalendarId,
     }),
   );
+  const initialCalendar = calendars.find(
+    (calendar) =>
+      calendar.id === (baseline.calendarId || createCalendarId),
+  );
+  const initialEventColor =
+    event?.color ??
+    (initialCalendar?.color_mode === "required_per_event"
+      ? initialCalendar.color
+      : null);
 
   const [form, setForm] = useState<EventFormState>(baseline);
+  const [eventColor, setEventColor] = useState<CalendarColorValue | null>(
+    initialEventColor,
+  );
+  const [baselineEventColor] = useState<CalendarColorValue | null>(
+    isCreate ? initialEventColor : (event?.color ?? null),
+  );
   const [captureLine, setCaptureLine] = useState("");
   const [captureMode, setCaptureMode] = useState<EventCaptureMode>(
     isCreate ? "quick" : "details",
@@ -210,7 +239,9 @@ export function EventDetailPanel({
   const isDirty =
     (isQuick
       ? captureLine.trim().length > 0
-      : !eventFormStatesEqual(form, baseline)) || reminderDirty;
+      : !eventFormStatesEqual(form, baseline)) ||
+    reminderDirty ||
+    eventColor !== baselineEventColor;
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -232,6 +263,7 @@ export function EventDetailPanel({
         setReminderLoaded(true);
         return;
       }
+      setReminderLoaded(true);
       setValidationError(result.error);
     });
     return () => {
@@ -239,22 +271,25 @@ export function EventDetailPanel({
     };
   }, [reminderEventId, shouldLoadReminder]);
 
-  // Keeps the ghost block on the grid in step with the card while creating.
+  // Keeps the grid block in step with the card before a create or edit is saved.
   useEffect(() => {
-    if (!isCreate || !onDraftChange || !draftStartsAt || !draftEndsAt) return;
+    if (!onDraftChange || !draftStartsAt || !draftEndsAt) return;
     onDraftChange({
       title: form.title,
       startsAt: draftStartsAt,
       endsAt: draftEndsAt,
       calendarId: selectedCalendarId,
+      allDay: form.allDay,
+      color: eventColor,
     });
   }, [
-    isCreate,
     onDraftChange,
     form.title,
+    form.allDay,
     selectedCalendarId,
     draftStartsAt,
     draftEndsAt,
+    eventColor,
   ]);
 
   function handleFormChange(patch: Partial<EventFormState>) {
@@ -300,6 +335,13 @@ export function EventDetailPanel({
       setValidationError(resolvedTimes.error);
       return;
     }
+    if (
+      selectedCalendar?.color_mode === "required_per_event" &&
+      eventColor === null
+    ) {
+      setValidationError("Choose an event color for this calendar.");
+      return;
+    }
 
     setValidationError(null);
     onSave({
@@ -316,6 +358,7 @@ export function EventDetailPanel({
       description: form.description.trim(),
       reminderOffsetMinutes,
       allDay: resolvedTimes.allDay,
+      color: eventColor,
     });
   }
 
@@ -358,7 +401,9 @@ export function EventDetailPanel({
     return (
       <div className="flex flex-col gap-2 p-2">
         <header className="flex shrink-0 items-center gap-2 pl-1">
-          <CalendarColorDot color={selectedCalendar?.color ?? "ocean"} />
+          <CalendarColorDot
+            color={eventColor ?? selectedCalendar?.color ?? "graphite"}
+          />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-product-meta font-medium text-text-secondary">
               {selectedCalendar?.name ?? provider}
@@ -404,14 +449,26 @@ export function EventDetailPanel({
       <form onSubmit={handleSubmit} className="flex flex-col gap-2 p-2">
         <header className="flex shrink-0 items-center gap-2 pl-1">
           <span className="flex min-w-0 flex-1 items-center gap-2">
-            <CalendarColorDot color={selectedCalendar?.color ?? "ocean"} />
+            <CalendarColorDot
+              color={eventColor ?? selectedCalendar?.color ?? "graphite"}
+            />
             {writableCalendars.length > 1 ? (
               <Select
                 aria-label="Calendar"
                 value={selectedCalendarId}
-                onChange={(changeEvent) =>
-                  handleFormChange({ calendarId: changeEvent.target.value })
-                }
+                onChange={(changeEvent) => {
+                  const calendarId = changeEvent.target.value;
+                  const nextCalendar = calendars.find(
+                    (calendar) => calendar.id === calendarId,
+                  );
+                  handleFormChange({ calendarId });
+                  if (
+                    eventColor === null &&
+                    nextCalendar?.color_mode === "required_per_event"
+                  ) {
+                    setEventColor(nextCalendar.color);
+                  }
+                }}
                 className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-product-meta font-medium shadow-none focus:border-0"
               >
                 {writableCalendars.map((calendar) => (
@@ -467,6 +524,7 @@ export function EventDetailPanel({
                 reminderOffsetMinutes={reminderOffsetMinutes}
                 onReminderChange={(offset) => void handleReminderChange(offset)}
                 reminderDisabled={Boolean(form.rrule)}
+                reminderLoading={!reminderLoaded}
                 showCrossLinks={!isCreate && Boolean(event) && !mutationBlocked}
                 taskLinked={hasLinkedTask}
                 titleReadOnly={hasLinkedTask}
@@ -475,6 +533,22 @@ export function EventDetailPanel({
               />
             )}
           </fieldset>
+          <div className="border-t border-border p-3">
+            {selectedCalendar?.color_mode !== "required_per_event" ? (
+              <button
+                type="button"
+                onClick={() => setEventColor(null)}
+                className="mb-3 text-product-meta font-medium text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                Use calendar color
+              </button>
+            ) : null}
+            <CalendarColorPicker
+              value={eventColor ?? selectedCalendar?.color ?? "graphite"}
+              onChange={setEventColor}
+              label="Event color"
+            />
+          </div>
         </div>
 
         {!isCreate && event && hasLinkedTask ? (

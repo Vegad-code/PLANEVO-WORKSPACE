@@ -137,10 +137,12 @@ tasks                 id, user_id, title, status, priority, due_at, description_
 task_subtasks         id, task_id, title, is_done, position, created_at
 
 -- CALENDAR PRODUCT
-calendars             id, user_id, name, color, is_visible, position, created_at
+calendars             id, user_id, name, color, color_mode, is_main,
+                      is_included_in_main, is_default, deleted_at, purge_after, position
 calendar_events       id, calendar_id, user_id, title, starts_at, ends_at, all_day,
                       location, description_json, task_id (nullable FK → tasks),
                       google_event_id (nullable), source, created_at, updated_at
+task_calendar_assignments task_id, calendar_id, user_id, created_at, updated_at
 
 -- FILES PRODUCT (elevate existing)
 file_sources          id, user_id, name, storage_path, mime_type, size_bytes,
@@ -209,14 +211,18 @@ credit_ledger, integration_connections, user_preferences, onboarding_progress
 
 ### 5.3 Calendar (sidebar product)
 
-- **Own product.** Sunsama/Frappe-style reference: Today column + week grid, multiple calendars, clean organization.
+- **Own product.** Main Calendar is a writable unified view; named and connected
+  calendars are independently routable and strictly isolated.
 - Own tables: `calendars`, `calendar_events`.
 - **Calendar ↔ Tasks (founder decision):**
-  - Tasks with `due_at` **auto-appear** on Calendar.
+  - Agenda tasks are assigned to a calendar but stay off the grid until scheduled.
   - **Drag** task onto grid → scheduled time block linked to task.
   - **Native buttons** on each page — no cross-navigation required.
-- Google Calendar events ingest into `calendar_events` (same table, `source = google`).
-- Optional workspace toast + embed on event creation (same rules as Tasks).
+- Main and named calendars share Day / Week / Month; Year is Main-only.
+- The toolbar calendar selector owns navigation, Main inclusion, creation, colors,
+  defaults, Trash, and connected-calendar disconnect.
+- Google/ICS events ingest into `calendar_events` and stay read-only.
+- Workspace embeds reference Main or a calendar and edit canonical events live.
 - Filter toggle: **All ↔ This workspace** (client-cached).
 
 ### 5.4 Files (sidebar product)

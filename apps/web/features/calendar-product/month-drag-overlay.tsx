@@ -5,6 +5,7 @@ import type { MonthEventItem, MonthItem } from "@/lib/calendar/month-items"
 import { formatCompactMonthTime } from "@/lib/calendar/format-compact-month-time"
 import { cn } from "@/lib/utils"
 import {
+  calendarColorStyle,
   CALENDAR_COLOR_BLOCK_CLASS,
   CALENDAR_COLOR_DOT_CLASS,
 } from "./calendar-color-dot"
@@ -108,7 +109,10 @@ function MonthBarGhost({
         CALENDAR_COLOR_BLOCK_CLASS[item.calendarColor],
         edge && "calendar-month-drag-ghost--resize",
       )}
-      style={width ? { width } : { minWidth: "8rem" }}
+      style={{
+        ...(width ? { width } : { minWidth: "8rem" }),
+        ...calendarColorStyle(item.calendarColor),
+      }}
     >
       <div className="calendar-month-bar-body">
         <span

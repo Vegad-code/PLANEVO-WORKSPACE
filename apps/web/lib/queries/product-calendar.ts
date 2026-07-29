@@ -49,9 +49,9 @@ export async function loadCalendarPageData(
     anchorDate: ready.anchorDate,
     initialView: ready.view,
     todayTasks: ready.todayTasks,
+    context: ready.context,
     workspaceId: ready.workspaceId,
     calendars: ready.calendars,
-    views: ready.views,
     events: ready.events,
     taskDues: ready.taskDues,
   }

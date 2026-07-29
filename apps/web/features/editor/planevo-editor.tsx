@@ -35,7 +35,7 @@ import {
 import {
   filterPlanevoSlashItems,
   getPlanevoSlashMenuItems,
-  type CalendarViewOption,
+  type CalendarOption,
   type DatabaseOption,
 } from "@/features/editor/slash-menu-items";
 import { SaveIndicator } from "@/features/editor/toolbar/save-indicator";
@@ -134,7 +134,7 @@ export function PlanevoEditor({
   onSave,
   pageId,
   databaseOptions = [],
-  calendarViewOptions = [],
+  calendarOptions = [],
   onPromoteRequest,
   toolbar,
   onContentChange,
@@ -146,7 +146,7 @@ export function PlanevoEditor({
   onSave: EditorSaveHandler;
   pageId?: string;
   databaseOptions?: DatabaseOption[];
-  calendarViewOptions?: CalendarViewOption[];
+  calendarOptions?: CalendarOption[];
   onPromoteRequest?: (blocks: PlanevoBlock[]) => void;
   toolbar?: (ctx: {
     editor: PlanevoEditorInstance;
@@ -306,7 +306,7 @@ export function PlanevoEditor({
             const items = getPlanevoSlashMenuItems(editor, {
               pageId,
               databaseOptions,
-              calendarViewOptions,
+          calendarOptions,
               onNavigate: (href) => {
                 // Persist the new page link before leaving so autosave isn't raced.
                 void (async () => {

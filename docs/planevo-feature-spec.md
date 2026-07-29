@@ -151,47 +151,67 @@ V1: board/list/table, subtasks, priorities, statuses, due dates, cross-links. La
 ## F-04 · Calendar
 
 **What it is**
-The calendar app. Multiple calendars, week-at-a-glance, own events — plus task due dates and Google Calendar in one view.
+The calendar app. Main Calendar is a writable unified view; every named or
+connected calendar also has a strictly isolated route.
 
 **Behavior**
 
 **Layout (V1)**
-- **Today column** + **week grid** (founder mockup reference). Day/Month layouts post-V1.
-- **Sidebar**: calendar list with visibility toggles, color dots, `+ New calendar`.
-- Events render as colored blocks. Task due dates render as distinct chips (linked, not duplicated).
+- Main and named calendars share Day / Week / Month. Year is Main-only.
+- A toolbar selector contains Main, owned and connected calendars, Main
+  visibility controls, creation, and management. Calendar identity does not
+  live in the Agenda sidebar.
+- Event blocks use a dedicated named spectrum or a validated custom color.
+- Main includes calendars according to `is_included_in_main`; isolated routes
+  ignore that preference.
 
 **Calendar ↔ Tasks (founder decision — all three)**
-1. **Auto:** `tasks.due_at` appears on calendar without user action.
-2. **Drag:** drag task from Tasks sidebar or picker onto grid → creates `calendar_events` row with `task_id` set + optional time block.
+1. **Assign:** every Agenda task belongs to one calendar while remaining
+   unscheduled.
+2. **Drag:** drag a task from Agenda onto the grid → creates or updates the
+   canonical task-linked event.
 3. **Native buttons:**
    - On task: **Schedule** → time picker → event linked to task.
    - On event: **Link task** / **Create task** → picker or inline create.
 
 **Event creation**
 - Click grid → new event. Global. Toast offers workspace link (F-02).
-- **Add to workspace** manual action available.
+- Main-created events belong to Main; isolated creation targets that calendar.
+- Outside Calendar, the user-selected default writable calendar is used.
+- Each calendar chooses inherited-with-overrides or required-per-event color.
+- **Add to Workspace** creates an explicit page containing a live calendar
+  embed; it never copies event data.
 
 **Google Calendar**
-- Connected events sync into `calendar_events` with `source = google`, `google_event_id` set. Display alongside native events. Editing external events = Tier 2 (agents/AI).
+- Connected Google/ICS events remain isolated, recolorable, hideable, and
+  read-only. Disconnecting purges the local mirror.
 
 **Filter toggle**
 - **All** | **This workspace** (F-02).
 
 **How it works**
 ```sql
-calendars (id, user_id, name, color, is_visible, position, created_at)
+calendars (
+  id, user_id, name, color, color_mode, is_main,
+  is_included_in_main, is_default, deleted_at, purge_after, position
+)
 calendar_events (
   id, calendar_id, user_id, title, starts_at, ends_at, all_day,
   location, description_json, task_id REFERENCES tasks(id),
   google_event_id, source, created_at, updated_at
 )
+task_calendar_assignments (task_id, calendar_id, user_id, created_at, updated_at)
 ```
 - RLS: `user_id = auth.uid()` on events; calendars via user_id
-- Route: `/calendar` — dedicated module
-- Task due dates: query `tasks WHERE due_at IS NOT NULL` merged in calendar render layer — not copied to events unless scheduled block created
+- Routes: `/calendar` for Main; `/calendar/c/[calendarId]` for isolation
+- Unscheduled due dates stay in Agenda and never become grid chips
+- Workspace embeds store `{ targetKind, calendarId, view, height }`
+- Native deletion uses 30-day Trash; tasks survive calendar deletion
 
 **V1 boundary / later**
-V1: week + today, multi-calendar, task integration, Google read sync. Later: calendar skins; push to Google; recurring events.
+V1: Day / Week / Month, Main Year, multi-calendar isolation, recurrence,
+task scheduling, Google/ICS read sync, live Workspace editing, and calendar
+Trash. Later: push edits to external providers.
 
 ---
 
@@ -350,7 +370,7 @@ No workspace database is born bare. Products ship pre-configured separately.
 - **Workspace Project DB:** Name, Status, Owner, Timeline, Tasks relation (to workspace DB or note "link tasks via F-02"), Board + Table views.
 - **Workspace Notes DB:** Name, Tags, Created, List + Table.
 - **Tasks product:** statuses and views in UI code — not template database.
-- **Calendar product:** default "My Calendar" on signup.
+- **Calendar product:** protected Main Calendar on signup.
 - **Files product:** empty library with filters ready.
 
 **How it works**

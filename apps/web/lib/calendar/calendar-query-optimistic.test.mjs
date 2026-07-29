@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import * as calendarOptimistic from "./calendar-query-optimistic.ts"
 import {
   appendEvent,
   buildOptimisticEvent,
@@ -133,11 +134,13 @@ test("appends an optimistic event without mutating existing rows", () => {
       description: "",
       reminderOffsetMinutes: null,
       allDay: false,
+      color: "grape",
     },
   })
   const after = appendEvent(before, optimistic)
   assert.equal(after.events.length, 3)
   assert.equal(after.events[2].id, "optimistic-event-1")
+  assert.equal(after.events[2].color, "grape")
 })
 
 test("replaces a temporary event id with the server id", () => {
@@ -187,10 +190,38 @@ test("patches event fields from the panel save payload", () => {
       description: "Notes",
       reminderOffsetMinutes: 10,
       allDay: false,
+      color: "plum",
     },
   })
   assert.equal(after.events[0].title, "Renamed")
   assert.equal(after.events[0].location, "Room A")
+  assert.equal(after.events[0].color, "plum")
+})
+
+test("previews an edited event color without mutating the query result", () => {
+  assert.equal(
+    typeof calendarOptimistic.previewCalendarEvent,
+    "function",
+    "calendar edit previews need a pure event overlay",
+  )
+
+  const before = payload().events
+  const after = calendarOptimistic.previewCalendarEvent(before, {
+    eventId: "event-1",
+    fields: {
+      calendarId: "cal-1",
+      title: "Standup",
+      startsAt: "A",
+      endsAt: "B",
+      allDay: false,
+      color: "grape",
+    },
+  })
+
+  assert.notEqual(after, before)
+  assert.equal(after[0].color, "grape")
+  assert.equal(before[0].color, undefined)
+  assert.equal(after[1], before[1])
 })
 
 test("patchEventTimes syncs task due chips for linked events", () => {

@@ -6,7 +6,7 @@ import { Sidebar } from "@/features/shell/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Select, SelectField } from "@/components/ui/select";
+import { SelectField } from "@/components/ui/select";
 import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/planevo-icon";
 import { TaskComposer } from "@/features/tasks/task-composer";
@@ -432,7 +432,7 @@ export default function DesignPage() {
         <TasksProductPreview />
       </Section>
 
-      <Section title="Calendar product: Planning rail + FullCalendar week grid">
+      <Section title="Calendar product: Agenda + multi-calendar toolbar + week grid">
         <CalendarProductPreview />
       </Section>
 

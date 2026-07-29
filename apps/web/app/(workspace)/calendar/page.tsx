@@ -1,84 +1,8 @@
-import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
-import { CalendarProductView } from "@/features/calendar-product/calendar-product-view"
-import {
-  calendarMetaQueryKey,
-  calendarRangeQueryKey,
-  calendarTodayQueryKey,
-} from "@/lib/calendar/calendar-query-keys"
-import { dateParam } from "@/lib/calendar/calendar-range"
-import { getQueryClient } from "@/lib/calendar/get-query-client"
-import { loadCalendarPageData } from "@/lib/queries/product-calendar"
+import { CalendarProductPage } from "@/features/calendar-product/calendar-product-page"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 
 function requestedScope(value: string | undefined): CalendarScope {
   return value === "workspace" ? "workspace" : "all"
-}
-
-async function CalendarProductPage({
-  scope,
-  date,
-  view,
-  week,
-}: {
-  scope: CalendarScope
-  date?: string
-  view?: string
-  week?: string
-}) {
-  let data = await loadCalendarPageData(scope, { date, view, week })
-  if (
-    data.status === "ready" &&
-    data.scope === "workspace" &&
-    data.workspaceId === null
-  ) {
-    data = await loadCalendarPageData("all", { date, view, week })
-  }
-
-  if (data.status === "unauthenticated") {
-    return (
-      <section className="mx-auto w-full max-w-3xl px-6 py-12">
-        <p className="text-label uppercase text-text-muted">Calendar</p>
-        <h1 className="mt-2 text-h1">Sign in to see your calendar</h1>
-        <p className="mt-2 text-body text-text-secondary">
-          Your week, your calendars, and your scheduled tasks will be ready here
-          after you sign in.
-        </p>
-      </section>
-    )
-  }
-
-  const queryClient = getQueryClient()
-
-  queryClient.setQueryData(
-    calendarRangeQueryKey(data.scope, data.initialView, data.anchorDate),
-    {
-      scope: data.scope,
-      anchorDate: dateParam(data.anchorDate),
-      view: data.initialView,
-      workspaceId: data.workspaceId,
-      events: data.events,
-      taskDues: data.taskDues,
-    },
-  )
-  queryClient.setQueryData(calendarMetaQueryKey(data.scope), {
-    scope: data.scope,
-    workspaceId: data.workspaceId,
-    calendars: data.calendars,
-    views: data.views,
-  })
-  queryClient.setQueryData(calendarTodayQueryKey(data.scope), {
-    scope: data.scope,
-    todayTasks: data.todayTasks,
-  })
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <CalendarProductView
-        initialScope={data.scope}
-        workspaceId={data.workspaceId}
-      />
-    </HydrationBoundary>
-  )
 }
 
 export default async function CalendarPage({
@@ -95,6 +19,7 @@ export default async function CalendarPage({
   return (
     <CalendarProductPage
       scope={requestedScope(scope)}
+      context={{ kind: "main" }}
       date={date}
       view={view}
       week={week}

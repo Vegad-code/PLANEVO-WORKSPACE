@@ -21,6 +21,7 @@ import {
 } from "@/lib/calendar/calendar-range-intersect"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import type { CalendarView } from "@/features/calendar-product/calendar-toolbar"
+import type { CalendarContext } from "@planevo/core/types/calendar"
 
 export type { EventTimeWindow }
 export { eventWindowFromIso, rangesIntersect }
@@ -41,17 +42,19 @@ export type CalendarCacheSnapshot = {
 
 export function calendarCacheKeys({
   scope,
+  context,
   view,
   anchor,
 }: {
   scope: CalendarScope
+  context: CalendarContext
   view: CalendarView
   anchor: Date
 }): CalendarCacheKeys {
   return {
-    rangeKey: calendarRangeQueryKey(scope, view, anchor),
-    metaKey: calendarMetaQueryKey(scope),
-    todayKey: calendarTodayQueryKey(scope),
+    rangeKey: calendarRangeQueryKey(scope, context, view, anchor),
+    metaKey: calendarMetaQueryKey(scope, context),
+    todayKey: calendarTodayQueryKey(scope, context),
   }
 }
 
@@ -87,6 +90,7 @@ export function writeMergedCalendarCache(
   payload: CalendarQueryPayload,
 ): void {
   queryClient.setQueryData<CalendarRangeQueryPayload>(keys.rangeKey, {
+    context: payload.context,
     scope: payload.scope,
     anchorDate: payload.anchorDate,
     view: payload.view,
@@ -95,12 +99,13 @@ export function writeMergedCalendarCache(
     taskDues: payload.taskDues,
   })
   queryClient.setQueryData<CalendarMetaQueryPayload>(keys.metaKey, {
+    context: payload.context,
     scope: payload.scope,
     workspaceId: payload.workspaceId,
     calendars: payload.calendars,
-    views: payload.views,
   })
   queryClient.setQueryData<CalendarTodayQueryPayload>(keys.todayKey, {
+    context: payload.context,
     scope: payload.scope,
     todayTasks: payload.todayTasks,
   })
@@ -121,15 +126,23 @@ export function patchMergedCalendarCache(
 function isRangeQueryKey(
   queryKey: QueryKey,
   scope: CalendarScope,
-): queryKey is readonly ["calendar", CalendarScope, string, string, string] {
+): queryKey is readonly [
+  "calendar",
+  CalendarScope,
+  string,
+  string,
+  string,
+  string,
+] {
   return (
     Array.isArray(queryKey) &&
-    queryKey.length === 5 &&
+    queryKey.length === 6 &&
     queryKey[0] === "calendar" &&
     queryKey[1] === scope &&
     typeof queryKey[2] === "string" &&
     typeof queryKey[3] === "string" &&
-    typeof queryKey[4] === "string"
+    typeof queryKey[4] === "string" &&
+    typeof queryKey[5] === "string"
   )
 }
 
@@ -205,8 +218,8 @@ export function patchAllIntersectingCalendarCaches({
 
   for (const [queryKey, range] of rangeEntries) {
     if (!range || !isRangeQueryKey(queryKey, scope)) continue
-    const keyStart = queryKey[3]
-    const keyEnd = queryKey[4]
+    const keyStart = queryKey[4]
+    const keyEnd = queryKey[5]
     if (
       window &&
       !rangesIntersect({ start: keyStart, end: keyEnd }, window)
@@ -220,6 +233,7 @@ export function patchAllIntersectingCalendarCaches({
       const merged = mergeCalendarQueryData({ range, meta, today })
       const next = patch(merged)
       queryClient.setQueryData<CalendarRangeQueryPayload>(queryKey, {
+        context: next.context,
         scope: next.scope,
         anchorDate: next.anchorDate,
         view: next.view,
@@ -231,12 +245,13 @@ export function patchAllIntersectingCalendarCaches({
     } else {
       // Incomplete cache: apply a range-only projection of the patch.
       const stubMeta: CalendarMetaQueryPayload = meta ?? {
+        context: range.context,
         scope,
         workspaceId: range.workspaceId,
         calendars: [],
-        views: [],
       }
       const stubToday: CalendarTodayQueryPayload = today ?? {
+        context: range.context,
         scope,
         todayTasks: [],
       }
@@ -247,6 +262,7 @@ export function patchAllIntersectingCalendarCaches({
       })
       const next = patch(merged)
       queryClient.setQueryData<CalendarRangeQueryPayload>(queryKey, {
+        context: next.context,
         scope: next.scope,
         anchorDate: next.anchorDate,
         view: next.view,
@@ -265,12 +281,13 @@ export function patchAllIntersectingCalendarCaches({
     if (activeRange) {
       snapshot.entries.push(snapshotEntry(queryClient, activeKeys.rangeKey))
       const stubMeta: CalendarMetaQueryPayload = meta ?? {
+        context: activeRange.context,
         scope,
         workspaceId: activeRange.workspaceId,
         calendars: [],
-        views: [],
       }
       const stubToday: CalendarTodayQueryPayload = today ?? {
+        context: activeRange.context,
         scope,
         todayTasks: [],
       }
@@ -281,6 +298,7 @@ export function patchAllIntersectingCalendarCaches({
       })
       const next = patch(merged)
       queryClient.setQueryData<CalendarRangeQueryPayload>(activeKeys.rangeKey, {
+        context: next.context,
         scope: next.scope,
         anchorDate: next.anchorDate,
         view: next.view,
@@ -303,15 +321,16 @@ export function patchAllIntersectingCalendarCaches({
       })
       const next = patch(merged)
       queryClient.setQueryData<CalendarTodayQueryPayload>(activeKeys.todayKey, {
+        context: next.context,
         scope: next.scope,
         todayTasks: next.todayTasks,
       })
     } else if (activeRange) {
       const stubMeta: CalendarMetaQueryPayload = {
+        context: activeRange.context,
         scope,
         workspaceId: activeRange.workspaceId,
         calendars: [],
-        views: [],
       }
       const merged = mergeCalendarQueryData({
         range: activeRange,
@@ -320,6 +339,7 @@ export function patchAllIntersectingCalendarCaches({
       })
       const next = patch(merged)
       queryClient.setQueryData<CalendarTodayQueryPayload>(activeKeys.todayKey, {
+        context: next.context,
         scope: next.scope,
         todayTasks: next.todayTasks,
       })
@@ -338,10 +358,10 @@ export function patchAllIntersectingCalendarCaches({
       })
       const next = patch(merged)
       queryClient.setQueryData<CalendarMetaQueryPayload>(activeKeys.metaKey, {
+        context: next.context,
         scope: next.scope,
         workspaceId: next.workspaceId,
         calendars: next.calendars,
-        views: next.views,
       })
     }
   }
@@ -371,7 +391,7 @@ export function invalidateIntersectingRanges({
     if (!isRangeQueryKey(queryKey, scope)) continue
     if (
       !rangesIntersect(
-        { start: queryKey[3], end: queryKey[4] },
+        { start: queryKey[4], end: queryKey[5] },
         { start, end },
       )
     ) {

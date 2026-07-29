@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../types/database.types";
 import type {
+  CalendarContext,
   CalendarEventRow,
   CalendarRow,
-  CalendarViewRow,
   TaskDueChip,
 } from "../types/calendar";
 import type { TaskStatus } from "../types/tasks";
@@ -13,6 +13,8 @@ const EXCEPTION_PARENT_CHUNK_SIZE = 100;
 
 export type CalendarWeekData = {
   calendars: CalendarRow[];
+  /** Calendar identities allowed by the requested Main or isolated context. */
+  calendarIds: string[];
   /** Persisted, non-recurring rows. Expanded instances are materialized in web. */
   events: CalendarEventRow[];
   /** Live series masters whose occurrences may intersect this window. */
@@ -43,10 +45,13 @@ export type LoadCalendarWeekOptions = {
    * meta separately should pass false to avoid duplicate RTTs.
    */
   includeCalendars?: boolean;
+  /** Main unified view or one strictly isolated calendar route/embed. */
+  context?: CalendarContext;
+  /** Already ownership-filtered IDs shared by a page-level parallel loader. */
+  contextCalendarIds?: string[];
 };
 
-/** All of a user's calendars ordered by position (hidden ones included —
- * the sidebar renders them unchecked; the grid filters by is_visible). */
+/** All live calendars ordered for selectors and context-aware range loading. */
 export async function loadCalendars(
   client: SupabaseClient<Database>,
   userId: string,
@@ -56,6 +61,7 @@ export async function loadCalendars(
       .from("calendars")
       .select("*")
       .eq("user_id", userId)
+      .is("deleted_at", null)
       .order("position", { ascending: true }),
     client
       .from("calendar_connections")
@@ -86,88 +92,67 @@ export async function loadCalendars(
             provider: connection.provider as "ics" | "google",
           }
         : null,
-      // DB CHECK constrains this text column to CALENDAR_COLORS.
+      // DB CHECK constrains this text column to the calendar palette or #RRGGBB.
       color: calendar.color as CalendarRow["color"],
+      color_mode: calendar.color_mode as CalendarRow["color_mode"],
     };
   });
 }
 
-/**
- * Saved lenses ordered for the switcher. Calendar ids are intentionally not
- * foreign keys, so stale ids are discarded at the read boundary after a source
- * calendar is deleted.
- */
-export async function listCalendarViews(
+export async function loadCalendarIdsForContext(
   client: SupabaseClient<Database>,
   userId: string,
-): Promise<CalendarViewRow[]> {
-  const [viewsResult, calendarsResult] = await Promise.all([
-    client
-      .from("calendar_views")
-      .select("*")
-      .eq("user_id", userId)
-      .order("position", { ascending: true }),
-    client.from("calendars").select("id").eq("user_id", userId),
-  ]);
-  if (viewsResult.error) throw viewsResult.error;
-  if (calendarsResult.error) throw calendarsResult.error;
+  context: CalendarContext,
+): Promise<string[]> {
+  let query = client
+    .from("calendars")
+    .select("id,is_main,is_included_in_main")
+    .eq("user_id", userId)
+    .is("deleted_at", null);
 
-  const ownedCalendarIds = new Set(
-    (calendarsResult.data ?? []).map(({ id }) => id),
-  );
-  return (viewsResult.data ?? []).map((row) =>
-    calendarViewWithOwnedSources(row as unknown as CalendarViewRow, ownedCalendarIds),
-  );
+  if (context.kind === "calendar") {
+    query = query.eq("id", context.calendarId);
+  } else {
+    query = query.or("is_main.eq.true,is_included_in_main.eq.true");
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map(({ id }) => id);
 }
 
-function calendarViewWithOwnedSources(
-  view: CalendarViewRow,
-  ownedCalendarIds: ReadonlySet<string>,
-): CalendarViewRow {
-  return {
-    ...view,
-    source_calendar_ids: view.source_calendar_ids.filter((calendarId) =>
-      ownedCalendarIds.has(calendarId),
-    ),
-  };
-}
-
-/**
- * Loads one saved lens for an embedded calendar. The explicit owner predicate
- * is required even when the auth client already applies RLS because local
- * development can use an administrative client.
- */
-export async function loadCalendarView(
+export async function loadTaskIdsForCalendarContext(
   client: SupabaseClient<Database>,
   userId: string,
-  viewId: string,
-): Promise<CalendarViewRow | null> {
-  const [viewResult, calendarsResult] = await Promise.all([
-    client
-      .from("calendar_views")
-      .select("*")
-      .eq("id", viewId)
-      .eq("user_id", userId)
-      .maybeSingle(),
-    client.from("calendars").select("id").eq("user_id", userId),
-  ]);
-  if (viewResult.error) throw viewResult.error;
-  if (calendarsResult.error) throw calendarsResult.error;
-  if (!viewResult.data) return null;
+  context: CalendarContext,
+): Promise<string[]> {
+  const calendarIds = await loadCalendarIdsForContext(
+    client,
+    userId,
+    context,
+  );
+  return loadTaskIdsForCalendarIds(client, userId, calendarIds);
+}
 
-  const ownedCalendarIds = new Set(
-    (calendarsResult.data ?? []).map(({ id }) => id),
-  );
-  return calendarViewWithOwnedSources(
-    viewResult.data as unknown as CalendarViewRow,
-    ownedCalendarIds,
-  );
+export async function loadTaskIdsForCalendarIds(
+  client: SupabaseClient<Database>,
+  userId: string,
+  calendarIds: string[],
+): Promise<string[]> {
+  if (calendarIds.length === 0) return [];
+
+  const { data, error } = await client
+    .from("task_calendar_assignments")
+    .select("task_id")
+    .eq("user_id", userId)
+    .in("calendar_id", calendarIds);
+  if (error) throw error;
+  return (data ?? []).map(({ task_id }) => task_id);
 }
 
 /**
- * One week of calendar data: the user's calendars, events starting inside
- * [start, end), and task due dates in range rendered as chips (never
- * duplicated into calendar_events).
+ * Range-scoped calendar data. Unscheduled tasks are intentionally absent:
+ * Agenda owns them until scheduling creates the canonical linked event.
  */
 export async function loadCalendarWeek(
   client: SupabaseClient<Database>,
@@ -178,11 +163,15 @@ export async function loadCalendarWeek(
   const startIso = options.start.toISOString();
   const endIso = options.end.toISOString();
   const eventRange = options.eventRange ?? "starts-in";
+  const context = options.context ?? { kind: "main" };
 
-  const [calendars, workspaceIds] = await Promise.all([
+  const [calendars, contextCalendarIds, workspaceIds] = await Promise.all([
     includeCalendars
       ? loadCalendars(client, userId)
       : Promise.resolve([] as CalendarRow[]),
+    options.contextCalendarIds !== undefined
+      ? Promise.resolve(options.contextCalendarIds)
+      : loadCalendarIdsForContext(client, userId, context),
     options.workspaceId
       ? Promise.all([
           listWorkspaceResourceIds(client, {
@@ -191,23 +180,31 @@ export async function loadCalendarWeek(
           }),
           listWorkspaceResourceIds(client, {
             workspaceId: options.workspaceId,
-            resourceType: "task",
+            resourceType: "calendar",
           }),
-        ]).then(([allowedEventIds, allowedTaskIds]) => ({
+        ]).then(([allowedEventIds, allowedCalendarIds]) => ({
           allowedEventIds,
-          allowedTaskIds,
+          allowedCalendarIds,
         }))
       : Promise.resolve({
           allowedEventIds: null as string[] | null,
-          allowedTaskIds: null as string[] | null,
+          allowedCalendarIds: null as string[] | null,
         }),
   ]);
-  const { allowedEventIds, allowedTaskIds } = workspaceIds;
+  const { allowedEventIds, allowedCalendarIds } = workspaceIds;
+  const workspaceHasContent =
+    allowedEventIds === null ||
+    allowedCalendarIds === null ||
+    allowedEventIds.length > 0 ||
+    allowedCalendarIds.length > 0;
 
   let events: CalendarEventRow[] = [];
   let recurringMasters: CalendarEventRow[] = [];
   let recurrenceExceptions: CalendarEventRow[] = [];
-  if (allowedEventIds === null || allowedEventIds.length > 0) {
+  if (
+    contextCalendarIds.length > 0
+    && workspaceHasContent
+  ) {
     let eventQuery = client
       .from("calendar_events")
       .select("*")
@@ -215,7 +212,8 @@ export async function loadCalendarWeek(
       .is("deleted_at", null)
       .is("parent_event_id", null)
       .is("rrule", null)
-      .eq("is_cancelled", false);
+      .eq("is_cancelled", false)
+      .in("calendar_id", contextCalendarIds);
 
     if (eventRange === "overlaps") {
       eventQuery = eventQuery.lt("starts_at", endIso).gt("ends_at", startIso);
@@ -225,15 +223,27 @@ export async function loadCalendarWeek(
         .lt("starts_at", endIso);
     }
 
-    if (allowedEventIds) eventQuery = eventQuery.in("id", allowedEventIds);
+    if (allowedEventIds && allowedCalendarIds) {
+      if (allowedEventIds.length > 0 && allowedCalendarIds.length > 0) {
+        eventQuery = eventQuery.or(
+          `id.in.(${allowedEventIds.join(",")}),calendar_id.in.(${allowedCalendarIds.join(",")})`,
+        );
+      } else if (allowedEventIds.length > 0) {
+        eventQuery = eventQuery.in("id", allowedEventIds);
+      } else {
+        eventQuery = eventQuery.in("calendar_id", allowedCalendarIds);
+      }
+    }
     const [eventsResult, mastersResult] = await Promise.all([
       eventQuery.order("starts_at", { ascending: true }),
-      client.rpc("list_calendar_recurrence_masters", {
+      client.rpc("list_calendar_recurrence_masters_for_context", {
         p_owner_id: userId,
         p_window_start: startIso,
         p_window_end: endIso,
         p_overlaps: eventRange === "overlaps",
         p_workspace_event_ids: allowedEventIds,
+        p_calendar_ids: contextCalendarIds,
+        p_workspace_calendar_ids: allowedCalendarIds,
       }),
     ]);
     if (eventsResult.error) throw eventsResult.error;
@@ -288,9 +298,9 @@ export async function loadCalendarWeek(
         .filter((taskId): taskId is string => taskId !== null),
     ),
   ];
-  const [linkedTasks, taskDues] = await Promise.all([
+  const linkedTasks =
     taskIds.length > 0
-      ? client
+      ? await client
           .from("tasks")
           .select("id,title,status,description_json")
           .eq("user_id", userId)
@@ -300,48 +310,18 @@ export async function loadCalendarWeek(
             return (data ??
               []) as unknown as CalendarWeekData["linkedTasks"];
           })
-      : Promise.resolve([] as CalendarWeekData["linkedTasks"]),
-    allowedTaskIds === null || allowedTaskIds.length > 0
-      ? (() => {
-          let taskQuery = client
-            .from("tasks")
-            .select("id, title, due_at, status")
-            .eq("user_id", userId)
-            .gte("due_at", startIso)
-            .lt("due_at", endIso);
-          if (allowedTaskIds) taskQuery = taskQuery.in("id", allowedTaskIds);
-          return taskQuery.order("due_at", { ascending: true }).then(
-            ({ data, error }) => {
-              if (error) throw error;
-              return (data ?? []).map((row) => ({
-                taskId: row.id,
-                title: row.title,
-                dueAt: row.due_at as string,
-                status: row.status as TaskStatus,
-              }));
-            },
-          );
-        })()
-      : Promise.resolve([] as TaskDueChip[]),
-  ]);
-
-  const scheduledTaskIds = new Set(
-    [...events, ...recurringMasters, ...recurrenceExceptions]
-      .map((event) => event.task_id)
-      .filter((taskId): taskId is string => taskId !== null),
-  );
-  const visibleTaskDues =
-    scheduledTaskIds.size === 0
-      ? taskDues
-      : taskDues.filter((task) => !scheduledTaskIds.has(task.taskId));
+      : ([] as CalendarWeekData["linkedTasks"]);
 
   return {
     calendars,
+    calendarIds: contextCalendarIds,
     events,
     recurringMasters,
     recurrenceExceptions,
     linkedTasks,
-    taskDues: visibleTaskDues,
+    // Unscheduled tasks belong in Agenda only. A due_at value never creates a
+    // second visual event in the grid.
+    taskDues: [],
   };
 }
 

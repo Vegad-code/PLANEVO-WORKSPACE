@@ -18,7 +18,7 @@ export function RbcEventContent({ event }: EventProps<PlanevoRbcEvent>) {
   return (
     <span className="flex min-w-0 flex-col" data-event-id={eventId}>
       {timeLabel ? (
-        <span className="truncate text-product-meta text-text-secondary">
+        <span className="planevo-rbc-event__secondary truncate text-product-meta">
           {timeLabel}
         </span>
       ) : null}
@@ -26,7 +26,7 @@ export function RbcEventContent({ event }: EventProps<PlanevoRbcEvent>) {
         {event.linkedTask ? (
           <span
             aria-hidden="true"
-            className="shrink-0 text-text-secondary"
+            className="planevo-rbc-event__secondary shrink-0"
           >
             <ListTodo aria-hidden="true" className="size-3" />
           </span>
@@ -41,7 +41,7 @@ export function RbcEventContent({ event }: EventProps<PlanevoRbcEvent>) {
         {event.isReadOnly ? (
           <span
             aria-label="Read-only synced event"
-            className="shrink-0 text-product-meta text-text-secondary"
+            className="planevo-rbc-event__secondary shrink-0 text-product-meta"
           >
             ↗
           </span>
@@ -49,8 +49,8 @@ export function RbcEventContent({ event }: EventProps<PlanevoRbcEvent>) {
         <span
           className={
             event.isTaskComplete
-              ? "truncate text-product-meta font-medium text-text-muted line-through"
-              : "truncate text-product-meta font-medium text-ink"
+              ? "planevo-rbc-event__secondary truncate text-product-meta font-medium line-through"
+              : "truncate text-product-meta font-medium"
           }
         >
           {event.title}

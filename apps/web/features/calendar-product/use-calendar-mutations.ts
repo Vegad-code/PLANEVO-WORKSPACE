@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import type {
   CalendarDisplayEvent,
   CalendarEventRow,
+  CalendarContext,
 } from "@planevo/core/types/calendar"
 import type { TaskStatus } from "@planevo/core/types/tasks"
 import {
@@ -61,6 +62,7 @@ import type { EventPanelSavePayload } from "./event-detail-panel"
 
 type MutationContext = {
   scope: CalendarScope
+  context: CalendarContext
   view: CalendarView
   anchor: Date
 }
@@ -93,11 +95,16 @@ type OptimisticMutationInput<T> = {
  * reconcile on success / restore snapshots on failure. Same-entity mutations
  * serialize through a per-id queue so rapid re-drags cannot race.
  */
-export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
+export function useCalendarMutations({
+  scope,
+  context,
+  view,
+  anchor,
+}: MutationContext) {
   const queryClient = useQueryClient()
   const keys = useMemo(
-    () => calendarCacheKeys({ scope, view, anchor }),
-    [anchor, scope, view],
+    () => calendarCacheKeys({ scope, context, view, anchor }),
+    [anchor, context, scope, view],
   )
   const queuesRef = useRef(new Map<string, Promise<void>>())
 
@@ -384,11 +391,16 @@ export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
       const tempId = createOptimisticEventId()
       const startsAtMs = new Date(startsAt).getTime()
       const endsAt = new Date(startsAtMs + 30 * 60_000).toISOString()
+      let targetCalendarId = ""
 
       runOptimistic({
         patch: (current) => {
           const userId = resolveUserIdFromPayload(current)
-          const calendarId = defaultCalendarId(current.calendars)
+          targetCalendarId =
+            context.kind === "calendar"
+              ? context.calendarId
+              : current.calendars.find(({ is_main }) => is_main)?.id ??
+                defaultCalendarId(current.calendars)
           const withEvent = appendEvent(
             current,
             buildOptimisticScheduledEvent({
@@ -398,13 +410,18 @@ export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
               startsAt,
               endsAt,
               userId,
-              calendarId,
+              calendarId: targetCalendarId,
             }),
           )
           return removeTodayTask(withEvent, taskId)
         },
         action: () =>
-          scheduleTaskFromDragAction({ taskId, operationKey, startsAt }),
+          scheduleTaskFromDragAction({
+            taskId,
+            calendarId: targetCalendarId,
+            operationKey,
+            startsAt,
+          }),
         eventWindow: { startsAt, endsAt },
         entityKey: `task:${taskId}`,
         onSuccess: (data) => {
@@ -417,7 +434,7 @@ export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
         },
       })
     },
-    [patchCache, runOptimistic],
+    [context, patchCache, runOptimistic],
   )
 
   const quickAddTask = useCallback(
@@ -427,15 +444,26 @@ export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
     ) => {
       const dueAt = quickAddTaskDueAt(input.bucket)
       const tempId = createOptimisticTaskId()
+      let targetCalendarId = ""
       runOptimistic({
-        patch: (payload) =>
-          appendTodayTask(payload, {
+        patch: (payload) => {
+          targetCalendarId =
+            context.kind === "calendar"
+              ? context.calendarId
+              : payload.calendars.find(({ is_main }) => is_main)?.id ??
+                defaultCalendarId(payload.calendars)
+          return appendTodayTask(payload, {
             id: tempId,
             title: input.title,
             status: "not_started",
             due_at: dueAt,
+          })
+        },
+        action: () =>
+          quickAddTaskAction({
+            ...input,
+            calendarId: targetCalendarId,
           }),
-        action: () => quickAddTaskAction(input),
         onSuccess: (data) => {
           const merged = readMergedCalendarCache(queryClient, keys)
           if (!merged) return
@@ -449,7 +477,7 @@ export function useCalendarMutations({ scope, view, anchor }: MutationContext) {
         },
       })
     },
-    [keys, queryClient, runOptimistic],
+    [context, keys, queryClient, runOptimistic],
   )
 
   const completeLinkedTask = useCallback(

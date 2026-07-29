@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import type {
-  CalendarColor,
   CalendarEventRow,
   CalendarRow,
 } from "@planevo/core/types/calendar";
@@ -16,11 +15,6 @@ import {
 import { cn } from "@/lib/utils";
 import { CalendarDateSection } from "./calendar-date-section";
 import { CalendarPlanningSection } from "./calendar-planning-section";
-import {
-  CalendarSourcesSection,
-  type IcsCalendarSubscriptionInput,
-  type CalendarSourceUpdateInput,
-} from "./calendar-sources-section";
 import {
   CalendarTasksSection,
   countOpenPlanningTasks,
@@ -35,20 +29,10 @@ export type CalendarPlanningSidebarProps = {
   now?: Date;
   weekStart: Date;
   onSelectDay: (day: Date) => void;
-  onToggleVisibility: (calendarId: string, isVisible: boolean) => void;
-  onCreateCalendar: (name: string, color: CalendarColor) => void;
-  onUpdateCalendar: (
-    calendarId: string,
-    input: CalendarSourceUpdateInput,
-  ) => void;
-  onSetDefaultCalendar: (calendarId: string) => void;
-  onSubscribeIcs?: (
-    input: IcsCalendarSubscriptionInput,
-  ) => Promise<boolean>;
-  onSyncConnection?: (connectionId: string) => Promise<void>;
   onToggleTask: (taskId: string, done: boolean) => void;
   onQuickAddTask: (title: string, bucket: "week" | "month" | "none") => void;
   onCollapse: () => void;
+  isLoadingTasks?: boolean;
   /** Extra left inset on the title row when the app nav hamburger is visible. */
   clearRevealChrome?: boolean;
   /** Hide the collapse control in the mobile drawer (drawer has its own close). */
@@ -56,8 +40,8 @@ export type CalendarPlanningSidebarProps = {
 };
 
 /**
- * Calendar left rail (Files Library parity): accordion stack of Date, Tasks,
- * and Calendars. Title mirrors Library — short product noun, not a verb.
+ * Calendar Agenda rail. Calendar switching and management deliberately live in
+ * the toolbar selector so the task rail stays focused on planning.
  */
 export function CalendarPlanningSidebar({
   calendars,
@@ -66,15 +50,10 @@ export function CalendarPlanningSidebar({
   now,
   weekStart,
   onSelectDay,
-  onToggleVisibility,
-  onCreateCalendar,
-  onUpdateCalendar,
-  onSetDefaultCalendar,
-  onSubscribeIcs,
-  onSyncConnection,
   onToggleTask,
   onQuickAddTask,
   onCollapse,
+  isLoadingTasks = false,
   clearRevealChrome = false,
   hideCollapseControl = false,
 }: CalendarPlanningSidebarProps) {
@@ -149,35 +128,37 @@ export function CalendarPlanningSidebar({
           label="Tasks"
           open={!collapsedSections.has("tasks")}
           onToggle={() => handleToggleSection("tasks")}
-          count={openTaskCount}
+          count={isLoadingTasks ? undefined : openTaskCount}
         >
-          <CalendarTasksSection
-            tasks={todayTasks}
-            events={events}
-            calendars={calendars}
-            now={resolvedNow}
-            onToggleTask={onToggleTask}
-            onQuickAddTask={onQuickAddTask}
-          />
+          {isLoadingTasks ? (
+            <div
+              aria-label="Loading Agenda tasks"
+              className="flex flex-col gap-3 py-1"
+            >
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="size-4 shrink-0 rounded-full border border-border-strong" />
+                  <span
+                    className={cn(
+                      "calendar-skeleton-placeholder h-3 rounded-full bg-sidebar",
+                      index % 2 === 0 ? "w-3/4" : "w-1/2",
+                    )}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <CalendarTasksSection
+              tasks={todayTasks}
+              events={events}
+              calendars={calendars}
+              now={resolvedNow}
+              onToggleTask={onToggleTask}
+              onQuickAddTask={onQuickAddTask}
+            />
+          )}
         </CalendarPlanningSection>
 
-        <CalendarPlanningSection
-          id="planning-calendars"
-          label="Calendars"
-          open={!collapsedSections.has("calendars")}
-          onToggle={() => handleToggleSection("calendars")}
-          count={calendars.length}
-        >
-          <CalendarSourcesSection
-            calendars={calendars}
-            onToggleVisibility={onToggleVisibility}
-            onCreateCalendar={onCreateCalendar}
-            onUpdateCalendar={onUpdateCalendar}
-            onSetDefaultCalendar={onSetDefaultCalendar}
-            onSubscribeIcs={onSubscribeIcs}
-            onSyncConnection={onSyncConnection}
-          />
-        </CalendarPlanningSection>
       </nav>
     </div>
   );

@@ -1,10 +1,6 @@
 "use client"
 
-import {
-  keepPreviousData,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo } from "react"
 import { stepAnchor, type CalendarToolbarView } from "@/lib/calendar/calendar-navigation"
 import {
@@ -15,7 +11,10 @@ import {
   calendarTodayQueryKey,
   calendarTodayScopePrefix,
 } from "@/lib/calendar/calendar-query-keys"
-import { invalidateIntersectingRanges } from "@/lib/calendar/calendar-query-cache"
+import {
+  invalidateIntersectingRanges,
+  writeMergedCalendarCache,
+} from "@/lib/calendar/calendar-query-cache"
 import type {
   CalendarMetaQueryPayload,
   CalendarQueryPayload,
@@ -24,8 +23,10 @@ import type {
 } from "@/lib/calendar/fetch-calendar-page-data"
 import { mergeCalendarQueryData } from "@/lib/calendar/fetch-calendar-page-data"
 import { dateParam } from "@/lib/calendar/calendar-range"
+import { calendarRenderSlices } from "@/lib/calendar/calendar-render-slices"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import type { CalendarView } from "./calendar-toolbar"
+import type { CalendarContext } from "@planevo/core/types/calendar"
 
 type CalendarApiResponse<T> = {
   success: boolean
@@ -34,17 +35,22 @@ type CalendarApiResponse<T> = {
 }
 
 async function fetchCalendarPart<T>(
-  part: "range" | "meta" | "today",
+  part: "range" | "meta" | "today" | "all",
   scope: CalendarScope,
+  context: CalendarContext,
   view: CalendarToolbarView,
   anchor: Date,
   signal?: AbortSignal,
 ): Promise<T> {
   const params = new URLSearchParams({ part })
+  params.set("context", context.kind)
+  if (context.kind === "calendar") {
+    params.set("calendarId", context.calendarId)
+  }
   if (scope === "workspace") {
     params.set("scope", "workspace")
   }
-  if (part === "range") {
+  if (part === "range" || part === "all") {
     params.set("date", dateParam(anchor))
     params.set("view", view)
   }
@@ -65,93 +71,221 @@ const RANGE_STALE_MS = 60_000
 const META_STALE_MS = 300_000
 const TODAY_STALE_MS = 30_000
 
-export function useCalendarData(scope: CalendarScope, view: CalendarView, anchorDate: Date) {
+export function useCalendarData(
+  scope: CalendarScope,
+  context: CalendarContext,
+  view: CalendarView,
+  anchorDate: Date,
+) {
   const queryClient = useQueryClient()
+  const rangeKey = useMemo(
+    () => calendarRangeQueryKey(scope, context, view, anchorDate),
+    [anchorDate, context, scope, view],
+  )
+  const metaKey = useMemo(
+    () => calendarMetaQueryKey(scope, context),
+    [context, scope],
+  )
+  const todayKey = useMemo(
+    () => calendarTodayQueryKey(scope, context),
+    [context, scope],
+  )
+  const shouldBootstrap =
+    queryClient.getQueryData(rangeKey) === undefined &&
+    queryClient.getQueryData(todayKey) === undefined
+
+  const bootstrapQuery = useQuery({
+    queryKey: ["calendar-bootstrap", ...rangeKey],
+    queryFn: ({ signal }) =>
+      fetchCalendarPart<CalendarQueryPayload>(
+        "all",
+        scope,
+        context,
+        view,
+        anchorDate,
+        signal,
+      ),
+    enabled: shouldBootstrap,
+    staleTime: RANGE_STALE_MS,
+  })
+  const bootstrapData = shouldBootstrap ? bootstrapQuery.data : undefined
 
   const rangeQuery = useQuery({
-    queryKey: calendarRangeQueryKey(scope, view, anchorDate),
+    queryKey: rangeKey,
     queryFn: ({ signal }) =>
       fetchCalendarPart<CalendarRangeQueryPayload>(
         "range",
         scope,
+        context,
         view,
         anchorDate,
         signal,
       ),
-    placeholderData: keepPreviousData,
+    enabled: !shouldBootstrap,
     staleTime: RANGE_STALE_MS,
   })
 
   const metaQuery = useQuery({
-    queryKey: calendarMetaQueryKey(scope),
+    queryKey: metaKey,
     queryFn: ({ signal }) =>
       fetchCalendarPart<CalendarMetaQueryPayload>(
         "meta",
         scope,
+        context,
         view,
         anchorDate,
         signal,
       ),
+    enabled: !shouldBootstrap,
     staleTime: META_STALE_MS,
   })
 
   const todayQuery = useQuery({
-    queryKey: calendarTodayQueryKey(scope),
+    queryKey: todayKey,
     queryFn: ({ signal }) =>
       fetchCalendarPart<CalendarTodayQueryPayload>(
         "today",
         scope,
+        context,
         view,
         anchorDate,
         signal,
       ),
+    enabled: !shouldBootstrap,
     staleTime: TODAY_STALE_MS,
   })
 
   useEffect(() => {
-    const controllers: AbortController[] = []
-    for (const direction of [-1, 1] as const) {
-      const nextAnchor = stepAnchor(view, anchorDate, direction)
-      const controller = new AbortController()
-      controllers.push(controller)
-      void queryClient.prefetchQuery({
-        queryKey: calendarRangeQueryKey(scope, view, nextAnchor),
-        queryFn: () =>
-          fetchCalendarPart<CalendarRangeQueryPayload>(
-            "range",
-            scope,
-            view,
-            nextAnchor,
-            controller.signal,
-          ),
-        staleTime: RANGE_STALE_MS,
-      })
+    if (!bootstrapQuery.data) return
+    writeMergedCalendarCache(
+      queryClient,
+      { rangeKey, metaKey, todayKey },
+      bootstrapQuery.data,
+    )
+  }, [
+    bootstrapQuery.data,
+    metaKey,
+    queryClient,
+    rangeKey,
+    todayKey,
+  ])
+
+  useEffect(() => {
+    let active = true
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: () => void,
+        options?: { timeout: number },
+      ) => number
+      cancelIdleCallback?: (handle: number) => void
     }
+
+    const prefetchAdjacentRanges = () => {
+      if (!active) return
+      for (const direction of [-1, 1] as const) {
+        const nextAnchor = stepAnchor(view, anchorDate, direction)
+        void queryClient.prefetchQuery({
+          queryKey: calendarRangeQueryKey(scope, context, view, nextAnchor),
+          queryFn: ({ signal }) =>
+            fetchCalendarPart<CalendarRangeQueryPayload>(
+              "range",
+              scope,
+              context,
+              view,
+              nextAnchor,
+              signal,
+            ),
+          staleTime: RANGE_STALE_MS,
+        })
+      }
+    }
+
+    const idleHandle = idleWindow.requestIdleCallback?.(
+      prefetchAdjacentRanges,
+      { timeout: 2_000 },
+    )
+    const timeoutHandle =
+      idleHandle === undefined
+        ? window.setTimeout(prefetchAdjacentRanges, 750)
+        : null
+
     return () => {
-      for (const controller of controllers) controller.abort()
+      active = false
+      if (idleHandle !== undefined) {
+        idleWindow.cancelIdleCallback?.(idleHandle)
+      }
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle)
+      }
     }
-  }, [anchorDate, queryClient, scope, view])
+  }, [anchorDate, context, queryClient, scope, view])
 
   const data = useMemo<CalendarQueryPayload | undefined>(() => {
+    if (bootstrapData) return bootstrapData
     if (!rangeQuery.data || !metaQuery.data || !todayQuery.data) return undefined
     return mergeCalendarQueryData({
       range: rangeQuery.data,
       meta: metaQuery.data,
       today: todayQuery.data,
     })
-  }, [metaQuery.data, rangeQuery.data, todayQuery.data])
+  }, [
+    bootstrapData,
+    metaQuery.data,
+    rangeQuery.data,
+    todayQuery.data,
+  ])
+  const slices = useMemo(
+    () => {
+      if (bootstrapData) {
+        return {
+          calendars: bootstrapData.calendars,
+          events: bootstrapData.events,
+          taskDues: bootstrapData.taskDues,
+          todayTasks: bootstrapData.todayTasks,
+        }
+      }
+      return calendarRenderSlices({
+        range: rangeQuery.data,
+        meta: metaQuery.data,
+        today: todayQuery.data,
+      })
+    },
+    [
+      bootstrapData,
+      metaQuery.data,
+      rangeQuery.data,
+      todayQuery.data,
+    ],
+  )
 
   return {
     data,
+    ...slices,
     /** True only while the active range is fetching (not meta/today). */
-    isRangeFetching: rangeQuery.isFetching && !rangeQuery.isPlaceholderData,
-    isMetaFetching: metaQuery.isFetching,
-    isTodayFetching: todayQuery.isFetching,
+    isRangeFetching: rangeQuery.isFetching || bootstrapQuery.isFetching,
+    isRangePending:
+      !bootstrapData && !rangeQuery.data && rangeQuery.isPending,
+    isMetaFetching: metaQuery.isFetching || bootstrapQuery.isFetching,
+    isMetaPending:
+      !bootstrapData && !metaQuery.data && metaQuery.isPending,
+    isTodayFetching: todayQuery.isFetching || bootstrapQuery.isFetching,
+    isTodayPending:
+      !bootstrapData && !todayQuery.data && todayQuery.isPending,
     isFetching:
-      rangeQuery.isFetching || metaQuery.isFetching || todayQuery.isFetching,
-    isPlaceholderData: rangeQuery.isPlaceholderData,
-    isError: rangeQuery.isError || metaQuery.isError || todayQuery.isError,
-    error: rangeQuery.error ?? metaQuery.error ?? todayQuery.error,
+      bootstrapQuery.isFetching ||
+      rangeQuery.isFetching ||
+      metaQuery.isFetching ||
+      todayQuery.isFetching,
+    isError:
+      bootstrapQuery.isError ||
+      rangeQuery.isError ||
+      metaQuery.isError ||
+      todayQuery.isError,
+    error:
+      bootstrapQuery.error ??
+      rangeQuery.error ??
+      metaQuery.error ??
+      todayQuery.error,
   }
 }
 
@@ -176,15 +310,17 @@ export function useInvalidateActiveCalendarRange() {
 
   return ({
     scope,
+    context,
     view,
     anchor,
   }: {
     scope: CalendarScope
+    context: CalendarContext
     view: CalendarView
     anchor: Date
   }) => {
     void queryClient.invalidateQueries({
-      queryKey: calendarRangeQueryKey(scope, view, anchor),
+      queryKey: calendarRangeQueryKey(scope, context, view, anchor),
     })
   }
 }
@@ -217,16 +353,18 @@ export function useInvalidateCalendarMeta() {
 
 export function useCalendarQueryKeys({
   scope,
+  context,
   view,
   anchor,
 }: {
   scope: CalendarScope
+  context: CalendarContext
   view: CalendarView
   anchor: Date
 }) {
   return {
-    rangeKey: calendarRangeQueryKey(scope, view, anchor),
-    metaKey: calendarMetaQueryKey(scope),
-    todayKey: calendarTodayQueryKey(scope),
+    rangeKey: calendarRangeQueryKey(scope, context, view, anchor),
+    metaKey: calendarMetaQueryKey(scope, context),
+    todayKey: calendarTodayQueryKey(scope, context),
   }
 }

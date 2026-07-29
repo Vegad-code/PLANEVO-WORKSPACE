@@ -34,8 +34,8 @@ const calendars = [
     id: "calendar-visible",
     user_id: "user-1",
     name: "Work",
-    color: "ocean",
-    is_visible: true,
+    color: "blueberry",
+    is_included_in_main: true,
     position: 0,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -43,8 +43,8 @@ const calendars = [
     id: "calendar-hidden",
     user_id: "user-1",
     name: "Hidden",
-    color: "brick",
-    is_visible: false,
+    color: "tomato",
+    is_included_in_main: false,
     position: 1,
     created_at: "2026-07-01T00:00:00.000Z",
   },
@@ -94,19 +94,20 @@ test("converts task dues with completion and toggle metadata", () => {
   assert.deepEqual(completedTask.toggle, { taskId: "task-done", nextCompleted: false })
 })
 
-test("filters hidden calendars and preserves color plus synced-source metadata", () => {
+test("renders the events supplied by the context query", () => {
   const visibleSubscription = event({
     id: "ics-event",
     source: "ics",
   })
   const hidden = event({ id: "hidden-event", calendar_id: "calendar-hidden" })
   const items = toMonthItems([visibleSubscription, hidden], [], calendars)
+  const synced = items.find((item) => item.kind === "event" && item.eventId === "ics-event")
 
-  assert.equal(items.length, 1)
-  assert.equal(items[0].kind, "event")
-  assert.equal(items[0].calendarColor, "ocean")
-  assert.equal(items[0].isSyncedSource, true)
-  assert.equal(items[0].source, "ics")
+  assert.equal(items.length, 2)
+  assert.ok(synced)
+  assert.equal(synced.calendarColor, "blueberry")
+  assert.equal(synced.isSyncedSource, true)
+  assert.equal(synced.source, "ics")
 })
 
 test("task blocks use the task's current title", () => {

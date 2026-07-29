@@ -1,6 +1,7 @@
 "use client";
 
 import type { ThemePreference } from "@planevo/core/state/app-preferences";
+import { Switch } from "@/components/ui/switch";
 import { useAppPreferences } from "@/features/settings/use-app-preferences";
 
 /** Pill group for light / dark / system. The one theme control in the app. */
@@ -32,19 +33,10 @@ export function MinimalModeSwitch() {
   const { preferences, updatePreferences } = useAppPreferences();
 
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={preferences.minimal}
+    <Switch
+      checked={preferences.minimal}
+      onCheckedChange={(minimal) => updatePreferences({ ...preferences, minimal })}
       aria-label="Minimal mode"
-      onClick={() => updatePreferences({ ...preferences, minimal: !preferences.minimal })}
-      className="relative h-6 w-11 shrink-0 rounded-full border border-border-strong bg-border outline-none transition-colors aria-checked:bg-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink motion-reduce:transition-none"
-    >
-      <span
-        className={`absolute top-0.5 size-4 rounded-full bg-paper transition-transform motion-reduce:transition-none ${
-          preferences.minimal ? "translate-x-5" : "translate-x-1"
-        }`}
-      />
-    </button>
+    />
   );
 }

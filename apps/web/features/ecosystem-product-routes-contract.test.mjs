@@ -10,9 +10,9 @@ function read(relativePath) {
   return readFileSync(join(root, relativePath), "utf8");
 }
 
-test("calendar page uses product view not DatabaseFace", () => {
+test("calendar page uses multi-calendar product chrome not DatabaseFace", () => {
   const source = read("app/(workspace)/calendar/page.tsx");
-  assert.match(source, /CalendarProductView/);
+  assert.match(source, /CalendarProductPage/);
   assert.doesNotMatch(source, /DatabaseFace/);
   assert.doesNotMatch(source, /getCalendarFaceBundle/);
 });

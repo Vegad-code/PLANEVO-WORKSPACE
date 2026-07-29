@@ -67,9 +67,7 @@ function collectTodayEvents(
   const colorByCalendarId = new Map(
     calendars.map((calendar) => [calendar.id, calendar.color]),
   );
-  const visibleCalendarIds = new Set(
-    calendars.filter((calendar) => calendar.is_visible).map((c) => c.id),
-  );
+  const visibleCalendarIds = new Set(calendars.map((calendar) => calendar.id));
   const todayKey = dateKey(now);
   return events
     .filter(
@@ -87,7 +85,7 @@ function collectTodayEvents(
       timeLabel: event.all_day
         ? "All day"
         : formatTimeLabel(new Date(event.starts_at)),
-      color: colorByCalendarId.get(event.calendar_id) ?? "slate",
+      color: colorByCalendarId.get(event.calendar_id) ?? "graphite",
     }));
 }
 

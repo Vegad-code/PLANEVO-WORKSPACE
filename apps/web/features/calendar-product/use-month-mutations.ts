@@ -3,6 +3,7 @@
 import { useCallback } from "react"
 import type { MonthMoveResult } from "@/lib/calendar/month-drag"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
+import type { CalendarContext } from "@planevo/core/types/calendar"
 import type { CalendarView } from "./calendar-toolbar"
 import { useCalendarMutations } from "./use-calendar-mutations"
 
@@ -12,12 +13,14 @@ import { useCalendarMutations } from "./use-calendar-mutations"
  */
 export function useMonthMutations({
   scope,
+  context,
   view,
   anchor,
   onRecurringEventMove,
   onEventMoveCommitted,
 }: {
   scope: CalendarScope
+  context: CalendarContext
   view: CalendarView
   anchor: Date
   onRecurringEventMove: (
@@ -29,6 +32,7 @@ export function useMonthMutations({
 }): { applyMonthMove: (move: MonthMoveResult) => void } {
   const { applyMonthMove: applyMove } = useCalendarMutations({
     scope,
+    context,
     view,
     anchor,
   })

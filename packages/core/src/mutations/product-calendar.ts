@@ -2,12 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../types/database.types";
 import type {
   CalendarColor,
+  CalendarColorValue,
+  CalendarColorMode,
   CalendarEventRow,
   CalendarRow,
-  CalendarViewConfigOverrides,
-  CalendarViewRow,
 } from "../types/calendar";
-import { scheduleTask } from "./task-cross-links.ts";
 
 const DEFAULT_TASK_BLOCK_DURATION_MINUTES = 60;
 
@@ -27,6 +26,7 @@ export type CreateCalendarEventInput = {
   rrule?: string | null;
   recurrenceEnd?: string | null;
   allDay?: boolean;
+  color?: CalendarColorValue | null;
   location?: string | null;
   description?: Record<string, unknown>;
   taskId?: string | null;
@@ -53,6 +53,7 @@ export async function createCalendarEvent(
       rrule: input.rrule ?? null,
       recurrence_end: input.recurrenceEnd ?? null,
       all_day: input.allDay ?? false,
+      color: input.color ?? null,
       location: input.location ?? null,
       description_json: (input.description ?? {}) as Json,
       task_id: input.taskId ?? null,
@@ -78,6 +79,7 @@ export type UpdateCalendarEventInput = {
   description?: Record<string, unknown>;
   taskId?: string | null;
   allDay?: boolean;
+  color?: CalendarColorValue | null;
 };
 
 /** Patch editable event fields. Scoped by id + user_id for RLS defense in depth. */
@@ -116,6 +118,7 @@ export async function updateCalendarEvent(
         : {}),
       ...(input.taskId !== undefined ? { task_id: input.taskId } : {}),
       ...(input.allDay !== undefined ? { all_day: input.allDay } : {}),
+      ...(input.color !== undefined ? { color: input.color } : {}),
       updated_at: nowIso(),
     })
     .eq("id", eventId)
@@ -302,6 +305,7 @@ export async function createCalendar(
 export type UpdateCalendarDetailsInput = {
   name?: string;
   color?: CalendarColor;
+  colorMode?: CalendarColorMode;
 };
 
 /** Rename or recolor an owned calendar without changing visibility/defaults. */
@@ -311,16 +315,23 @@ export async function updateCalendarDetails(
   calendarId: string,
   input: UpdateCalendarDetailsInput,
 ): Promise<CalendarRow> {
-  const { data, error } = await client
+  const { data: current, error: currentError } = await client
     .from("calendars")
-    .update({
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.color !== undefined ? { color: input.color } : {}),
-    })
+    .select("*")
     .eq("id", calendarId)
     .eq("user_id", userId)
-    .select()
+    .is("deleted_at", null)
     .maybeSingle();
+  if (currentError) throw currentError;
+  if (!current) throw new Error("Calendar not found.");
+
+  const { data, error } = await client.rpc("update_calendar_preferences", {
+    p_owner_id: userId,
+    p_calendar_id: calendarId,
+    p_name: input.name ?? current.name,
+    p_color: input.color ?? current.color,
+    p_color_mode: input.colorMode ?? current.color_mode,
+  });
   if (error) throw error;
   if (!data) throw new Error("Calendar not found.");
   return data as unknown as CalendarRow;
@@ -334,113 +345,9 @@ export async function updateCalendarVisibility(
 ): Promise<void> {
   const { error } = await client
     .from("calendars")
-    .update({ is_visible: isVisible })
+    .update({ is_included_in_main: isVisible })
     .eq("id", calendarId)
     .eq("user_id", userId);
-  if (error) throw error;
-}
-
-export type CreateCalendarViewInput = {
-  name: string;
-  preset: string;
-  config: CalendarViewConfigOverrides;
-  sourceCalendarIds: string[];
-  includeTaskDues: boolean;
-  position?: number;
-};
-
-export type UpdateCalendarViewInput = {
-  name?: string;
-  preset?: string;
-  config?: CalendarViewConfigOverrides;
-  sourceCalendarIds?: string[];
-  includeTaskDues?: boolean;
-  position?: number;
-};
-
-/**
- * Persist only the caller's overrides. Preset resolution belongs at the render
- * boundary so preset improvements flow through existing saved views.
- */
-export async function createCalendarView(
-  client: SupabaseClient<Database>,
-  userId: string,
-  input: CreateCalendarViewInput,
-): Promise<CalendarViewRow> {
-  const { data, error } = await client
-    .from("calendar_views")
-    .insert({
-      user_id: userId,
-      name: input.name,
-      preset: input.preset,
-      config: cloneCalendarViewConfig(input.config) as Json,
-      source_calendar_ids: [...input.sourceCalendarIds],
-      include_task_dues: input.includeTaskDues,
-      ...(input.position !== undefined ? { position: input.position } : {}),
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as unknown as CalendarViewRow;
-}
-
-export async function updateCalendarView(
-  client: SupabaseClient<Database>,
-  userId: string,
-  viewId: string,
-  input: UpdateCalendarViewInput,
-): Promise<CalendarViewRow> {
-  const { data, error } = await client
-    .from("calendar_views")
-    .update({
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.preset !== undefined ? { preset: input.preset } : {}),
-      ...(input.config !== undefined
-        ? { config: cloneCalendarViewConfig(input.config) as Json }
-        : {}),
-      ...(input.sourceCalendarIds !== undefined
-        ? { source_calendar_ids: [...input.sourceCalendarIds] }
-        : {}),
-      ...(input.includeTaskDues !== undefined
-        ? { include_task_dues: input.includeTaskDues }
-        : {}),
-      ...(input.position !== undefined ? { position: input.position } : {}),
-      updated_at: nowIso(),
-    })
-    .eq("id", viewId)
-    .eq("user_id", userId)
-    .select()
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error("Calendar view not found.");
-  return data as unknown as CalendarViewRow;
-}
-
-export async function deleteCalendarView(
-  client: SupabaseClient<Database>,
-  userId: string,
-  viewId: string,
-): Promise<void> {
-  const { data, error } = await client
-    .from("calendar_views")
-    .delete()
-    .eq("id", viewId)
-    .eq("user_id", userId)
-    .select("id")
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error("Calendar view not found.");
-}
-
-export async function setDefaultCalendarView(
-  client: SupabaseClient<Database>,
-  userId: string,
-  viewId: string,
-): Promise<void> {
-  const { error } = await client.rpc("set_default_calendar_view", {
-    p_owner_id: userId,
-    p_view_id: viewId,
-  });
   if (error) throw error;
 }
 
@@ -456,15 +363,10 @@ export async function setDefaultCalendar(
   if (error) throw error;
 }
 
-function cloneCalendarViewConfig(
-  config: CalendarViewConfigOverrides,
-): CalendarViewConfigOverrides {
-  return structuredClone(config);
-}
-
 export type ScheduleTaskFromDragInput = {
   operationKey: string;
   taskId: string;
+  calendarId: string;
   title: string;
   /** Drop-slot start time; the event gets a default 1h duration. */
   startsAt: string;
@@ -474,9 +376,8 @@ export type ScheduleTaskFromDragInput = {
 
 /**
  * Drag a task from the Today column onto the week grid: creates a
- * calendar_events row linked via task_id on the user's default calendar.
- * Delegates to the Phase 2 schedule_task_idempotent RPC so drag and the
- * Tasks-side Schedule button share one write path.
+ * calendar_events row linked via task_id on the Agenda's current calendar.
+ * The RPC updates the task assignment and linked event in one transaction.
  */
 export async function scheduleTaskFromDrag(
   client: SupabaseClient<Database>,
@@ -495,12 +396,18 @@ export async function scheduleTaskFromDrag(
     throw new Error(`Invalid task duration: ${durationMinutes}`);
   }
   const endsAt = new Date(startsAtMs + durationMinutes * 60_000).toISOString();
-  const event = await scheduleTask(client, userId, {
-    operationKey: input.operationKey,
-    taskId: input.taskId,
-    title: input.title,
-    startsAt: new Date(startsAtMs).toISOString(),
-    endsAt,
-  });
+  const { data: event, error } = await client.rpc(
+    "schedule_task_in_calendar_idempotent",
+    {
+      p_owner_id: userId,
+      p_task_id: input.taskId,
+      p_calendar_id: input.calendarId,
+      p_operation_key: input.operationKey,
+      p_title: input.title,
+      p_starts_at: new Date(startsAtMs).toISOString(),
+      p_ends_at: endsAt,
+    },
+  );
+  if (error) throw error;
   return event as unknown as CalendarEventRow;
 }

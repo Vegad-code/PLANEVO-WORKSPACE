@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useTransition,
@@ -13,6 +14,7 @@ import { PanelLeft } from "lucide-react";
 import { HotkeysProvider } from "react-hotkeys-hook";
 import type {
   CalendarColor,
+  CalendarContext,
   CalendarEventRow,
 } from "@planevo/core/types/calendar";
 import { toast } from "@/components/ui/toast";
@@ -43,17 +45,14 @@ import {
   restoreRecurringCalendarMutationAction,
   type RecurrenceMutationScope,
   setDefaultCalendarAction,
-  subscribeIcsCalendarAction,
-  syncCalendarConnectionAction,
   toggleCalendarVisibilityAction,
-  updateCalendarDetailsAction,
   updateRecurringEventAction,
 } from "@/app/(workspace)/calendar/actions";
 import {
   resolveEventMutationTarget,
   type EventMutationTarget,
 } from "@/lib/calendar/event-mutation-target";
-import { instantToLocalDateTime } from "@/lib/calendar/recurrence";
+import { recurrenceMutationPayload } from "@/lib/calendar/recurrence-mutation-payload";
 import {
   createUndoStack,
   popUndo,
@@ -61,13 +60,16 @@ import {
   type CalendarUndoPayload,
   type RestoreEventTimesUndoPayload,
 } from "@/lib/calendar/undo-stack";
+import {
+  previewCalendarEvent,
+  type EventDraftPreview,
+} from "@/lib/calendar/calendar-query-optimistic";
 import { EventDetailPopover } from "./event-detail-popover";
 import { CalendarDndContext } from "./calendar-dnd-context";
 import { useMonthMutations } from "./use-month-mutations";
 import { useCalendarMutations } from "./use-calendar-mutations";
 import { CalendarGridEngine } from "./calendar-grid-engine";
 import { CalendarPlanningSidebar } from "./calendar-planning-sidebar";
-import type { IcsCalendarSubscriptionInput } from "./calendar-sources-section";
 import { CalendarResizeHandle } from "./calendar-resize-handle";
 import { CalendarShortcutsCheatSheet } from "./calendar-shortcuts-cheat-sheet";
 import { CalendarToolbar } from "./calendar-toolbar";
@@ -91,10 +93,12 @@ import { YearView } from "./year-view";
 import { CalendarViewTransition } from "./calendar-view-transition";
 import { CalendarNowProvider } from "./calendar-now-context";
 import { EventRecurrenceScopeDialog } from "./event-recurrence-scope-dialog";
+import { CalendarGridSkeleton } from "./calendar-product-skeleton";
 
 type CalendarProductViewProps = {
   initialScope: CalendarScope;
   workspaceId: string | null;
+  context: CalendarContext;
 };
 
 type EventPanelState =
@@ -136,52 +140,6 @@ type PendingRecurrenceMutation =
       endsAt: string;
     };
 
-function eventDescription(event: CalendarEventRow): string {
-  const text = event.description_json.text;
-  return typeof text === "string" ? text : "";
-}
-
-function recurrencePayload(
-  pending: Exclude<PendingRecurrenceMutation, { kind: "delete" }>,
-): EventPanelSavePayload {
-  if (pending.kind === "save") return pending.payload;
-
-  const timezone =
-    pending.event.timezone ??
-    Intl.DateTimeFormat().resolvedOptions().timeZone ??
-    "UTC";
-  const startsAtLocal =
-    instantToLocalDateTime(pending.startsAt, timezone) ??
-    pending.startsAt.slice(0, 19);
-  const endsAtLocal =
-    instantToLocalDateTime(pending.endsAt, timezone) ??
-    pending.endsAt.slice(0, 19);
-  const durationMinutes = Math.max(
-    1,
-    Math.round(
-      (new Date(pending.endsAt).getTime() -
-        new Date(pending.startsAt).getTime()) /
-        60_000,
-    ),
-  );
-
-  return {
-    calendarId: pending.event.calendar_id,
-    title: pending.event.title,
-    startsAt: pending.startsAt,
-    endsAt: pending.endsAt,
-    startsAtLocal,
-    endsAtLocal,
-    timezone,
-    durationMinutes,
-    rrule: pending.event.rrule,
-    location: pending.event.location,
-    description: eventDescription(pending.event),
-    reminderOffsetMinutes: null,
-    allDay: pending.event.all_day,
-  };
-}
-
 const PLANNING_TOGGLE_TRANSITION = {
   duration: 0.15,
   ease: [0.16, 1, 0.3, 1] as const,
@@ -200,6 +158,7 @@ export function CalendarProductView(props: CalendarProductViewProps) {
 function CalendarProductViewInner({
   initialScope,
   workspaceId,
+  context,
 }: CalendarProductViewProps) {
   const { showRevealChrome } = useSidebarLayout();
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -221,9 +180,15 @@ function CalendarProductViewInner({
     handleViewChange,
     handleSelectDay,
   } = useCalendarNavigation(initialScope);
-  const calendarQuery = useCalendarData(scope, view, anchorDate);
+  const calendarQuery = useCalendarData(
+    scope,
+    context,
+    view,
+    anchorDate,
+  );
   const calendarMutations = useCalendarMutations({
     scope,
+    context,
     view,
     anchor: anchorDate,
   });
@@ -238,6 +203,8 @@ function CalendarProductViewInner({
   );
   const [draftCreateEvent, setDraftCreateEvent] =
     useState<DraftCreateEventState | null>(null);
+  const [eventDraftPreview, setEventDraftPreview] =
+    useState<EventDraftPreview | null>(null);
   const [crossLinkPanel, setCrossLinkPanel] =
     useState<EventCrossLinkPanel | null>(null);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
@@ -254,11 +221,23 @@ function CalendarProductViewInner({
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const undoStackRef = useRef(createUndoStack());
 
-  const calendars = calendarQuery.data?.calendars ?? [];
-  const events = calendarQuery.data?.events ?? [];
-  const taskDues = calendarQuery.data?.taskDues ?? [];
-  const todayTasks = calendarQuery.data?.todayTasks ?? [];
-  const createCalendarId = defaultCalendarId(calendars);
+  const calendars = calendarQuery.calendars;
+  const events = calendarQuery.events;
+  const taskDues = calendarQuery.taskDues;
+  const todayTasks = calendarQuery.todayTasks;
+  const displayEvents = useMemo(
+    () =>
+      eventPanel?.mode === "edit" &&
+      eventDraftPreview?.eventId === eventPanel.eventId
+        ? previewCalendarEvent(events, eventDraftPreview)
+        : events,
+    [eventDraftPreview, eventPanel, events],
+  );
+  const createCalendarId =
+    context.kind === "calendar"
+      ? context.calendarId
+      : calendars.find(({ is_main }) => is_main)?.id ??
+        defaultCalendarId(calendars);
   const isFetchingNewRange = calendarQuery.isRangeFetching;
 
   // Restore before paint so the first painted frame matches the loading
@@ -328,38 +307,22 @@ function CalendarProductViewInner({
       });
       if (!result.ok) toast(result.error, { tone: "error" });
       invalidateMeta(scope);
-      invalidateActiveRange({ scope, view, anchor: anchorDate });
+      invalidateActiveRange({ scope, context, view, anchor: anchorDate });
     });
   }
 
-  function handleCreateCalendar(name: string, color: CalendarColor) {
-    startMetaTransition(async () => {
-      const result = await createCalendarAction({ name, color });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        return;
-      }
-      toast("Calendar created");
-      invalidateMeta(scope);
-    });
-  }
-
-  function handleUpdateCalendar(
-    calendarId: string,
-    input: { name: string; color: CalendarColor },
-  ) {
-    startMetaTransition(async () => {
-      const result = await updateCalendarDetailsAction({
-        calendarId,
-        ...input,
-      });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        return;
-      }
-      toast("Calendar updated");
-      invalidateMeta(scope);
-    });
+  async function handleCreateCalendar(
+    name: string,
+    color: CalendarColor,
+  ): Promise<string | null> {
+    const result = await createCalendarAction({ name, color });
+    if (!result.ok) {
+      toast(result.error, { tone: "error" });
+      return null;
+    }
+    toast("Calendar created");
+    invalidateMeta(scope);
+    return result.data.calendarId;
   }
 
   function handleSetDefaultCalendar(calendarId: string) {
@@ -372,35 +335,6 @@ function CalendarProductViewInner({
       toast("Default calendar updated");
       invalidateMeta(scope);
     });
-  }
-
-  async function handleSubscribeIcs(
-    input: IcsCalendarSubscriptionInput,
-  ): Promise<boolean> {
-    const result = await subscribeIcsCalendarAction(input);
-    if (!result.ok) {
-      toast(result.error, { tone: "error" });
-      return false;
-    }
-    if (result.data.synced) {
-      toast("Subscribed calendar added");
-    } else {
-      toast(result.data.warning ?? "Calendar added; first sync needs a retry.", {
-        tone: "error",
-      });
-    }
-    invalidateCalendar(scope);
-    return true;
-  }
-
-  async function handleSyncConnection(connectionId: string): Promise<void> {
-    const result = await syncCalendarConnectionAction({ connectionId });
-    if (!result.ok) {
-      toast(result.error, { tone: "error" });
-      return;
-    }
-    toast("Calendar synced");
-    invalidateCalendar(scope);
   }
 
   function handleStandardViewChange(
@@ -457,7 +391,7 @@ function CalendarProductViewInner({
 
     toast("Change undone");
     if (payload.kind === "restore-event") {
-      invalidateActiveRange({ scope, view, anchor: anchorDate });
+      invalidateActiveRange({ scope, context, view, anchor: anchorDate });
     } else {
       const starts = payload.eventRows.map((row) => row.starts_at).sort();
       const ends = payload.eventRows.map((row) => row.ends_at).sort();
@@ -511,6 +445,7 @@ function CalendarProductViewInner({
     setEventPanelDirty(false);
     setCrossLinkPanel(null);
     setDraftCreateEvent(null);
+    setEventDraftPreview(null);
     setPendingRecurrence(pending);
   }
 
@@ -531,6 +466,7 @@ function CalendarProductViewInner({
       setEventPanelDirty(false);
       setCrossLinkPanel(null);
       setDraftCreateEvent(null);
+      setEventDraftPreview(null);
     },
     [eventPanel?.mode, eventPanelDirty],
   );
@@ -554,6 +490,8 @@ function CalendarProductViewInner({
         endsAt: range.endsAt.toISOString(),
         title: current?.title ?? "",
         calendarId: current?.calendarId ?? createCalendarId,
+        allDay: current?.allDay ?? false,
+        color: current?.color ?? null,
       }));
     },
     [createCalendarId],
@@ -572,7 +510,10 @@ function CalendarProductViewInner({
       endsAt,
       title: current?.title ?? "",
       calendarId: current?.calendarId ?? createCalendarId,
+      allDay: current?.allDay ?? false,
+      color: current?.color ?? null,
     }));
+    setEventDraftPreview(null);
     setEventPanel({
       mode: "create",
       sessionId: crypto.randomUUID(),
@@ -583,11 +524,16 @@ function CalendarProductViewInner({
     setEventPanelDirty(false);
   }
 
-  const handleDraftChange = useCallback(
+  const handleCreateDraftChange = useCallback(
     (
       payload: Pick<
         EventPanelSavePayload,
-        "title" | "startsAt" | "endsAt" | "calendarId"
+        | "title"
+        | "startsAt"
+        | "endsAt"
+        | "calendarId"
+        | "allDay"
+        | "color"
       >,
     ) => {
       setDraftCreateEvent({
@@ -595,6 +541,8 @@ function CalendarProductViewInner({
         startsAt: payload.startsAt,
         endsAt: payload.endsAt,
         calendarId: payload.calendarId,
+        allDay: payload.allDay,
+        color: payload.color,
       });
       setEventPanel((current) =>
         current?.mode === "create"
@@ -607,6 +555,14 @@ function CalendarProductViewInner({
       );
     },
     [],
+  );
+
+  const handleEditDraftChange = useCallback(
+    (fields: EventDraftPreview["fields"]) => {
+      if (eventPanel?.mode !== "edit") return;
+      setEventDraftPreview({ eventId: eventPanel.eventId, fields });
+    },
+    [eventPanel],
   );
 
   useLayoutEffect(() => {
@@ -630,6 +586,8 @@ function CalendarProductViewInner({
     draftCreateEvent?.endsAt,
     draftCreateEvent?.title,
     draftCreateEvent?.calendarId,
+    draftCreateEvent?.allDay,
+    draftCreateEvent?.color,
   ]);
 
   useEffect(() => {
@@ -661,6 +619,7 @@ function CalendarProductViewInner({
     }
     setCrossLinkPanel(null);
     setDraftCreateEvent(null);
+    setEventDraftPreview(null);
     setEventPanel({
       mode: "edit",
       eventId: event.id,
@@ -696,6 +655,7 @@ function CalendarProductViewInner({
       setEventPanel(null);
       setEventPanelDirty(false);
       setDraftCreateEvent(null);
+      setEventDraftPreview(null);
     };
     const onError = () => {
       setPanelSavePending(false);
@@ -815,6 +775,7 @@ function CalendarProductViewInner({
 
   const { applyMonthMove } = useMonthMutations({
     scope,
+    context,
     view,
     anchor: anchorDate,
     onRecurringEventMove: (move) => {
@@ -921,7 +882,7 @@ function CalendarProductViewInner({
     // This-occurrence move/resize: optimistic patch + no intersecting invalidate.
     if (pendingRecurrence.kind === "move" && scopeChoice === "this") {
       const held = pendingRecurrence;
-      const payload = recurrencePayload(held);
+      const payload = recurrenceMutationPayload(held);
       const operationKey = crypto.randomUUID();
       setPendingRecurrence(null);
       calendarMutations.commitRecurringThisMove({
@@ -970,7 +931,7 @@ function CalendarProductViewInner({
               recurrenceId,
               operationKey,
               scope: scopeChoice,
-              ...recurrencePayload(pendingRecurrence),
+              ...recurrenceMutationPayload(pendingRecurrence),
             });
 
       if (!result.ok) {
@@ -1082,19 +1043,14 @@ function CalendarProductViewInner({
   const planningSidebar = (
     <CalendarPlanningSidebar
       calendars={calendars}
-      events={events}
+      events={displayEvents}
       todayTasks={todayTasks}
       weekStart={visibleWeekStart}
       onSelectDay={handleStandardSelectDay}
-      onToggleVisibility={handleToggleVisibility}
-      onCreateCalendar={handleCreateCalendar}
-      onUpdateCalendar={handleUpdateCalendar}
-      onSetDefaultCalendar={handleSetDefaultCalendar}
-      onSubscribeIcs={handleSubscribeIcs}
-      onSyncConnection={handleSyncConnection}
       onToggleTask={handleToggleTask}
       onQuickAddTask={handleQuickAddTask}
       onCollapse={() => setSidebarCollapsedFromUser(true)}
+      isLoadingTasks={calendarQuery.isTodayPending}
       clearRevealChrome={showRevealChrome}
     />
   );
@@ -1205,7 +1161,10 @@ function CalendarProductViewInner({
                     id="calendar-product-title"
                     className="text-h2 font-medium tracking-tight text-ink"
                   >
-                    Calendar
+                    {context.kind === "main"
+                      ? "Main Calendar"
+                      : calendars.find(({ id }) => id === context.calendarId)
+                          ?.name ?? "Calendar"}
                   </h1>
                 </div>
                 <button
@@ -1221,6 +1180,8 @@ function CalendarProductViewInner({
                   anchor={anchorDate}
                   view={view}
                   scope={scope}
+                  context={context}
+                  calendars={calendars}
                   navMotion={navMotion}
                   prefersReducedMotion={prefersReducedMotion}
                   onViewChange={handleStandardViewChange}
@@ -1228,6 +1189,9 @@ function CalendarProductViewInner({
                   onNavigatePrevious={handleNavigatePrevious}
                   onNavigateNext={handleNavigateNext}
                   onNavigateToday={() => handleNavigateToday(new Date())}
+                  onToggleCalendarIncluded={handleToggleVisibility}
+                  onCreateCalendar={handleCreateCalendar}
+                  onSetDefaultCalendar={handleSetDefaultCalendar}
                 />
               </div>
             </div>
@@ -1244,7 +1208,9 @@ function CalendarProductViewInner({
                 ref={gridContainerRef}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                {view === "year" ? (
+                {calendarQuery.isRangePending && view !== "year" ? (
+                  <CalendarGridSkeleton view={view} />
+                ) : view === "year" && context.kind === "main" ? (
                   <YearView
                     year={anchorDate.getFullYear()}
                     onSelectDay={handleStandardSelectDay}
@@ -1252,10 +1218,10 @@ function CalendarProductViewInner({
                 ) : (
                   <CalendarGridEngine
                     className="min-h-0 flex-1"
-                    view={view}
+                    view={view === "year" ? "month" : view}
                     anchor={anchorDate}
                     calendars={calendars}
-                    events={events}
+                    events={displayEvents}
                     taskDues={taskDues}
                     draftCreateEvent={draftCreateEvent}
                     overlayPendingMoves={overlayPendingMoves}
@@ -1304,22 +1270,17 @@ function CalendarProductViewInner({
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <CalendarPlanningSidebar
                     calendars={calendars}
-                    events={events}
+                    events={displayEvents}
                     todayTasks={todayTasks}
                     weekStart={visibleWeekStart}
                     onSelectDay={(day) => {
                       handleStandardSelectDay(day);
                       setPlanningDrawerOpen(false);
                     }}
-                    onToggleVisibility={handleToggleVisibility}
-                    onCreateCalendar={handleCreateCalendar}
-                    onUpdateCalendar={handleUpdateCalendar}
-                    onSetDefaultCalendar={handleSetDefaultCalendar}
-                    onSubscribeIcs={handleSubscribeIcs}
-                    onSyncConnection={handleSyncConnection}
                     onToggleTask={handleToggleTask}
                     onQuickAddTask={handleQuickAddTask}
                     onCollapse={() => setPlanningDrawerOpen(false)}
+                    isLoadingTasks={calendarQuery.isTodayPending}
                     hideCollapseControl
                   />
                 </div>
@@ -1381,6 +1342,7 @@ function CalendarProductViewInner({
               }
               mode={eventPanel.mode}
               calendars={calendars}
+              defaultCalendarId={createCalendarId}
               event={editingEvent}
               initialRange={
                 eventPanel.mode === "create"
@@ -1412,7 +1374,9 @@ function CalendarProductViewInner({
               }
               onDirtyChange={setEventPanelDirty}
               onDraftChange={
-                eventPanel.mode === "create" ? handleDraftChange : undefined
+                eventPanel.mode === "create"
+                  ? handleCreateDraftChange
+                  : handleEditDraftChange
               }
               isPending={panelSavePending}
               mutationBlockedMessage={
@@ -1431,7 +1395,7 @@ function CalendarProductViewInner({
           panel={crossLinkPanel}
           onClose={() => setCrossLinkPanel(null)}
           onMutationSuccess={() =>
-            invalidateActiveRange({ scope, view, anchor: anchorDate })
+            invalidateActiveRange({ scope, context, view, anchor: anchorDate })
           }
         />
       ) : null}

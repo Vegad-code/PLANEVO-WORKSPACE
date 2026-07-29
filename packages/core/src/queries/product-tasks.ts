@@ -16,6 +16,8 @@ export type TaskWithMeta = TaskRow & {
 export type LoadProductTasksOptions = {
   /** F-02 "This workspace" filter — only tasks linked into this workspace. */
   workspaceId?: string;
+  /** Optional product-context filter, such as a Calendar Agenda assignment. */
+  taskIds?: string[];
 };
 
 export type TodayColumnTaskRow = {
@@ -43,6 +45,13 @@ export async function loadTodayColumnTasks(
       workspaceId: options.workspaceId,
       resourceType: "task",
     });
+    if (allowedIds.length === 0) return [];
+  }
+  if (options.taskIds) {
+    const requestedIds = new Set(options.taskIds);
+    allowedIds = allowedIds
+      ? allowedIds.filter((id) => requestedIds.has(id))
+      : options.taskIds;
     if (allowedIds.length === 0) return [];
   }
 

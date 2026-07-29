@@ -25,6 +25,14 @@ export type TaskDuePatch = {
   moveLinkedBlock?: boolean
 }
 
+export type EventDraftPreview = {
+  eventId: string
+  fields: Pick<
+    EventPanelSavePayload,
+    "calendarId" | "title" | "startsAt" | "endsAt" | "allDay" | "color"
+  >
+}
+
 export const OPTIMISTIC_EVENT_ID_PREFIX = "optimistic-event-"
 export const OPTIMISTIC_TASK_ID_PREFIX = "optimistic-task-"
 
@@ -168,6 +176,7 @@ export function patchEventFields(
     timezone: fields.timezone,
     duration_minutes: fields.durationMinutes,
     all_day: fields.allDay,
+    color: fields.color,
     rrule: fields.rrule,
     location: fields.location,
     description_json: { text: fields.description },
@@ -229,7 +238,7 @@ export function buildOptimisticEvent({
     is_exception: false,
     is_cancelled: false,
     deleted_at: null,
-    color: null,
+    color: payload.color,
     conference_url: null,
     all_day: payload.allDay,
     location: payload.location,
@@ -245,6 +254,26 @@ export function buildOptimisticEvent({
     updated_at: now,
     linked_task: linkedTask,
   }
+}
+
+export function previewCalendarEvent(
+  events: CalendarDisplayEvent[],
+  { eventId, fields }: EventDraftPreview,
+): CalendarDisplayEvent[] {
+  const index = events.findIndex((event) => event.id === eventId)
+  if (index === -1) return events
+
+  const nextEvents = [...events]
+  nextEvents[index] = {
+    ...nextEvents[index]!,
+    calendar_id: fields.calendarId,
+    title: fields.title,
+    starts_at: fields.startsAt,
+    ends_at: fields.endsAt,
+    all_day: fields.allDay,
+    color: fields.color,
+  }
+  return nextEvents
 }
 
 export function buildOptimisticScheduledEvent({
@@ -297,6 +326,7 @@ export function buildOptimisticScheduledEvent({
       description: "",
       reminderOffsetMinutes: null,
       allDay: false,
+      color: null,
     },
   })
 }

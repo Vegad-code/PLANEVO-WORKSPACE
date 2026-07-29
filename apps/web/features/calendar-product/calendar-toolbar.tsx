@@ -9,6 +9,12 @@ import { calendarTitleTransition } from "@/lib/calendar/calendar-nav-motion"
 import { Icon } from "@/components/ui/planevo-icon"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import { CalendarViewMenu } from "./calendar-view-menu"
+import { CalendarSelector } from "./calendar-selector"
+import type {
+  CalendarColorValue,
+  CalendarContext,
+  CalendarRow,
+} from "@planevo/core/types/calendar"
 
 export const CALENDAR_VIEWS = ["day", "week", "month", "year"] as const
 export type CalendarView = (typeof CALENDAR_VIEWS)[number]
@@ -29,6 +35,8 @@ type CalendarToolbarProps = {
   anchor: Date
   view: CalendarView
   scope: CalendarScope
+  context: CalendarContext
+  calendars: CalendarRow[]
   navMotion: CalendarNavMotion
   prefersReducedMotion: boolean
   onViewChange: (view: CalendarView) => void
@@ -36,12 +44,20 @@ type CalendarToolbarProps = {
   onNavigatePrevious: () => void
   onNavigateNext: () => void
   onNavigateToday: () => void
+  onToggleCalendarIncluded: (calendarId: string, included: boolean) => void
+  onCreateCalendar: (
+    name: string,
+    color: CalendarColorValue,
+  ) => Promise<string | null>
+  onSetDefaultCalendar: (calendarId: string) => void
 }
 
 export function CalendarToolbar({
   anchor,
   view,
   scope,
+  context,
+  calendars,
   navMotion,
   prefersReducedMotion,
   onViewChange,
@@ -49,6 +65,9 @@ export function CalendarToolbar({
   onNavigatePrevious,
   onNavigateNext,
   onNavigateToday,
+  onToggleCalendarIncluded,
+  onCreateCalendar,
+  onSetDefaultCalendar,
 }: CalendarToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false)
   const title = useMemo(() => formatToolbarTitle(anchor, view), [anchor, view])
@@ -155,7 +174,30 @@ export function CalendarToolbar({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <CalendarViewMenu view={view} onViewChange={onViewChange} />
+        <CalendarSelector
+          key={
+            context.kind === "main"
+              ? "main"
+              : `calendar:${context.calendarId}`
+          }
+          context={context}
+          anchor={anchor}
+          view={view}
+          scope={scope}
+          calendars={calendars}
+          onToggleIncluded={onToggleCalendarIncluded}
+          onCreateCalendar={onCreateCalendar}
+          onSetDefaultCalendar={onSetDefaultCalendar}
+        />
+        <CalendarViewMenu
+          view={view}
+          views={
+            context.kind === "main"
+              ? CALENDAR_VIEWS
+              : ["day", "week", "month"]
+          }
+          onViewChange={onViewChange}
+        />
 
         <div className="relative">
           <button

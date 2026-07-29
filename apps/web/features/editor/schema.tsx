@@ -48,15 +48,18 @@ const createDatabaseView = createReactBlockSpec(
 );
 
 /**
- * Saved calendar lens. `viewId` is the only data identity; height is a
- * presentation preference and the renderer always reloads the current view.
+ * Canonical Calendar target plus block-local presentation state.
  */
 const createCalendarEmbed = createReactBlockSpec(
   {
     type: "calendar_embed",
     content: "none",
     propSchema: {
+      targetKind: { default: "main" },
+      calendarId: { default: "" },
+      // Read-only compatibility guard until the manual SQL rewrite has run.
       viewId: { default: "" },
+      view: { default: "month" },
       height: { default: "standard" },
     },
   },
@@ -68,14 +71,20 @@ const createCalendarEmbed = createReactBlockSpec(
     },
     render: ({ block }) => (
       <EmbeddedCalendarView
-        viewId={block.props.viewId}
+        targetKind={block.props.targetKind}
+        calendarId={block.props.calendarId}
+        legacyViewId={block.props.viewId}
+        view={block.props.view}
         height={block.props.height}
       />
     ),
     toExternalHTML: ({ block }) => (
       <div
         data-calendar-embed=""
-        data-view-id={block.props.viewId}
+        data-target-kind={block.props.targetKind}
+        data-calendar-id={block.props.calendarId}
+        data-legacy-view-id={block.props.viewId}
+        data-view={block.props.view}
         data-height={block.props.height}
       >
         Calendar view

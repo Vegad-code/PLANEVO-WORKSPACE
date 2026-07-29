@@ -1,5 +1,6 @@
 import type {
   CalendarColor,
+  CalendarColorValue,
   CalendarDisplayEvent,
   CalendarLinkedTask,
   CalendarRow,
@@ -31,13 +32,15 @@ export type DraftCreateEventState = {
   endsAt: string
   title: string
   calendarId: string
+  allDay: boolean
+  color: CalendarColorValue | null
 }
 
 export type DraftCreateEventInput = DraftCreateEventState & {
   color: CalendarColor
 }
 
-/** Map Planevo events to react-big-calendar inputs, honoring calendar visibility. */
+/** Map already context-filtered Planevo events to react-big-calendar inputs. */
 export function toRbcEvents(
   events: CalendarDisplayEvent[],
   calendars: CalendarRow[],
@@ -45,16 +48,12 @@ export function toRbcEvents(
   const colorByCalendarId = new Map(
     calendars.map((calendar) => [calendar.id, calendar.color] as const),
   )
-  const visibleIds = new Set(
-    calendars
-      .filter((calendar) => calendar.is_visible)
-      .map((calendar) => calendar.id),
-  )
-
   return events
-    .filter((event) => visibleIds.has(event.calendar_id))
     .flatMap((event) => {
-      const color = colorByCalendarId.get(event.calendar_id) ?? "slate"
+      const color =
+        event.color ??
+        colorByCalendarId.get(event.calendar_id) ??
+        "graphite"
       const range = calendarEventDisplayRange(event)
       if (!range) return []
       return [{
@@ -93,7 +92,7 @@ export function toDraftRbcEvent(input: DraftCreateEventInput): PlanevoRbcEvent {
     title: trimmedTitle || DRAFT_CREATE_PLACEHOLDER_TITLE,
     start: new Date(input.startsAt),
     end: new Date(input.endsAt),
-    allDay: false,
+    allDay: input.allDay,
     planevoEventId: DRAFT_CREATE_EVENT_ID,
     calendarId: input.calendarId,
     color: input.color,

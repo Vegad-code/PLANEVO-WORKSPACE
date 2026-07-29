@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import {
   loadCalendars,
-  loadCalendarView,
   loadCalendarWeek,
 } from "./product-calendar.ts";
 
@@ -17,9 +16,13 @@ const CALENDAR_ROWS = [
     id: "c1",
     user_id: "u1",
     name: "Work",
-    color: "slate",
-    is_visible: true,
+    color: "graphite",
+    color_mode: "inherit_override",
+    is_main: true,
+    is_included_in_main: true,
     is_default: true,
+    deleted_at: null,
+    purge_after: null,
     position: 0,
     created_at: "",
   },
@@ -27,9 +30,13 @@ const CALENDAR_ROWS = [
     id: "c2",
     user_id: "u1",
     name: "Personal",
-    color: "meadow",
-    is_visible: false,
+    color: "basil",
+    color_mode: "inherit_override",
+    is_main: false,
+    is_included_in_main: false,
     is_default: false,
+    deleted_at: null,
+    purge_after: null,
     position: 1,
     created_at: "",
   },
@@ -89,10 +96,10 @@ function fluentQuery({ rows, table, queryIndex, calls }) {
 }
 
 function calendarClient({
+  calendarRows = CALENDAR_ROWS,
   eventQueries = [],
   recurringMasters = [],
   taskRows = [],
-  calendarViewRows = [],
   calendarConnectionRows = [],
   workspaceLinks = {},
 } = {}) {
@@ -114,9 +121,8 @@ function calendarClient({
       queryCounts.set(table, queryIndex + 1);
 
       let rows;
-      if (table === "calendars") rows = CALENDAR_ROWS;
+      if (table === "calendars") rows = calendarRows;
       else if (table === "calendar_connections") rows = calendarConnectionRows;
-      else if (table === "calendar_views") rows = calendarViewRows;
       else if (table === "calendar_events") {
         rows = eventQueries[queryIndex] ?? [];
       } else if (table === "tasks") rows = taskRows;
@@ -197,7 +203,7 @@ test("loadCalendars returns user calendars ordered by position", async () => {
 
   assert.equal(result.length, 2);
   assert.equal(result[0].name, "Work");
-  assert.equal(result[1].is_visible, false);
+  assert.equal(result[1].is_included_in_main, false);
   assert.equal(result[0].connection.provider, "ics");
   assert.equal(result[1].connection, null);
   assert.equal(
@@ -208,51 +214,7 @@ test("loadCalendars returns user calendars ordered by position", async () => {
   );
 });
 
-test("loadCalendarView scopes the embedded lens to both view id and owner", async () => {
-  const view = {
-    id: "view-1",
-    user_id: "u1",
-    name: "My flow",
-    preset: "flow",
-    config: {},
-    source_calendar_ids: ["c1", "deleted-calendar"],
-    include_task_dues: true,
-    is_default: false,
-    position: 1,
-    created_at: "",
-    updated_at: "",
-  };
-  const client = calendarClient({ calendarViewRows: [view] });
-
-  const result = await loadCalendarView(client, "u1", "view-1");
-  const viewCalls = callsFor(client, "calendar_views", 0);
-
-  assert.equal(hasCall(viewCalls, "eq", "id", "view-1"), true);
-  assert.equal(hasCall(viewCalls, "eq", "user_id", "u1"), true);
-  assert.deepEqual(result, {
-    ...view,
-    source_calendar_ids: ["c1"],
-  });
-});
-
-test("loadCalendarView returns nothing for a missing or foreign saved view", async () => {
-  const client = calendarClient({ calendarViewRows: [] });
-
-  const result = await loadCalendarView(client, "u1", "foreign-view");
-
-  assert.equal(result, null);
-  assert.equal(
-    hasCall(
-      callsFor(client, "calendar_views", 0),
-      "eq",
-      "user_id",
-      "u1",
-    ),
-    true,
-  );
-});
-
-test("loads live standalone events and task due chips in the requested range", async () => {
+test("loads live standalone events without turning task due dates into grid chips", async () => {
   const standalone = event();
   const dueTasks = [
     {
@@ -285,14 +247,7 @@ test("loads live standalone events and task due chips in the requested range", a
     hasCall(eventCalls, "lt", "starts_at", WEEK.end.toISOString()),
     true,
   );
-  assert.deepEqual(result.taskDues, [
-    {
-      taskId: "t1",
-      title: "Ship report",
-      dueAt: "2026-07-15T00:00:00.000Z",
-      status: "not_started",
-    },
-  ]);
+  assert.deepEqual(result.taskDues, []);
 });
 
 test("loads current task state for task-backed event cards even when the due date is outside the window", async () => {
@@ -318,6 +273,45 @@ test("loads current task state for task-backed event cards even when the due dat
   );
   assert.equal(hasCall(linkedTaskCalls, "in", "id", ["task-1"]), true);
 })
+
+test("isolated context constrains standalone and recurring event queries", async () => {
+  const client = calendarClient({
+    calendarRows: [CALENDAR_ROWS[1]],
+    eventQueries: [[]],
+  });
+
+  const result = await loadCalendarWeek(client, "u1", {
+    ...WEEK,
+    context: { kind: "calendar", calendarId: "c2" },
+  });
+
+  assert.deepEqual(result.calendarIds, ["c2"]);
+  assert.equal(
+    hasCall(
+      callsFor(client, "calendar_events", 0),
+      "in",
+      "calendar_id",
+      ["c2"],
+    ),
+    true,
+  );
+  assert.equal(
+    hasCall(
+      callsFor(client, "rpc", 0),
+      "list_calendar_recurrence_masters_for_context",
+      {
+        p_owner_id: "u1",
+        p_window_start: WEEK.start.toISOString(),
+        p_window_end: WEEK.end.toISOString(),
+        p_overlaps: false,
+      p_workspace_event_ids: null,
+      p_calendar_ids: ["c2"],
+      p_workspace_calendar_ids: null,
+      },
+    ),
+    true,
+  );
+});
 
 test("keeps a master returned for a moved-in override even when its natural series is outside the window", async () => {
   const master = event({
@@ -347,12 +341,14 @@ test("keeps a master returned for a moved-in override even when its natural seri
   assert.deepEqual(result.recurringMasters, [master]);
   assert.deepEqual(result.recurrenceExceptions, [exception]);
   assert.equal(
-    hasCall(masterCalls, "list_calendar_recurrence_masters", {
+    hasCall(masterCalls, "list_calendar_recurrence_masters_for_context", {
       p_owner_id: "u1",
       p_window_start: WEEK.start.toISOString(),
       p_window_end: WEEK.end.toISOString(),
       p_overlaps: false,
       p_workspace_event_ids: null,
+      p_calendar_ids: ["c1", "c2"],
+      p_workspace_calendar_ids: null,
     }),
     true,
   );
@@ -392,13 +388,15 @@ test("workspace scope filters standalone rows and masters through workspace link
   assert.equal(
     hasCall(
       callsFor(client, "rpc", 0),
-      "list_calendar_recurrence_masters",
+      "list_calendar_recurrence_masters_for_context",
       {
         p_owner_id: "u1",
         p_window_start: WEEK.start.toISOString(),
         p_window_end: WEEK.end.toISOString(),
         p_overlaps: false,
         p_workspace_event_ids: ["linked-event"],
+        p_calendar_ids: ["c1", "c2"],
+        p_workspace_calendar_ids: [],
       },
     ),
     true,

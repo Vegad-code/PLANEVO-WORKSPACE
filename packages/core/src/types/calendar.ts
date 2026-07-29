@@ -1,14 +1,34 @@
 import type { TaskStatus } from "./tasks";
 
-export const CALENDAR_COLORS = [
-  "slate",
-  "marigold",
-  "meadow",
-  "brick",
-  "ocean",
+export const CALENDAR_PALETTE_KEYS = [
+  "lavender",
+  "sage",
+  "grape",
+  "flamingo",
+  "banana",
+  "tangerine",
+  "peacock",
+  "graphite",
+  "blueberry",
+  "basil",
+  "tomato",
+  "rose",
+  "sky",
+  "teal",
+  "amber",
+  "plum",
 ] as const;
 
-export type CalendarColor = (typeof CALENDAR_COLORS)[number];
+export type CalendarPaletteKey = (typeof CALENDAR_PALETTE_KEYS)[number];
+export type CalendarColorValue = CalendarPaletteKey | `#${string}`;
+/** @deprecated Use CalendarColorValue. */
+export type CalendarColor = CalendarColorValue;
+export type CalendarColorMode = "inherit_override" | "required_per_event";
+export type CalendarSurfaceView = "day" | "week" | "month" | "year";
+export type CalendarContext =
+  | { kind: "main" }
+  | { kind: "calendar"; calendarId: string };
+export type CalendarEmbedTarget = CalendarContext;
 export type CalendarExternalProvider = "ics" | "google";
 
 export type CalendarConnectionSummary = {
@@ -19,56 +39,22 @@ export type CalendarConnectionSummary = {
   is_enabled: boolean;
 };
 
-export type CalendarViewConfigValue =
-  | string
-  | number
-  | boolean
-  | null
-  | CalendarViewConfigValue[]
-  | { [key: string]: CalendarViewConfigValue };
-
-/**
- * Persisted saved-view configuration contains only axes that differ from the
- * selected preset. Resolving those overrides into a complete renderer config is
- * deliberately a read concern.
- */
-export type CalendarViewConfigOverrides = {
-  [key: string]: CalendarViewConfigValue;
-};
-
 export type CalendarRow = {
   id: string;
   user_id: string;
   name: string;
-  color: CalendarColor;
-  is_visible: boolean;
+  color: CalendarColorValue;
+  color_mode: CalendarColorMode;
+  is_main: boolean;
+  is_included_in_main: boolean;
   /** Default write target for new events and task scheduling. One per user. */
   is_default: boolean;
+  deleted_at: string | null;
+  purge_after: string | null;
   position: number;
   created_at: string;
   /** Present only on product reads that request connection-safe metadata. */
   connection?: CalendarConnectionSummary | null;
-};
-
-/**
- * A saved view: a lens over the event pool, not a property of one calendar.
- * `source_calendar_ids` empty means every visible calendar.
- *
- * Availability is never scoped to these sources — conflict detection reads the
- * whole pool. A view filters what is drawn, not what the user is busy with.
- */
-export type CalendarViewRow = {
-  id: string;
-  user_id: string;
-  name: string;
-  preset: string;
-  config: CalendarViewConfigOverrides;
-  source_calendar_ids: string[];
-  include_task_dues: boolean;
-  is_default: boolean;
-  position: number;
-  created_at: string;
-  updated_at: string;
 };
 
 export type CalendarEventRow = {
@@ -94,7 +80,7 @@ export type CalendarEventRow = {
   is_cancelled: boolean;
   deleted_at: string | null;
   /** Per-event color override; null inherits the calendar color. */
-  color: string | null;
+  color: CalendarColorValue | null;
   conference_url: string | null;
   all_day: boolean;
   location: string | null;
@@ -120,6 +106,14 @@ export type CalendarLinkedTask = {
 /** Runtime projection used by renderers after task state is joined in. */
 export type CalendarDisplayEvent = CalendarEventRow & {
   linked_task: CalendarLinkedTask | null;
+};
+
+export type TaskCalendarAssignmentRow = {
+  task_id: string;
+  calendar_id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
 };
 
 /** A task due date rendered on the calendar without a calendar_events row. */

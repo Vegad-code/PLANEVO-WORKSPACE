@@ -10,6 +10,7 @@ import {
 
 type CalendarViewMenuProps = {
   view: CalendarView
+  views?: readonly CalendarView[]
   onViewChange: (view: CalendarView) => void
 }
 
@@ -19,7 +20,11 @@ const VIEW_KEYSHORTCUTS: Partial<Record<CalendarView, string>> = {
   month: "m",
 }
 
-export function CalendarViewMenu({ view, onViewChange }: CalendarViewMenuProps) {
+export function CalendarViewMenu({
+  view,
+  views = CALENDAR_VIEWS,
+  onViewChange,
+}: CalendarViewMenuProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -68,7 +73,7 @@ export function CalendarViewMenu({ view, onViewChange }: CalendarViewMenuProps) 
           aria-label="Calendar view"
           className="absolute right-0 z-20 mt-2 min-w-[9.5rem] rounded-lg border border-border bg-paper p-1 shadow-spotlight"
         >
-          {CALENDAR_VIEWS.map((option) => {
+          {views.map((option) => {
             const isSelected = view === option
             const keyshortcut = VIEW_KEYSHORTCUTS[option]
             return (

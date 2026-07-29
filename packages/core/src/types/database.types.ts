@@ -505,9 +505,9 @@ export interface Database {
         Relationships: [];
       };
       calendars: {
-        Row: { id: string; user_id: string; name: string; color: string; is_visible: boolean; is_default: boolean; position: number; created_at: string };
-        Insert: { id?: string; user_id: string; name: string; color?: string; is_visible?: boolean; is_default?: boolean; position?: number; created_at?: string };
-        Update: { id?: string; user_id?: string; name?: string; color?: string; is_visible?: boolean; is_default?: boolean; position?: number; created_at?: string };
+        Row: { id: string; user_id: string; name: string; color: string; color_mode: string; is_main: boolean; is_included_in_main: boolean; is_default: boolean; position: number; deleted_at: string | null; purge_after: string | null; created_at: string };
+        Insert: { id?: string; user_id: string; name: string; color?: string; color_mode?: string; is_main?: boolean; is_included_in_main?: boolean; is_default?: boolean; position?: number; deleted_at?: string | null; purge_after?: string | null; created_at?: string };
+        Update: { id?: string; user_id?: string; name?: string; color?: string; color_mode?: string; is_main?: boolean; is_included_in_main?: boolean; is_default?: boolean; position?: number; deleted_at?: string | null; purge_after?: string | null; created_at?: string };
         Relationships: [];
       };
       calendar_accounts: {
@@ -522,10 +522,10 @@ export interface Database {
         Update: { id?: string; user_id?: string; calendar_id?: string; account_id?: string | null; provider?: string; provider_calendar_id?: string | null; feed_url?: string | null; feed_etag?: string | null; feed_last_modified?: string | null; sync_token?: string | null; sync_window_end?: string | null; watch_channel_id?: string | null; watch_resource_id?: string | null; watch_token?: string | null; watch_expires_at?: string | null; last_synced_at?: string | null; last_attempted_at?: string | null; next_retry_at?: string; consecutive_failure_count?: number; last_sync_error?: string | null; is_enabled?: boolean; metadata_json?: Json; created_at?: string; updated_at?: string };
         Relationships: [];
       };
-      calendar_views: {
-        Row: { id: string; user_id: string; name: string; preset: string; config: Json; source_calendar_ids: string[]; include_task_dues: boolean; is_default: boolean; position: number; created_at: string; updated_at: string };
-        Insert: { id?: string; user_id: string; name: string; preset?: string; config?: Json; source_calendar_ids?: string[]; include_task_dues?: boolean; is_default?: boolean; position?: number; created_at?: string; updated_at?: string };
-        Update: { id?: string; user_id?: string; name?: string; preset?: string; config?: Json; source_calendar_ids?: string[]; include_task_dues?: boolean; is_default?: boolean; position?: number; created_at?: string; updated_at?: string };
+      task_calendar_assignments: {
+        Row: { task_id: string; calendar_id: string; user_id: string; created_at: string; updated_at: string };
+        Insert: { task_id: string; calendar_id: string; user_id: string; created_at?: string; updated_at?: string };
+        Update: { task_id?: string; calendar_id?: string; user_id?: string; created_at?: string; updated_at?: string };
         Relationships: [];
       };
       calendar_events: {
@@ -586,6 +586,26 @@ export interface Database {
         };
         Returns: string;
       };
+      create_calendar_event_with_color_and_reminder: {
+        Args: {
+          p_owner_id: string;
+          p_calendar_id: string;
+          p_title: string;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_starts_at_local: string;
+          p_ends_at_local: string;
+          p_timezone: string;
+          p_duration_minutes: number;
+          p_rrule: string | null;
+          p_recurrence_end: string | null;
+          p_location: string | null;
+          p_description_json: Json;
+          p_color: string | null;
+          p_reminder_offset_minutes: number | null;
+        };
+        Returns: string;
+      };
       update_calendar_event_with_reminder: {
         Args: {
           p_owner_id: string;
@@ -638,12 +658,17 @@ export interface Database {
         };
         Returns: Database["public"]["Tables"]["calendar_events"]["Row"][];
       };
-      set_default_calendar_view: {
+      list_calendar_recurrence_masters_for_context: {
         Args: {
           p_owner_id: string;
-          p_view_id: string;
+          p_window_start: string;
+          p_window_end: string;
+          p_overlaps: boolean;
+          p_workspace_event_ids?: string[] | null;
+          p_calendar_ids?: string[] | null;
+          p_workspace_calendar_ids?: string[] | null;
         };
-        Returns: undefined;
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"][];
       };
       set_default_calendar: {
         Args: {
@@ -804,6 +829,48 @@ export interface Database {
       schedule_task_idempotent: {
         Args: { p_owner_id: string; p_task_id: string; p_operation_key: string; p_title: string; p_starts_at: string; p_ends_at: string };
         Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      schedule_task_in_calendar_idempotent: {
+        Args: { p_owner_id: string; p_task_id: string; p_calendar_id: string; p_operation_key: string; p_title: string; p_starts_at: string; p_ends_at: string };
+        Returns: Database["public"]["Tables"]["calendar_events"]["Row"];
+      };
+      reassign_task_calendar: {
+        Args: { p_owner_id: string; p_task_id: string; p_calendar_id: string };
+        Returns: undefined;
+      };
+      trash_calendar: {
+        Args: { p_owner_id: string; p_calendar_id: string; p_move_events_to?: string | null };
+        Returns: undefined;
+      };
+      restore_calendar: {
+        Args: { p_owner_id: string; p_calendar_id: string };
+        Returns: undefined;
+      };
+      update_calendar_preferences: {
+        Args: {
+          p_owner_id: string;
+          p_calendar_id: string;
+          p_name: string;
+          p_color: string;
+          p_color_mode: string;
+        };
+        Returns: Database["public"]["Tables"]["calendars"]["Row"];
+      };
+      create_calendar_workspace_page: {
+        Args: {
+          p_owner_id: string;
+          p_workspace_id: string;
+          p_calendar_id: string;
+        };
+        Returns: string;
+      };
+      disconnect_calendar: {
+        Args: { p_owner_id: string; p_calendar_id: string };
+        Returns: undefined;
+      };
+      purge_deleted_calendars: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
       };
       save_file_page_document: {
         Args: { p_owner_id: string; p_file_source_id: string; p_base_version: number; p_content_json: Json; p_content_hash: string };

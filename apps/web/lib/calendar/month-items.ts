@@ -102,7 +102,7 @@ export function eventToMonthItem(
     end,
     eventId: event.id,
     calendarId: event.calendar_id,
-    calendarColor,
+    calendarColor: event.color ?? calendarColor,
     source: event.source,
     isSyncedSource: event.source !== "planevo",
     allDay: event.all_day,
@@ -141,9 +141,7 @@ export function toMonthItems(
   calendars: CalendarRow[],
 ): MonthItem[] {
   const visibleCalendars = new Map(
-    calendars
-      .filter((calendar) => calendar.is_visible)
-      .map((calendar) => [calendar.id, calendar.color] as const),
+    calendars.map((calendar) => [calendar.id, calendar.color] as const),
   )
 
   const eventItems = events.flatMap((event) => {

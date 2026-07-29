@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import {
   fetchCalendarMetaData,
+  fetchCalendarPageData,
   fetchCalendarRangeData,
   fetchCalendarTodayData,
   serializeCalendarQueryData,
@@ -8,6 +9,8 @@ import {
 import { getDataAccess } from "@/lib/data/access"
 import { getCurrentWorkspace } from "@/lib/data/current-workspace"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
+import type { CalendarContext } from "@planevo/core/types/calendar"
+import { z } from "zod"
 
 function requestedScope(value: string | null): CalendarScope {
   return value === "workspace" ? "workspace" : "all"
@@ -27,6 +30,18 @@ export async function GET(request: Request) {
   const date = searchParams.get("date") ?? undefined
   const view = searchParams.get("view") ?? undefined
   const week = searchParams.get("week") ?? undefined
+  const contextKind = searchParams.get("context")
+  const calendarId = searchParams.get("calendarId")
+  const context: CalendarContext =
+    contextKind === "calendar" && z.string().uuid().safeParse(calendarId).success
+      ? { kind: "calendar", calendarId: calendarId as string }
+      : { kind: "main" }
+  if (contextKind === "calendar" && context.kind !== "calendar") {
+    return NextResponse.json(
+      { success: false, error: "Calendar not found.", data: null },
+      { status: 400 },
+    )
+  }
 
   const currentWorkspace = await getCurrentWorkspace()
   const access = currentWorkspace?.access ?? (await getDataAccess())
@@ -38,7 +53,7 @@ export async function GET(request: Request) {
     )
   }
 
-  let workspaceId = currentWorkspace?.workspace.id ?? null
+  const workspaceId = currentWorkspace?.workspace.id ?? null
   let resolvedScope = scope
 
   if (scope === "workspace" && workspaceId === null) {
@@ -51,7 +66,7 @@ export async function GET(request: Request) {
         access,
         workspaceId,
         resolvedScope,
-        { date, view, week },
+        { date, view, week, context },
       )
       return NextResponse.json({ success: true, error: null, data })
     }
@@ -61,6 +76,7 @@ export async function GET(request: Request) {
         access,
         workspaceId,
         resolvedScope,
+        context,
       )
       return NextResponse.json({ success: true, error: null, data })
     }
@@ -70,34 +86,22 @@ export async function GET(request: Request) {
         access,
         workspaceId,
         resolvedScope,
+        context,
       )
       return NextResponse.json({ success: true, error: null, data })
     }
 
-    const [range, meta, today] = await Promise.all([
-      fetchCalendarRangeData(access, workspaceId, resolvedScope, {
-        date,
-        view,
-        week,
-      }),
-      fetchCalendarMetaData(access, workspaceId, resolvedScope),
-      fetchCalendarTodayData(access, workspaceId, resolvedScope),
-    ])
+    const data = await fetchCalendarPageData(
+      access,
+      workspaceId,
+      resolvedScope,
+      { date, view, week, context },
+    )
 
     return NextResponse.json({
       success: true,
       error: null,
-      data: serializeCalendarQueryData({
-        scope: resolvedScope,
-        anchorDate: new Date(range.anchorDate),
-        view: range.view,
-        workspaceId,
-        calendars: meta.calendars,
-        views: meta.views,
-        events: range.events,
-        taskDues: range.taskDues,
-        todayTasks: today.todayTasks,
-      }),
+      data: serializeCalendarQueryData(data),
     })
   } catch {
     return NextResponse.json(

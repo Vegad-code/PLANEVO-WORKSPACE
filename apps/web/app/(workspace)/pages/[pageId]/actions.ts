@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { stripPageContentForTemplate } from "@planevo/core/mutations/duplicate-page";
 import { promoteBlocksToRecordsAtomic } from "@planevo/core/mutations/promote-blocks-atomic";
 import { createDatabase } from "@planevo/core/mutations/create-database";
+import { linkResourceToWorkspace } from "@planevo/core/mutations/workspace-links";
+import { z } from "zod";
 import { requireDataAccess } from "@/lib/data/access";
 import { createProductTaskFromFields } from "@/lib/tasks/create-product-task";
 import {
@@ -28,7 +30,40 @@ async function requireOwnedPage(pageId: string) {
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Page not found.");
-  return { access, pageId: data.id };
+  return { access, pageId: data.id, workspaceId: data.workspace_id };
+}
+
+const calendarEmbedLinkSchema = z.object({
+  pageId: z.string().uuid(),
+  calendarId: z.string().uuid(),
+});
+
+export async function linkCalendarEmbedAction(input: {
+  pageId: string;
+  calendarId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const parsed = calendarEmbedLinkSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid calendar link." };
+    const { access, workspaceId } = await requireOwnedPage(parsed.data.pageId);
+    const { data: calendar, error } = await access.client
+      .from("calendars")
+      .select("id")
+      .eq("id", parsed.data.calendarId)
+      .eq("user_id", access.ownerId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (error) throw error;
+    if (!calendar) return { ok: false, error: "Calendar not found." };
+    await linkResourceToWorkspace(access.client, access.ownerId, {
+      workspaceId,
+      resourceType: "calendar",
+      resourceId: calendar.id,
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Could not link the calendar." };
+  }
 }
 
 export async function savePageContent(
