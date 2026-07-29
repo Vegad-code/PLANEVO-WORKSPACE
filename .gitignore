@@ -23,8 +23,13 @@ out/
 # Supabase CLI local state (project refs, pooler URLs)
 supabase/.temp/
 
-# Cursor local settings
-.cursor/
+# Cursor local settings (keep shared hooks + rules trackable)
+.cursor/*
+!.cursor/hooks.json
+!.cursor/hooks/
+!.cursor/hooks/**
+!.cursor/rules/
+!.cursor/rules/**
 
 # Deep research skill outputs (outline / JSON / reports)
 research/

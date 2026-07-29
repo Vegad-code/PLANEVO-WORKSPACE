@@ -1,0 +1,59 @@
+{
+  "strictness": 2,
+  "commentTypes": ["logic", "syntax"],
+  "triggerOnUpdates": true,
+  "triggerOnDrafts": false,
+  "shouldUpdateDescription": false,
+  "statusCheck": true,
+  "statusCommentsEnabled": true,
+  "disabledLabels": ["no-review", "skip-review", "wip"],
+  "excludeBranches": ["dependabot/**"],
+  "ignoreKeywords": "no-review\nskip-review\nmechanical-format-only",
+  "ignorePatterns": "node_modules/**\n.next/**\nout/**\ncoverage/**\n*.lock\npackage-lock.json\n*.png\n*.jpg\n*.jpeg\n*.gif\n*.webp\n*.mp4\n*.webm\n.serena/**\nartifacts/**\nsupabase/.temp/**",
+  "instructions": "Follow AGENTS.md. Planevo is an ecosystem (Tasks, Calendar, Files, Workspace as separate products), never a Notion clone or database-face architecture. Flag hardcoded colors/fonts/px, marigold used more than once per screen, and secrets in commits.",
+  "summarySection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": true
+  },
+  "issuesTableSection": {
+    "included": true,
+    "collapsible": false,
+    "defaultOpen": true
+  },
+  "confidenceScoreSection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": false
+  },
+  "sequenceDiagramSection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": false
+  },
+  "rules": [
+    {
+      "id": "no-secrets",
+      "severity": "high",
+      "rule": "Never commit API keys, tokens, private keys, or .env values. Flag any credential-looking literals."
+    },
+    {
+      "id": "token-colors",
+      "severity": "medium",
+      "scope": ["apps/web/**/*.{ts,tsx,css}"],
+      "rule": "Do not hardcode hex colors, font names, or arbitrary pixel type sizes. Use CSS custom properties / Tailwind theme tokens from globals.css."
+    },
+    {
+      "id": "ecosystem-not-kernel",
+      "severity": "high",
+      "scope": ["apps/web/**/*", "packages/core/**/*"],
+      "rule": "Do not reintroduce kernel-first patterns (DatabaseFace, template_type faces for Tasks/Calendar/Files). Products stay independent and link via workspace_links."
+    },
+    {
+      "id": "calendar-immutability",
+      "severity": "medium",
+      "scope": ["apps/web/lib/calendar/**/*", "apps/web/features/calendar-product/**/*"],
+      "rule": "Never mutate Date instances or cached calendar payloads in place. Day arithmetic must use local-day helpers, not raw millisecond day adds."
+    }
+  ]
+}

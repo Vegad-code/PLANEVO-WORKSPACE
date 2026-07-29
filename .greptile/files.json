@@ -1,0 +1,12 @@
+{
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "description": "Authoritative Planevo agent and product rules."
+    },
+    {
+      "path": "docs/planevo-feature-spec.md",
+      "description": "Feature IDs and V1 boundaries."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "/Users/jabbo/.local/bin/serena-hooks activate --client=vscode"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "/Users/jabbo/.local/bin/serena-hooks remind --client=vscode"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": ".cursor/hooks/greptile-after-git.sh",
+        "matcher": "git\\s+(commit|push)\\b",
+        "timeout": 300
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "/Users/jabbo/.local/bin/serena-hooks cleanup --client=vscode"
+      }
+    ]
+  }
+}
