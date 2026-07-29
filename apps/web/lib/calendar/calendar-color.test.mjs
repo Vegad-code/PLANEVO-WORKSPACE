@@ -30,6 +30,9 @@ test("event text selection preserves contrast on light and dark custom colors", 
 test("event text selection keeps palette blocks readable", () => {
   assert.equal(contrastTextForCalendarColor("banana"), "ink")
   assert.equal(contrastTextForCalendarColor("flamingo"), "ink")
+  assert.equal(contrastTextForCalendarColor("lavender"), "ink")
+  assert.equal(contrastTextForCalendarColor("sage"), "ink")
+  assert.equal(contrastTextForCalendarColor("sky"), "ink")
   assert.equal(contrastTextForCalendarColor("grape"), "paper")
   assert.equal(contrastTextForCalendarColor("blueberry"), "paper")
 })

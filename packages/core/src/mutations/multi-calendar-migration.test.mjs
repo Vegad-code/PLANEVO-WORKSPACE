@@ -86,6 +86,18 @@ test("required event colors are backfilled before the mode is enabled", () => {
   )
 })
 
+test("event color remap keeps palette keys intact on re-run", () => {
+  const sql = migration()
+  assert.match(
+    sql,
+    /update public\.calendar_events\s+set color = case color[\s\S]*?when 'ocean' then 'blueberry'[\s\S]*?when color ~ '\^#\[0-9a-fa-f\]\{6\}\$' then upper\(color\)[\s\S]*?else color[\s\S]*?end\s+where color is not null/,
+  )
+  assert.doesNotMatch(
+    sql,
+    /when 'ocean' then 'blueberry'\s+else upper\(color\)/,
+  )
+})
+
 test("moved recurrence masters remain discoverable in an isolated context", () => {
   const sql = migration()
   const recurrence = sql.slice(

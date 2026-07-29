@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       : { kind: "main" }
   if (contextKind === "calendar" && context.kind !== "calendar") {
     return NextResponse.json(
-      { success: false, error: "Calendar not found.", data: null },
+      { success: false, error: "Invalid calendar ID.", data: null },
       { status: 400 },
     )
   }

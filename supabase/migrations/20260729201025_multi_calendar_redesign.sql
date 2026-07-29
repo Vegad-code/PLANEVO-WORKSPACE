@@ -88,7 +88,11 @@ set color = case color
   when 'meadow' then 'basil'
   when 'brick' then 'tomato'
   when 'ocean' then 'blueberry'
-  else upper(color)
+  -- Keep palette keys intact on re-run; only normalize custom hex casing.
+  else case
+    when color ~ '^#[0-9a-fA-F]{6}$' then upper(color)
+    else color
+  end
 end
 where color is not null;
 

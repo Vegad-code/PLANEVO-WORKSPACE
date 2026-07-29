@@ -533,22 +533,30 @@ export function EventDetailPanel({
               />
             )}
           </fieldset>
-          <div className="border-t border-border p-3">
-            {selectedCalendar?.color_mode !== "required_per_event" ? (
-              <button
-                type="button"
-                onClick={() => setEventColor(null)}
-                className="mb-3 text-product-meta font-medium text-text-secondary outline-none hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
-              >
-                Use calendar color
-              </button>
-            ) : null}
-            <CalendarColorPicker
-              value={eventColor ?? selectedCalendar?.color ?? "graphite"}
-              onChange={setEventColor}
-              label="Event color"
-            />
-          </div>
+          {/* Quick capture stays minimal — color overrides live on Details/Main. */}
+          {!isQuick ? (
+            <div className="border-t border-border p-3">
+              {selectedCalendar?.color_mode !== "required_per_event" ? (
+                <button
+                  type="button"
+                  aria-pressed={eventColor === null}
+                  onClick={() => setEventColor(null)}
+                  className={`mb-3 text-product-meta font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
+                    eventColor === null
+                      ? "text-ink"
+                      : "text-text-secondary hover:text-ink"
+                  }`}
+                >
+                  Use calendar color
+                </button>
+              ) : null}
+              <CalendarColorPicker
+                value={eventColor ?? selectedCalendar?.color ?? "graphite"}
+                onChange={setEventColor}
+                label="Event color"
+              />
+            </div>
+          ) : null}
         </div>
 
         {!isCreate && event && hasLinkedTask ? (

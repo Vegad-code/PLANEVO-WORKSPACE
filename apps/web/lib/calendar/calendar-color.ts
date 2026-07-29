@@ -32,6 +32,9 @@ const LIGHT_PALETTE_KEYS = new Set<CalendarPaletteKey>([
   "flamingo",
   "banana",
   "amber",
+  "lavender",
+  "sage",
+  "sky",
 ])
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/
 
