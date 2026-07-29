@@ -114,7 +114,8 @@ create or replace function public.create_calendar_event_with_color_and_reminder(
   p_location text,
   p_description_json jsonb,
   p_color text,
-  p_reminder_offset_minutes integer
+  p_reminder_offset_minutes integer,
+  p_all_day boolean default false
 )
 returns uuid
 language plpgsql
@@ -175,7 +176,8 @@ begin
     recurrence_end,
     location,
     description_json,
-    color
+    color,
+    all_day
   )
   values (
     p_calendar_id,
@@ -191,7 +193,8 @@ begin
     p_recurrence_end,
     p_location,
     coalesce(p_description_json, '{}'::jsonb),
-    p_color
+    p_color,
+    coalesce(p_all_day, false)
   )
   returning id into event_id;
 
@@ -215,11 +218,11 @@ $$;
 
 revoke all on function public.create_calendar_event_with_color_and_reminder(
   uuid, uuid, text, timestamptz, timestamptz, timestamp, timestamp,
-  text, integer, text, timestamptz, text, jsonb, text, integer
+  text, integer, text, timestamptz, text, jsonb, text, integer, boolean
 ) from public, anon;
 grant execute on function public.create_calendar_event_with_color_and_reminder(
   uuid, uuid, text, timestamptz, timestamptz, timestamp, timestamp,
-  text, integer, text, timestamptz, text, jsonb, text, integer
+  text, integer, text, timestamptz, text, jsonb, text, integer, boolean
 ) to authenticated, service_role;
 
 create or replace function public.calendar_event_color_mode_is_valid()
@@ -1187,7 +1190,9 @@ begin
     );
   end loop;
 
-  if p_value ->> 'type' <> 'calendar_embed' then
+  if p_value ->> 'type' is null
+    or p_value ->> 'type' <> 'calendar_embed'
+  then
     return result;
   end if;
 

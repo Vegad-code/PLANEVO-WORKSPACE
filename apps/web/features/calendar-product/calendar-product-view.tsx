@@ -1208,8 +1208,10 @@ function CalendarProductViewInner({
                 ref={gridContainerRef}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                {calendarQuery.isRangePending && view !== "year" ? (
-                  <CalendarGridSkeleton view={view} />
+                {calendarQuery.isRangePending ? (
+                  <CalendarGridSkeleton
+                    view={view === "year" ? "month" : view}
+                  />
                 ) : view === "year" && context.kind === "main" ? (
                   <YearView
                     year={anchorDate.getFullYear()}

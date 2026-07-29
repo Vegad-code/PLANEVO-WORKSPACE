@@ -1,5 +1,4 @@
 import {
-  loadCalendarIdsForContext,
   loadTaskIdsForCalendarIds,
   loadTaskIdsForCalendarContext,
   loadCalendars,
@@ -24,7 +23,7 @@ import {
 } from "@/lib/calendar/task-linked-events"
 import type { CalendarScope } from "@/lib/calendar/scope-prefs"
 import type { TodayColumnTask } from "@/features/calendar-product/today-task-row"
-import { calendarSupportsView } from "@/lib/calendar/calendar-context"
+import { calendarIdsForContext, calendarSupportsView } from "@/lib/calendar/calendar-context"
 
 export type CalendarPageRequest = {
   date?: string
@@ -239,17 +238,15 @@ export async function fetchCalendarPageData(
     scope,
     context,
   )
-  const contextCalendarIds = await loadCalendarIdsForContext(
-    access.client,
-    access.ownerId,
-    context,
-  )
-  const [range, meta, today] = await Promise.all([
+  // Derive context IDs from meta calendars so range/today do not wait on a
+  // separate calendars round-trip before starting.
+  const meta = await metaPromise
+  const contextCalendarIds = calendarIdsForContext(meta.calendars, context)
+  const [range, today] = await Promise.all([
     fetchCalendarRangeData(access, workspaceId, scope, {
       ...request,
       contextCalendarIds,
     }),
-    metaPromise,
     fetchCalendarTodayData(
       access,
       workspaceId,

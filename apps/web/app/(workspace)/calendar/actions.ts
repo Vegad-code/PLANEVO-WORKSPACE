@@ -328,24 +328,12 @@ export async function createCalendarEventAction(input: {
         p_color: parsed.data.color,
         p_reminder_offset_minutes:
           parsed.data.reminderOffsetMinutes ?? null,
+        p_all_day: parsed.data.allDay ?? false,
       },
     );
     if (error) throw error;
     if (!eventId) {
       throw new Error("Calendar event creation returned no event.");
-    }
-    if (parsed.data.allDay) {
-      const { error: allDayError } = await access.client.rpc(
-        "update_calendar_event_with_reminder",
-        {
-          p_owner_id: access.ownerId,
-          p_event_id: eventId,
-          p_patch: { all_day: true },
-          p_reminder_specified: false,
-          p_reminder_offset_minutes: null,
-        },
-      );
-      if (allDayError) throw allDayError;
     }
     return { ok: true, data: { eventId } };
   } catch (cause) {

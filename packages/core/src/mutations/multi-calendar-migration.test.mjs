@@ -98,6 +98,14 @@ test("event color remap keeps palette keys intact on re-run", () => {
   )
 })
 
+test("embed rewrite guards null type keys before calendar_embed compare", () => {
+  const sql = migration()
+  assert.match(
+    sql,
+    /if p_value ->> 'type' is null\s+or p_value ->> 'type' <> 'calendar_embed'/,
+  )
+})
+
 test("moved recurrence masters remain discoverable in an isolated context", () => {
   const sql = migration()
   const recurrence = sql.slice(
