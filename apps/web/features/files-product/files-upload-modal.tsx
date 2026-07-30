@@ -169,7 +169,7 @@ export function FilesUploadModal({
       className="m-4 w-[min(100%,26rem)] rounded-files-modal border-0 bg-transparent p-0 text-files-text shadow-none backdrop:bg-files-text/35 sm:m-auto"
     >
       <div className="rounded-files-modal bg-files-surface-muted/80 p-1.5 ring-1 ring-files-border/60">
-        <div className="overflow-hidden rounded-[calc(var(--radius-files-modal)-0.375rem)] bg-files-surface shadow-[inset_0_1px_0_color-mix(in_srgb,var(--color-files-surface)_80%,white)]">
+        <div className="overflow-hidden rounded-[calc(var(--radius-files-modal)-0.375rem)] bg-files-surface shadow-[inset_0_1px_0_color-mix(in_srgb,var(--color-files-surface)_80%,var(--color-paper))]">
           <div className="flex flex-col gap-5 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <h2 id="files-upload-title" className="sr-only">

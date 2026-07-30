@@ -35,8 +35,8 @@ function folderGlyphs(files: ProductFileItem[], folderId: string): MimeFamily[] 
 }
 
 /**
- * Premium glassmorphic folder illustration: a dark back + tab, white sheets
- * peeking out (when the folder holds files, one flagged as a PDF), and a frosted
+ * Folder illustration: recessed back + tab, warm document sheets when populated,
+ * frosted flap. Shadows use --color-files-folder-shade (darkening wash both themes).
  * front flap blurring the sheets behind it. Source glyphs sit on the flap.
  */
 function FolderArt({
@@ -48,27 +48,29 @@ function FolderArt({
 }) {
   return (
     <div aria-hidden="true" className="relative mx-auto h-28 w-44">
-      {/* grounding shadow */}
-      <div className="absolute inset-x-6 bottom-1 h-5 rounded-[50%] bg-black/50 blur-lg" />
-      {/* folder tab */}
-      <div className="absolute left-4 top-2 h-6 w-20 rounded-t-[10px] bg-gradient-to-b from-[#454547] to-[#37373a]" />
-      {/* folder back body */}
-      <div className="absolute inset-x-1 bottom-1 top-5 rounded-[14px] bg-gradient-to-b from-[#3d3d40] to-[#2b2b2e] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
+      {/* grounding shadow — theme shade token, never pure black / inverted ink */}
+      <div className="absolute inset-x-6 bottom-1 h-5 rounded-[50%] bg-files-folder-shadow opacity-55 blur-lg" />
+      {/* folder tab — ink-tinted raised chrome */}
+      <div className="absolute left-4 top-2 h-6 w-20 rounded-t-[10px] bg-files-border-strong" />
+      {/* folder back body — recessed below the card surface */}
+      <div className="absolute inset-x-1 bottom-1 top-5 rounded-[14px] bg-files-folder-recess shadow-[inset_0_1px_0_color-mix(in_srgb,var(--color-ink)_10%,transparent)]" />
 
-      {/* sheets peeking out */}
+      {/* sheets OR empty well — signature law: color = user's work; empty keeps warm depth */}
       {hasFiles ? (
         <>
-          <div className="absolute left-8 top-3 h-16 w-24 -rotate-6 rounded-[8px] bg-[#f5f5f7] shadow-[0_2px_6px_rgba(0,0,0,0.35)]" />
-          <div className="absolute left-12 top-4 h-16 w-24 rotate-6 rounded-[8px] bg-[#e9e9ee] shadow-[0_2px_6px_rgba(0,0,0,0.35)]">
-            <span className="absolute right-1.5 top-1.5 rounded-[3px] bg-[#e2483d] px-1 py-px text-[7px] font-bold leading-none tracking-wide text-white">
+          <div className="absolute left-8 top-3 h-16 w-24 -rotate-6 rounded-[8px] bg-files-folder-sheet shadow-[0_2px_6px_var(--color-files-folder-shade)]" />
+          <div className="absolute left-12 top-4 h-16 w-24 rotate-6 rounded-[8px] bg-files-folder-sheet-alt shadow-[0_2px_6px_var(--color-files-folder-shade)]">
+            <span className="absolute right-1.5 top-1.5 rounded-[3px] bg-brick px-1 py-px text-label font-bold leading-none tracking-wide text-white scale-75 origin-top-right">
               PDF
             </span>
           </div>
         </>
-      ) : null}
+      ) : (
+        <div className="absolute inset-x-5 top-5 h-11 rounded-[10px] bg-files-folder-flap opacity-55 shadow-[inset_0_2px_6px_var(--color-files-folder-shade)]" />
+      )}
 
-      {/* frosted glass front flap */}
-      <div className="absolute inset-x-1 bottom-1 top-10 overflow-hidden rounded-[14px] border-t border-white/20 bg-gradient-to-b from-white/[0.14] to-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] backdrop-blur-md">
+      {/* frosted front flap — solid warm wash so empty folders keep depth */}
+      <div className="absolute inset-x-1 bottom-1 top-10 overflow-hidden rounded-[14px] border-t border-border bg-files-folder-flap shadow-[inset_0_1px_0_color-mix(in_srgb,var(--color-ink)_14%,transparent)] backdrop-blur-md">
         {/* source glyphs on the flap */}
         {glyphs.length > 0 ? (
           <div className="absolute bottom-2 left-3 flex items-center">
@@ -79,7 +81,7 @@ function FolderArt({
                   key={family}
                   title={label}
                   className={cn(
-                    "flex size-5 items-center justify-center rounded-[6px] ring-2 ring-[#2b2b2e]",
+                    "flex size-5 items-center justify-center rounded-[6px] ring-2 ring-files-folder-recess",
                     className,
                     index > 0 && "-ml-1.5",
                   )}
@@ -120,17 +122,17 @@ function FolderCard({
         onOpenFolder(folder.id);
       }}
       className={cn(
-        "group flex w-56 shrink-0 cursor-pointer flex-col rounded-2xl border p-3 shadow-[0_1px_2px_rgba(0,0,0,0.4)] outline-none transition-all focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta",
+        "group flex w-56 shrink-0 cursor-pointer flex-col rounded-2xl border p-3 outline-none transition-colors focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta",
         isOver
           ? "border-files-cta bg-files-surface-muted ring-1 ring-files-cta"
-          : "border-files-border bg-files-surface hover:border-files-border-strong hover:bg-files-surface-muted",
+          : "border-files-border-strong bg-files-surface hover:bg-files-surface-muted",
       )}
     >
       <div className="flex items-center justify-center pt-2">
         <FolderArt hasFiles={folder.fileCount > 0} glyphs={glyphs} />
       </div>
       <div className="mt-3 min-w-0 px-1">
-        <p className="truncate text-product-title font-semibold text-files-text">
+        <p className="truncate text-product-title text-files-text">
           {folder.name}
         </p>
         <p className="mt-0.5 text-product-meta text-files-text-muted">

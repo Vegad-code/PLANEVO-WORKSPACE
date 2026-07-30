@@ -85,7 +85,7 @@ function OwnerCell({ owner }: { owner: OwnerDisplay }) {
           className="size-6 shrink-0 rounded-full object-cover"
         />
       ) : (
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#c9a227] text-[11px] font-semibold text-black">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-files-folder text-[11px] font-semibold text-ink">
           {initial}
         </span>
       )}

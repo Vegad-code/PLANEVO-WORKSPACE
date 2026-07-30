@@ -3,15 +3,15 @@
  * Compositions use var(--color-*) only; no raw hex in TSX.
  */
 :root {
-  --color-paper: #ffffff;
-  --color-ink: #37352f;
+  --color-paper: #eee5da;
+  --color-ink: #262424;
   --color-marigold: #2383e2;
   --color-marigold-foreground: #ffffff;
-  --color-sidebar: #f7f6f3;
-  --color-surface-raised: #f1f1ef;
-  --color-border: rgba(55, 53, 47, 0.09);
-  --color-text-secondary: #787774;
-  --color-text-muted: #9b9a97;
+  --color-sidebar: color-mix(in srgb, var(--color-ink) 3%, var(--color-paper));
+  --color-surface-raised: color-mix(in srgb, var(--color-ink) 5%, var(--color-paper));
+  --color-border: color-mix(in srgb, var(--color-ink) 9%, transparent);
+  --color-text-secondary: color-mix(in srgb, var(--color-paper) 35%, var(--color-ink));
+  --color-text-muted: color-mix(in srgb, var(--color-paper) 55%, var(--color-ink));
 
   --text-h1: 27px;
   --text-h2: 20px;

@@ -173,7 +173,7 @@ function MainHeaderSkeleton({ collapsed }: { collapsed: boolean }) {
 
 function FolderCardSkeleton() {
   return (
-    <div className="flex w-56 shrink-0 flex-col rounded-2xl border border-files-border bg-files-surface p-3 shadow-[0_1px_2px_rgba(0,0,0,0.4)]">
+    <div className="flex w-56 shrink-0 flex-col rounded-2xl border border-files-border-strong bg-files-surface p-3">
       <div className="flex items-center justify-center pt-2">
         <Skeleton width={176} height={112} borderRadius="1rem" />
       </div>

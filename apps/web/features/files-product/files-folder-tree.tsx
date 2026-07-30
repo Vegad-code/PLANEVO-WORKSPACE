@@ -310,7 +310,7 @@ function FolderRow({
 
           {!isEditing && (
             <>
-              <span className="shrink-0 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-files-text-muted group-hover:hidden">
+              <span className="shrink-0 rounded-md bg-paper/[0.06] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-files-text-muted group-hover:hidden">
                 {folder.fileCount}
               </span>
               <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">

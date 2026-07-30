@@ -41,7 +41,7 @@ import { WorkspacePreview } from "./workspace-preview";
 
 /*
  * The kitchen sink (design-brief §6). Dev-only surface — every token rendered and
- * labeled. Light hex labels are Notion-caliber @theme defaults; dark hex labels
+ * labeled. Light hex labels are Light Almond / Deep Charcoal @theme defaults; dark hex labels
  * are the [data-theme="dark"] overrides in globals.css. Swatches respond live
  * to the theme / minimal-mode toggles.
  */
@@ -79,8 +79,8 @@ const DESIGN_RECORDS: DisplayRecord[] = [
 ];
 
 const CORE = [
-  { name: "paper", cls: "bg-paper", hex: "#FFFFFF", role: "App canvas background" },
-  { name: "ink", cls: "bg-ink", hex: "#37352F", role: "Primary text, logo" },
+  { name: "paper", cls: "bg-paper", hex: "#EEE5DA", role: "App canvas — Light Almond" },
+  { name: "ink", cls: "bg-ink", hex: "#262424", role: "Primary text — Deep Charcoal" },
   { name: "marigold", cls: "bg-marigold", hex: "#2383E2", role: "CTA / active — Notion blue" },
   { name: "brick", cls: "bg-brick", hex: "#E03E3E", role: "Destructive, errors" },
   { name: "meadow", cls: "bg-meadow", hex: "#0F7B6C", role: "Success, done" },
@@ -88,18 +88,18 @@ const CORE = [
 ];
 
 const DERIVED = [
-  { name: "sidebar", cls: "bg-sidebar", hex: "#F7F6F3", role: "Sidebar surface" },
-  { name: "surface-raised", cls: "bg-surface-raised", hex: "#F1F1EF", role: "Cards, popovers, callouts" },
-  { name: "border", cls: "bg-border", hex: "rgba(55,53,47,0.09)", role: "Hairline dividers" },
-  { name: "border-strong", cls: "bg-border-strong", hex: "rgba(55,53,47,0.16)", role: "Inputs, tables" },
-  { name: "text-secondary", cls: "bg-text-secondary", hex: "#787774", role: "Body secondary" },
-  { name: "text-muted", cls: "bg-text-muted", hex: "#9B9A97", role: "Metadata" },
+  { name: "sidebar", cls: "bg-sidebar", hex: "mix(ink 5% → paper)", role: "Sidebar surface" },
+  { name: "surface-raised", cls: "bg-surface-raised", hex: "mix(warm ivory 14% → paper)", role: "Cards, popovers, callouts" },
+  { name: "border", cls: "bg-border", hex: "ink @ 9%", role: "Hairline dividers" },
+  { name: "border-strong", cls: "bg-border-strong", hex: "ink @ 16%", role: "Inputs, tables" },
+  { name: "text-secondary", cls: "bg-text-secondary", hex: "mix(paper 35% → ink)", role: "Body secondary" },
+  { name: "text-muted", cls: "bg-text-muted", hex: "mix(paper 38% → ink)", role: "Metadata" },
 ];
 
-/** Canonical dark values — Notion-caliber cool neutrals (globals.css). */
+/** Canonical dark values — Deep Charcoal / Light Almond reciprocal (globals.css). */
 const DARK_CORE = [
-  { name: "paper", cls: "bg-paper", hex: "#191919", role: "Canvas (unified with sidebar)" },
-  { name: "ink", cls: "bg-ink", hex: "rgba(255,255,255,0.9)", role: "Primary text" },
+  { name: "paper", cls: "bg-paper", hex: "#262424", role: "Canvas — Deep Charcoal" },
+  { name: "ink", cls: "bg-ink", hex: "#EEE5DA", role: "Primary text — Light Almond" },
   { name: "marigold", cls: "bg-marigold", hex: "#2383E2", role: "CTA / active — Notion blue" },
   { name: "brick", cls: "bg-brick", hex: "#FF7369", role: "Destructive, errors" },
   { name: "meadow", cls: "bg-meadow", hex: "#4DAB9A", role: "Success, done" },
@@ -107,26 +107,26 @@ const DARK_CORE = [
 ];
 
 const DARK_DERIVED = [
-  { name: "sidebar", cls: "bg-sidebar", hex: "#191919", role: "Sidebar (unified with canvas)" },
-  { name: "surface-raised", cls: "bg-surface-raised", hex: "#252525", role: "Cards, popovers, callouts" },
-  { name: "border", cls: "bg-border", hex: "rgba(255,255,255,0.13)", role: "Hairline dividers" },
-  { name: "border-strong", cls: "bg-border-strong", hex: "#373737", role: "Inputs, tables" },
-  { name: "text-secondary", cls: "bg-text-secondary", hex: "#9B9B9B", role: "Body secondary" },
-  { name: "text-muted", cls: "bg-text-muted", hex: "#6F6F6F", role: "Metadata" },
+  { name: "sidebar", cls: "bg-sidebar", hex: "= paper", role: "Sidebar (unified with canvas)" },
+  { name: "surface-raised", cls: "bg-surface-raised", hex: "mix(ink 10% → paper)", role: "Cards, popovers, callouts" },
+  { name: "border", cls: "bg-border", hex: "ink @ 14%", role: "Hairline dividers" },
+  { name: "border-strong", cls: "bg-border-strong", hex: "mix(ink 18% → paper)", role: "Inputs, tables" },
+  { name: "text-secondary", cls: "bg-text-secondary", hex: "mix(paper 35% → ink)", role: "Body secondary" },
+  { name: "text-muted", cls: "bg-text-muted", hex: "mix(paper 38% → ink)", role: "Metadata" },
 ];
 
 const DARK_TINTS = [
-  { name: "marigold-tint", cls: "bg-marigold-tint", hex: "#364954" },
-  { name: "meadow-tint", cls: "bg-meadow-tint", hex: "#354C4B" },
-  { name: "brick-tint", cls: "bg-brick-tint", hex: "#594141" },
-  { name: "slate-tint", cls: "bg-slate-tint", hex: "#443F57" },
+  { name: "marigold-tint", cls: "bg-marigold-tint", hex: "mix(marigold 18% → paper)" },
+  { name: "meadow-tint", cls: "bg-meadow-tint", hex: "mix(meadow 18% → paper)" },
+  { name: "brick-tint", cls: "bg-brick-tint", hex: "mix(brick 16% → paper)" },
+  { name: "slate-tint", cls: "bg-slate-tint", hex: "mix(slate 16% → paper)" },
 ];
 
 const TINTS = [
-  { name: "marigold-tint", cls: "bg-marigold-tint", hex: "#DDEBF1" },
-  { name: "meadow-tint", cls: "bg-meadow-tint", hex: "#DDEDEA" },
-  { name: "brick-tint", cls: "bg-brick-tint", hex: "#FBE4E4" },
-  { name: "slate-tint", cls: "bg-slate-tint", hex: "#EAE4F2" },
+  { name: "marigold-tint", cls: "bg-marigold-tint", hex: "mix(marigold 12% → paper)" },
+  { name: "meadow-tint", cls: "bg-meadow-tint", hex: "mix(meadow 12% → paper)" },
+  { name: "brick-tint", cls: "bg-brick-tint", hex: "mix(brick 10% → paper)" },
+  { name: "slate-tint", cls: "bg-slate-tint", hex: "mix(slate 10% → paper)" },
 ];
 
 const TYPE_STYLES = [
@@ -179,8 +179,8 @@ function AppearancePreview({
 }) {
   const blurb =
     theme === "dark"
-      ? "Notion cool neutrals — canvas #191919, CTA #2383E2."
-      : "Notion light — canvas #FFFFFF, sidebar #F7F6F3, CTA #2383E2.";
+      ? "Deep Charcoal canvas #262424 · Light Almond ink #EEE5DA · CTA #2383E2."
+      : "Light Almond canvas #EEE5DA · Deep Charcoal ink #262424 · CTA #2383E2.";
 
   return (
     <div
@@ -249,7 +249,7 @@ export default function DesignPage() {
           <AppearancePreview label="Minimal dark" theme="dark" minimal />
         </div>
         <div className="mt-8 flex flex-col gap-6">
-          <DarkSwatchPanel title="Dark core (Notion-caliber)" swatches={DARK_CORE} />
+          <DarkSwatchPanel title="Dark core (charcoal / almond reciprocal)" swatches={DARK_CORE} />
           <DarkSwatchPanel title="Dark derived neutrals" swatches={DARK_DERIVED} />
           <DarkSwatchPanel title="Dark status tints" swatches={DARK_TINTS} />
         </div>

@@ -38,20 +38,22 @@ ignore its structure.
 `paper` + `ink` carry ~90% of every screen; accents are meaningful and rare.
 Values live only in `globals.css` — never hardcoded in components.
 
-### Light mode (Notion-caliber)
+### Light mode (Light Almond / Deep Charcoal)
 
-Default theme (`@theme` in `globals.css`). Canvas is pure white; sidebar is a soft
-elevated tier. **CTA accent is Notion blue `#2383E2`** — the token name stays
-`marigold` for semantic stability; use `text-marigold-foreground` (`#FFFFFF`) on
-primary buttons. One accent per view still applies.
+Default theme (`@theme` in `globals.css`). Canvas is **Light Almond** `#EEE5DA`;
+primary text/icons are **Deep Charcoal** `#262424`. Derived neutrals are
+`color-mix` steps of those two anchors — never cool gray. **CTA accent is Notion
+blue `#2383E2`** — the token name stays `marigold` for semantic stability; use
+`text-marigold-foreground` (`#FFFFFF`) on primary buttons. One accent per view
+still applies.
 
-**Borders:** warm brown-black rgba (not cool gray) — hairlines at
-`rgba(55,53,47,0.09)`, structural at `rgba(55,53,47,0.16)`.
+**Borders:** ink mixed into transparent — hairlines at `ink @ 9%`, structural at
+`ink @ 16%`.
 
 | Token | CSS variable | Hex | Role |
 |---|---|---|---|
-| paper | `--color-paper` | `#FFFFFF` | App canvas background |
-| ink | `--color-ink` | `#37352F` | Primary text, logo |
+| paper | `--color-paper` | `#EEE5DA` | App canvas — Light Almond |
+| ink | `--color-ink` | `#262424` | Primary text, logo — Deep Charcoal |
 | marigold | `--color-marigold` | `#2383E2` | Primary CTA / active — **once per view max** |
 | marigold-foreground | `--color-marigold-foreground` | `#FFFFFF` | Text on marigold CTAs |
 | brick | `--color-brick` | `#E03E3E` | Destructive, errors — sparing |
@@ -61,79 +63,66 @@ primary buttons. One accent per view still applies.
 
 Derived neutrals — define these, don't eyeball them:
 
-| CSS variable | Hex | Role |
+| CSS variable | Value | Role |
 |---|---|---|
-| `--color-sidebar` | `#F7F6F3` | Sidebar surface (elevated vs canvas) |
-| `--color-surface-raised` | `#F1F1EF` | Cards, popovers, gray callouts |
-| `--color-border` | `rgba(55, 53, 47, 0.09)` | Hairline dividers |
-| `--color-border-strong` | `rgba(55, 53, 47, 0.16)` | Inputs, tables, emphasis |
-| `--color-text-secondary` | `#787774` | Body secondary |
-| `--color-text-muted` | `#9B9A97` | Metadata |
+| `--color-sidebar` | `color-mix(ink 5% → paper)` | Sidebar surface (elevated vs canvas) |
+| `--color-surface-raised` | `color-mix(warm-white → paper)` | Cards, popovers, callouts (luminous lift) |
+| `--color-border` | `color-mix(ink 9% → transparent)` | Hairline dividers |
+| `--color-border-strong` | `color-mix(ink 16% → transparent)` | Inputs, tables, emphasis |
+| `--color-text-secondary` | `color-mix(paper 35% → ink)` | Body secondary |
+| `--color-text-muted` | `color-mix(paper 38% → ink)` | Metadata |
 
-Tint variables for status pills: `--color-marigold-tint` `#DDEBF1`,
-`--color-meadow-tint` `#DDEDEA`, `--color-brick-tint` `#FBE4E4`,
-`--color-slate-tint` `#EAE4F2`, `--color-ocean-tint` `#DDEBF1`.
+Tint variables for status pills are chroma scaled into paper (e.g.
+`color-mix(in srgb, var(--color-marigold) 12%, var(--color-paper))`).
 
 Map every one of these into the Tailwind theme so components write `bg-paper`,
-`text-ink`, `border-border` — never `bg-[#FFFFFF]`.
+`text-ink`, `border-border` — never raw hex.
 
-**Minimal light:** accents desaturate to Notion gray (`#9B9A97` / tint `#F1F1EF`);
-slate and ink stay. Implement as an alternate set of custom-property values on a
-`data-minimal` root attribute — accent usage must survive muting without breaking
-hierarchy.
+**Minimal light:** accents desaturate to `--color-text-muted` / tint
+`--color-surface-raised`; slate and ink stay. Implement as an alternate set of
+custom-property values on a `data-minimal` root attribute — accent usage must
+survive muting without breaking hierarchy.
 
-Light neutrals and block colors are derived from Notion’s public CSS variable
-ecosystem. MIT reference implementations:
-[udus122/notion-renderer](https://github.com/udus122/notion-renderer),
-[shade-solutions/notion-design-system](https://github.com/shade-solutions/notion-design-system)
-(structural Tailwind pattern — prefer `#F7F6F3` sidebar over cooler grays).
-
-### Dark mode (Notion-caliber)
+### Dark mode (Deep Charcoal / Light Almond reciprocal)
 
 Toggled via `data-theme="dark"` on `<html>`. Values live only in `globals.css` — never
 hardcoded in components. **`--color-marigold` is Notion blue `#2383E2` in both
-themes** so CTAs / active nav match Notion chrome. One accent per view still applies.
+themes** so CTAs / active nav match chrome. One accent per view still applies.
 
-Canvas and sidebar are **unified** at `#191919` (no elevated sidebar rail). Elevation
-comes from `--color-surface-raised` (`#252525`) for cards, popovers, and menus.
+Canvas and sidebar are **unified** at Deep Charcoal `#262424` (no elevated sidebar
+rail). Elevation comes from `--color-surface-raised` (`color-mix(ink 10% → paper)`)
+for cards, popovers, and menus. Primary text is Light Almond `#EEE5DA` — exact
+reciprocal of light mode; derived neutrals inherit the same `@theme` mix formulas.
 
-**Borders:** hairline chrome uses low-opacity white (`rgba(255,255,255,0.13)`);
-structural / input borders use solid `#373737`.
+**Borders:** hairlines use `ink @ 9%` transparent; structural borders use `ink @ 16%`.
 
 | CSS variable | Dark value | Role |
 |---|---|---|
-| `--color-paper` | `#191919` | App canvas |
-| `--color-sidebar` | `#191919` | Sidebar (unified with canvas) |
-| `--color-surface-raised` | `#252525` | Cards, popovers, menus, gray callouts |
-| `--color-border` | `rgba(255, 255, 255, 0.13)` | Hairline dividers |
-| `--color-border-strong` | `#373737` | Inputs, tables, emphasis |
-| `--color-ink` | `rgba(255, 255, 255, 0.9)` | Primary text |
-| `--color-text-secondary` | `#9B9B9B` | Body secondary |
-| `--color-text-muted` | `#6F6F6F` | Metadata |
+| `--color-paper` | `#262424` | App canvas — Deep Charcoal |
+| `--color-sidebar` | `= paper` | Sidebar (unified with canvas) |
+| `--color-surface-raised` | `color-mix(ink 10% → paper)` | Cards, popovers, menus |
+| `--color-border` | `color-mix(ink 14% → transparent)` | Hairline dividers |
+| `--color-border-strong` | `color-mix(ink 18% → paper)` | Inputs, tables, emphasis |
+| `--color-ink` | `#EEE5DA` | Primary text — Light Almond |
+| `--color-text-secondary` | `color-mix(paper 35% → ink)` | Body secondary |
+| `--color-text-muted` | `color-mix(paper 38% → ink)` | Metadata |
 | `--color-marigold` | `#2383E2` | Primary CTA / active (Notion blue) |
 | `--color-marigold-foreground` | `#FFFFFF` | Text on marigold CTAs |
-| `--color-marigold-tint` | `#364954` | Blue callout / status tint |
+| `--color-marigold-tint` | `color-mix(marigold 18% → paper)` | Blue callout / status tint |
 | `--color-brick` | `#FF7369` | Destructive text |
-| `--color-brick-tint` | `#594141` | Destructive bg |
+| `--color-brick-tint` | `color-mix(brick 16% → paper)` | Destructive bg |
 | `--color-meadow` | `#4DAB9A` | Success text |
-| `--color-meadow-tint` | `#354C4B` | Success bg |
+| `--color-meadow-tint` | `color-mix(meadow 18% → paper)` | Success bg |
 | `--color-ocean` | `#529CCA` | Calendar / link accent |
-| `--color-ocean-tint` | `#364954` | Blue surface tint |
+| `--color-ocean-tint` | `color-mix(ocean 18% → paper)` | Blue surface tint |
 | `--color-slate` | `#9A6DD7` | AI layer text |
-| `--color-slate-tint` | `#443F57` | AI layer bg |
+| `--color-slate-tint` | `color-mix(slate 16% → paper)` | AI layer bg |
 
-Files product tokens (`--color-files-*`) override to the same Notion tiers under
+Files product tokens (`--color-files-*`) alias the same core neutrals under
 `[data-theme="dark"]`.
 
-**Minimal dark:** accents desaturate to cool gray (`#8A8A8A` / tint `#2F2F2F`) on the
-`#191919` base; ink and slate stay.
-
-Dark neutrals and block colors are derived from Notion’s public CSS variable ecosystem
-(verified against live app extractions). MIT reference implementations:
-[udus122/notion-renderer](https://github.com/udus122/notion-renderer),
-[shade-solutions/notion-design-system](https://github.com/shade-solutions/notion-design-system)
-(structural Tailwind pattern only — prefer `#191919` / `#252525` over its legacy
-`#2F3437` secondary).
+**Minimal dark:** accents desaturate to `--color-text-muted` / tint
+`--color-files-surface-muted` on the charcoal base; ink and slate stay.
 
 ---
 
