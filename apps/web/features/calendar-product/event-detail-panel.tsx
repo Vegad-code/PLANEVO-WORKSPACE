@@ -9,10 +9,10 @@ import type {
   CalendarRow,
   CalendarColorValue,
 } from "@planevo/core/types/calendar";
+import { DEFAULT_CALENDAR_COLOR } from "@/lib/calendar/calendar-color";
 import { defaultCalendarId } from "@/lib/calendar/default-calendar";
 import { calendarEventDisplayRange } from "@/lib/calendar/calendar-event-display-range";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
-import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { Select } from "@/components/ui/select";
 import {
   applyCaptureToForm,
@@ -23,6 +23,10 @@ import {
   resolveEventFormTimes,
   type EventFormState,
 } from "@/lib/calendar/event-form-state";
+import {
+  resolveEventPanelDismiss,
+  type EventPanelSavePayload,
+} from "@/lib/calendar/event-panel-dismiss";
 import type { EventCapture } from "@/lib/calendar/parse-event-capture";
 import { CalendarColorDot } from "./calendar-color-dot";
 import { CalendarColorPicker } from "./calendar-color-picker";
@@ -35,22 +39,7 @@ import type { EventCrossLinkPanel } from "./event-cross-links";
 import { EventQuickCaptureField } from "./event-quick-capture-field";
 import { loadEventReminderAction } from "@/app/(workspace)/calendar/actions";
 
-export type EventPanelSavePayload = {
-  calendarId: string;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  startsAtLocal: string;
-  endsAtLocal: string;
-  timezone: string;
-  durationMinutes: number;
-  rrule: string | null;
-  location: string | null;
-  description: string;
-  reminderOffsetMinutes: number | null;
-  allDay: boolean;
-  color: CalendarColorValue | null;
-};
+export type { EventPanelSavePayload } from "@/lib/calendar/event-panel-dismiss";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -62,7 +51,12 @@ type EventDetailPanelProps = {
   event?: CalendarDisplayEvent | CalendarEventRow | null;
   initialRange?: { startsAt: string; endsAt: string };
   onClose: (options?: { force?: boolean }) => void;
-  onSave: (payload: EventPanelSavePayload) => void;
+  onSave: (
+    payload: EventPanelSavePayload,
+    meta?: { reason: "explicit" | "dismiss" },
+  ) => void;
+  /** Parent Escape / outside-click routes through this so dismiss can silent-save. */
+  onProvideDismiss?: (dismiss: (() => void) | null) => void;
   onDelete?: (
     event: CalendarEventRow,
   ) => Promise<{ ok: boolean; error?: string } | void>;
@@ -77,6 +71,8 @@ type EventDetailPanelProps = {
   /** When set, fields are view-only and Save/Delete are blocked. */
   mutationBlockedMessage?: string | null;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Fired when the custom color wheel opens/closes (Escape ownership). */
+  onCustomColorOpenChange?: (open: boolean) => void;
   onDraftChange?: (
     payload: Pick<
       EventPanelSavePayload,
@@ -137,7 +133,9 @@ export function EventDetailPanel({
   isPending = false,
   mutationBlockedMessage = null,
   onDirtyChange,
+  onCustomColorOpenChange,
   onDraftChange,
+  onProvideDismiss,
 }: EventDetailPanelProps) {
   const isCreate = mode === "create";
   const writableCalendars = useMemo(
@@ -193,7 +191,6 @@ export function EventDetailPanel({
     isCreate ? "quick" : "details",
   );
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [discardOpen, setDiscardOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [linkedActionPending, setLinkedActionPending] = useState(false);
   const [reminderOffsetMinutes, setReminderOffsetMinutes] = useState<
@@ -304,20 +301,42 @@ export function EventDetailPanel({
   }
 
   const mutationBlocked = Boolean(mutationBlockedMessage);
+  const colorRequired = selectedCalendar?.color_mode === "required_per_event";
 
   function requestClose() {
-    // Create discards straight away (Google Calendar). Edit confirms if dirty.
-    if (!isCreate && isDirty) {
-      setDiscardOpen(true);
+    // A dismiss-triggered save is already closing the card on commit.
+    if (isPending) return;
+
+    const decision = resolveEventPanelDismiss({
+      mode,
+      isDirty,
+      saveInput: {
+        form,
+        selectedCalendarId,
+        resolvedTimes,
+        reminderOffsetMinutes,
+        eventColor,
+        colorRequired: Boolean(colorRequired),
+        mutationBlocked,
+        isPending: Boolean(isPending),
+      },
+    });
+    if (decision.kind === "silent_save") {
+      setValidationError(null);
+      onSave(decision.payload, { reason: "dismiss" });
       return;
     }
     onClose({ force: true });
   }
 
-  function confirmDiscard() {
-    setDiscardOpen(false);
-    onClose({ force: true });
-  }
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+
+  useEffect(() => {
+    if (!onProvideDismiss) return;
+    onProvideDismiss(() => requestCloseRef.current());
+    return () => onProvideDismiss(null);
+  }, [onProvideDismiss]);
 
   function handleSubmit(submitEvent: React.FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
@@ -335,31 +354,31 @@ export function EventDetailPanel({
       setValidationError(resolvedTimes.error);
       return;
     }
-    if (
-      selectedCalendar?.color_mode === "required_per_event" &&
-      eventColor === null
-    ) {
+    if (colorRequired && eventColor === null) {
       setValidationError("Choose an event color for this calendar.");
       return;
     }
 
     setValidationError(null);
-    onSave({
-      calendarId: selectedCalendarId,
-      title: trimmedTitle,
-      startsAt: resolvedTimes.startsAt,
-      endsAt: resolvedTimes.endsAt,
-      startsAtLocal: resolvedTimes.startsAtLocal,
-      endsAtLocal: resolvedTimes.endsAtLocal,
-      timezone: resolvedTimes.timezone,
-      durationMinutes: resolvedTimes.durationMinutes,
-      rrule: form.rrule,
-      location: form.location.trim() || null,
-      description: form.description.trim(),
-      reminderOffsetMinutes,
-      allDay: resolvedTimes.allDay,
-      color: eventColor,
-    });
+    onSave(
+      {
+        calendarId: selectedCalendarId,
+        title: trimmedTitle,
+        startsAt: resolvedTimes.startsAt,
+        endsAt: resolvedTimes.endsAt,
+        startsAtLocal: resolvedTimes.startsAtLocal,
+        endsAtLocal: resolvedTimes.endsAtLocal,
+        timezone: resolvedTimes.timezone,
+        durationMinutes: resolvedTimes.durationMinutes,
+        rrule: form.rrule,
+        location: form.location.trim() || null,
+        description: form.description.trim(),
+        reminderOffsetMinutes,
+        allDay: resolvedTimes.allDay,
+        color: eventColor,
+      },
+      { reason: "explicit" },
+    );
   }
 
   const canSave =
@@ -402,7 +421,7 @@ export function EventDetailPanel({
       <div className="flex flex-col gap-2 p-2">
         <header className="flex shrink-0 items-center gap-2 pl-1">
           <CalendarColorDot
-            color={eventColor ?? selectedCalendar?.color ?? "graphite"}
+            color={eventColor ?? selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR}
           />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-product-meta font-medium text-text-secondary">
@@ -450,7 +469,7 @@ export function EventDetailPanel({
         <header className="flex shrink-0 items-center gap-2 pl-1">
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <CalendarColorDot
-              color={eventColor ?? selectedCalendar?.color ?? "graphite"}
+              color={eventColor ?? selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR}
             />
             {writableCalendars.length > 1 ? (
               <Select
@@ -533,30 +552,36 @@ export function EventDetailPanel({
               />
             )}
           </fieldset>
-          {/* Quick capture stays minimal — color overrides live on Details/Main. */}
-          {!isQuick ? (
-            <div className="border-t border-border p-3">
-              {selectedCalendar?.color_mode !== "required_per_event" ? (
-                <button
-                  type="button"
-                  aria-pressed={eventColor === null}
-                  onClick={() => setEventColor(null)}
-                  className={`mb-3 text-product-meta font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
-                    eventColor === null
-                      ? "text-ink"
-                      : "text-text-secondary hover:text-ink"
-                  }`}
-                >
-                  Use calendar color
-                </button>
-              ) : null}
-              <CalendarColorPicker
-                value={eventColor ?? selectedCalendar?.color ?? "graphite"}
-                onChange={setEventColor}
-                label="Event color"
-              />
-            </div>
-          ) : null}
+          {/* Quick: compact swatches + custom dropdown. Details: full wheel. */}
+          <div
+            className={
+              isQuick
+                ? "border-t border-border px-3 py-2"
+                : "border-t border-border p-3"
+            }
+          >
+            {selectedCalendar?.color_mode !== "required_per_event" ? (
+              <button
+                type="button"
+                aria-pressed={eventColor === null}
+                onClick={() => setEventColor(null)}
+                className={`${isQuick ? "mb-2" : "mb-3"} text-product-meta font-medium outline-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink ${
+                  eventColor === null
+                    ? "text-ink"
+                    : "text-text-secondary hover:text-ink"
+                }`}
+              >
+                Use calendar color
+              </button>
+            ) : null}
+            <CalendarColorPicker
+              value={eventColor ?? selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR}
+              onChange={setEventColor}
+              label="Event color"
+              variant={isQuick ? "quick" : "full"}
+              onCustomOpenChange={onCustomColorOpenChange}
+            />
+          </div>
         </div>
 
         {!isCreate && event && hasLinkedTask ? (
@@ -698,16 +723,6 @@ export function EventDetailPanel({
         />
       ) : null}
 
-      <ConfirmActionDialog
-        open={discardOpen}
-        onClose={() => setDiscardOpen(false)}
-        title="Discard unsaved changes?"
-        description="Your edits will be lost."
-        confirmLabel="Discard"
-        destructive
-        onConfirm={async () => ({ ok: true as const })}
-        onSuccess={confirmDiscard}
-      />
     </>
   );
 }

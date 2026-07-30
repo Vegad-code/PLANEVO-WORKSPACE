@@ -8,6 +8,7 @@ import type {
   CalendarEventRow,
   CalendarRow,
 } from "@planevo/core/types/calendar";
+import { DEFAULT_CALENDAR_COLOR } from "@/lib/calendar/calendar-color";
 import { cn } from "@/lib/utils";
 import { CalendarColorDot } from "./calendar-color-dot";
 import { formatTimeLabel } from "./time-axis";
@@ -85,7 +86,7 @@ function collectTodayEvents(
       timeLabel: event.all_day
         ? "All day"
         : formatTimeLabel(new Date(event.starts_at)),
-      color: colorByCalendarId.get(event.calendar_id) ?? "graphite",
+      color: colorByCalendarId.get(event.calendar_id) ?? DEFAULT_CALENDAR_COLOR,
     }));
 }
 

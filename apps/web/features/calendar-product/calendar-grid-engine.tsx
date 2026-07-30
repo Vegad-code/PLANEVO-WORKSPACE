@@ -24,10 +24,9 @@ import {
   type DraftCreateEventState,
   type PlanevoRbcEvent,
 } from "@/lib/calendar/rbc-event-adapter"
-import { isCalendarEventPast } from "@/lib/calendar/event-is-past"
 import {
-  contrastTextForCalendarColor,
-  isCustomCalendarColor,
+  calendarEventSurface,
+  DEFAULT_CALENDAR_COLOR,
 } from "@/lib/calendar/calendar-color"
 import { isPointOutsideRect } from "@/lib/calendar/task-event-unschedule-drop"
 import { calendarLocalizer } from "@/lib/calendar/rbc-localizer"
@@ -41,10 +40,10 @@ import {
   slotInfoToAnchorRect,
 } from "@/lib/calendar/event-popover-anchor"
 import {
+  capturePendingRbcEventSelect,
+  consumePendingRbcEventSelect,
   findRbcEventAnchorElement,
-  readRbcEventPointerDown,
-  resolveRbcEventPointerSelect,
-  type RbcEventPointerDown,
+  type PendingRbcEventSelect,
 } from "@/lib/calendar/rbc-event-pointer-select"
 import { useCalendarDay } from "./calendar-now-context"
 import { MonthDayAgendaPopover } from "./month-day-agenda-popover"
@@ -55,9 +54,15 @@ import { RbcNowIndicatorWrapper } from "./rbc-now-indicator-wrapper"
 import { RbcEventContent } from "./rbc-event-content"
 import { RbcPlanevoEventWrapper } from "./rbc-planevo-event-wrapper"
 import { RbcTimeGutterHeader } from "./rbc-time-gutter-header"
+import {
+  TIME_GRID_SLOTS_PER_HOUR,
+  TIME_GRID_SNAP_MINUTES,
+  normalizeTimeGridCreateRange,
+} from "@/lib/calendar/time-grid-snap"
 import { formatHourLabel } from "./time-axis"
 import "react-big-calendar/lib/css/react-big-calendar.css"
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css"
+import "./calendar-rbc-overrides.css"
 
 type RbcInteractionInfo = {
   event: PlanevoRbcEvent
@@ -254,7 +259,7 @@ export function CalendarGridEngine({
       draftCreateEvent.color ??
       calendars.find((calendar) => calendar.id === draftCreateEvent.calendarId)
         ?.color ??
-      "graphite"
+      DEFAULT_CALENDAR_COLOR
     return toDraftRbcEvent({ ...draftCreateEvent, color })
   }, [calendars, draftCreateEvent])
   const rbcEvents = useMemo(
@@ -290,6 +295,12 @@ export function CalendarGridEngine({
   const scrollToTime = useMemo(() => scrollTimeNearNow(), [])
   const gridRef = useRef<HTMLDivElement>(null)
   const activeRbcTaskDragRef = useRef<PlanevoRbcEvent | null>(null)
+  // Survives effect remounts mid-gesture (create dismiss → onEventSelect churn).
+  const pendingEventSelectRef = useRef<PendingRbcEventSelect | null>(null)
+  const eventsByIdRef = useRef(eventsById)
+  eventsByIdRef.current = eventsById
+  const onEventSelectRef = useRef(onEventSelect)
+  onEventSelectRef.current = onEventSelect
 
   const todayInVisibleRange = useMemo(() => {
     if (view === "day") return isCalendarToday(anchor, now)
@@ -317,6 +328,7 @@ export function CalendarGridEngine({
           {...props}
           now={now}
           align={view === "day" ? "start" : "center"}
+          onSelectDay={view === "week" ? onOpenDay : undefined}
         />
       ),
       event: (props: EventProps<PlanevoRbcEvent>) => (
@@ -326,7 +338,7 @@ export function CalendarGridEngine({
       timeGutterHeader: RbcTimeGutterHeader,
       timeIndicatorWrapper: RbcNowIndicatorWrapper,
     }),
-    [now, view],
+    [now, onOpenDay, view],
   )
 
   const closeAgenda = useCallback(
@@ -382,11 +394,24 @@ export function CalendarGridEngine({
   }, [])
 
   const handleSelectSlot = useCallback(
-    (slotInfo: SlotInfo) =>
+    (slotInfo: SlotInfo) => {
+      const action =
+        slotInfo.action === "click" ||
+        slotInfo.action === "select" ||
+        slotInfo.action === "doubleClick"
+          ? slotInfo.action
+          : "select"
+      const range = normalizeTimeGridCreateRange({
+        start: slotInfo.start,
+        end: slotInfo.end,
+        action,
+      })
+      if (!range) return
       onSlotSelect(
-        { startsAt: slotInfo.start, endsAt: slotInfo.end },
+        { startsAt: range.start, endsAt: range.end },
         slotInfoToAnchorRect(slotInfo, gridRef.current),
-      ),
+      )
+    },
     [onSlotSelect],
   )
 
@@ -408,68 +433,58 @@ export function CalendarGridEngine({
   // RBC DnD setStates on mousedown and remounts the event node before mouseup,
   // so the browser never emits `click` / onSelectEvent. Recover select from a
   // short pointer press (same 8px threshold as month dnd-kit chips).
+  //
+  // Pending lives in a ref and listeners read latest maps/callbacks via refs so
+  // create-dismiss re-renders (onEventSelect identity change) cannot drop the
+  // press before pointerup — GCal: create open → click event → edit that event.
   useEffect(() => {
     if (isMonthView) return
     const root = gridRef.current
     if (!root) return
 
-    let pending: (RbcEventPointerDown & { anchor: HTMLElement | null }) | null =
-      null
-
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
-      const read = readRbcEventPointerDown({
+      pendingEventSelectRef.current = capturePendingRbcEventSelect({
         target: event.target,
         clientX: event.clientX,
         clientY: event.clientY,
       })
-      if (!read) {
-        pending = null
-        return
-      }
-      const eventRoot =
-        event.target instanceof Element
-          ? event.target.closest(".rbc-event")
-          : null
-      pending = {
-        ...read,
-        anchor: eventRoot instanceof HTMLElement ? eventRoot : null,
-      }
     }
 
     const onPointerUp = (event: PointerEvent) => {
-      const eventId = resolveRbcEventPointerSelect({
-        pointerDown: pending,
+      const pending = pendingEventSelectRef.current
+      pendingEventSelectRef.current = null
+      const selected = consumePendingRbcEventSelect({
+        pending,
         clientX: event.clientX,
         clientY: event.clientY,
       })
-      const anchorHint = pending?.anchor ?? null
-      pending = null
-      if (!eventId) return
-      const row = eventsById.get(eventId)
+      if (!selected) return
+      const row = eventsByIdRef.current.get(selected.eventId)
       if (!row) return
       const anchorEl = findRbcEventAnchorElement({
         root,
-        eventId,
-        fallback: anchorHint,
+        eventId: selected.eventId,
+        fallback: selected.anchor,
       })
       if (!anchorEl) return
-      onEventSelect(row, elementToAnchorRect(anchorEl))
+      onEventSelectRef.current(row, elementToAnchorRect(anchorEl))
     }
 
     const onPointerCancel = () => {
-      pending = null
+      pendingEventSelectRef.current = null
     }
 
     root.addEventListener("pointerdown", onPointerDown)
     document.addEventListener("pointerup", onPointerUp)
     document.addEventListener("pointercancel", onPointerCancel)
     return () => {
+      // Do not clear pendingEventSelectRef — mid-gesture remount must keep it.
       root.removeEventListener("pointerdown", onPointerDown)
       document.removeEventListener("pointerup", onPointerUp)
       document.removeEventListener("pointercancel", onPointerCancel)
     }
-  }, [eventsById, isMonthView, onEventSelect])
+  }, [isMonthView])
 
   const handleEventTimes = useCallback(
     (
@@ -512,30 +527,25 @@ export function CalendarGridEngine({
     return () => document.removeEventListener("mouseup", finishDrag, true)
   }, [eventsById, onUnscheduleTaskEvent])
 
-  const eventPropGetter = useCallback(
-    (event: PlanevoRbcEvent) => {
-      const isDraft = isDraftCreateEvent(event)
-      // Cosmetic only — past events stay fully editable like Google Calendar.
-      const isPast = !isDraft && isCalendarEventPast(event.end, now)
-      return {
-        className: cn(
-          "planevo-rbc-event",
-          isDraft && "planevo-rbc-event--draft pointer-events-none",
-          isPast && "planevo-rbc-event--past",
-          event.isReadOnly && "planevo-rbc-event--read-only",
-          event.isTaskComplete && "opacity-65",
-        ),
-        style: {
-          "--planevo-rbc-event-accent": isCustomCalendarColor(event.color)
-            ? event.color
-            : `var(--color-calendar-${event.color})`,
-          "--planevo-rbc-event-text": `var(--color-${contrastTextForCalendarColor(event.color)})`,
-        } as React.CSSProperties,
-        "data-event-id": event.id,
-      }
-    },
-    [now],
-  )
+  const eventPropGetter = useCallback((event: PlanevoRbcEvent) => {
+    const isDraft = isDraftCreateEvent(event)
+    // Solid accent fill for draft and committed alike — never paper-wash past
+    // events (that made saved blocks look muted vs the create ghost/swatch).
+    const surface = calendarEventSurface(event.color)
+    return {
+      className: cn(
+        "planevo-rbc-event",
+        isDraft && "planevo-rbc-event--draft pointer-events-none",
+        event.isReadOnly && "planevo-rbc-event--read-only",
+        event.isTaskComplete && "opacity-65",
+      ),
+      style: {
+        "--planevo-rbc-event-accent": surface.accent,
+        "--planevo-rbc-event-text": `var(--color-${surface.text})`,
+      } as React.CSSProperties,
+      "data-event-id": event.id,
+    }
+  }, [])
 
   const draggableAccessor = useCallback(
     (event: PlanevoRbcEvent) =>
@@ -598,8 +608,8 @@ export function CalendarGridEngine({
               resizable
               draggableAccessor={draggableAccessor}
               resizableAccessor={resizableAccessor}
-              step={30}
-              timeslots={2}
+              step={TIME_GRID_SNAP_MINUTES}
+              timeslots={TIME_GRID_SLOTS_PER_HOUR}
               min={DAY_MIN}
               max={DAY_MAX}
               scrollToTime={scrollToTime}

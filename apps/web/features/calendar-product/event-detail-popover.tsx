@@ -23,14 +23,19 @@ import { cn } from "@/lib/utils"
 
 type EventDetailPopoverProps = {
   anchorRect: DOMRect
-  onClose: () => void
+  /**
+   * `outside-pointer` is the dismiss-then-slot-select race: callers must arm
+   * create-gesture suppress so the same click does not reopen create.
+   */
+  onClose: (meta?: { reason: "escape" | "outside-pointer" }) => void
   children: React.ReactNode
   className?: string
   /** Reserved for callers; glass mouse tracking is intentionally frozen. */
   mouseContainerRef?: RefObject<HTMLElement | null>
   /**
    * When true, outside-click and Escape do not dismiss — used while a nested
-   * dialog (e.g. cross-link picker) is open as a sibling outside this tree.
+   * surface (cross-link picker, custom color wheel) is open outside this tree.
+   * Match GCal: grid click with the wheel open closes the wheel, not the card.
    */
   suppressDismiss?: boolean
 }
@@ -121,7 +126,15 @@ export function EventDetailPopover({
     if (suppressDismiss) return
     const handlePointerDown = (event: PointerEvent) => {
       if (panelRef.current?.contains(event.target as Node)) return
-      onClose()
+      // Portaled color wheel sits outside this tree but belongs to the card.
+      if (
+        (event.target as Element | null)?.closest?.(
+          "[data-calendar-color-wheel]",
+        )
+      ) {
+        return
+      }
+      onClose({ reason: "outside-pointer" })
     }
     const frame = window.requestAnimationFrame(() => {
       document.addEventListener("pointerdown", handlePointerDown)
@@ -165,13 +178,15 @@ export function EventDetailPopover({
               visibility: "hidden",
             }
       }
+      data-event-detail-popover=""
+      data-placement={position?.placement}
       className={cn("fixed z-50 outline-none", className)}
       onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
       onKeyDown={(keyEvent) => {
         if (keyEvent.key !== "Escape" || suppressDismiss) return
         keyEvent.preventDefault()
         keyEvent.stopPropagation()
-        onClose()
+        onClose({ reason: "escape" })
       }}
     >
       <div className="relative w-full">

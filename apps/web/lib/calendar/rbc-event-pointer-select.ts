@@ -13,6 +13,18 @@ export type RbcEventPointerDown = {
 }
 
 /**
+ * Press that may become an event select on pointerup. Must live in a React ref
+ * — never a `let` closed over by a useEffect that depends on render-time props.
+ *
+ * Classic failure (GCal create→existing-event): create popover dismisses on
+ * pointerdown → parent re-render → effect teardown drops local `pending` →
+ * pointerup never calls onEventSelect. Effect cleanup must not clear this.
+ */
+export type PendingRbcEventSelect = RbcEventPointerDown & {
+  anchor: HTMLElement | null
+}
+
+/**
  * RBC DnD begins a move on mousedown and remounts the event node before
  * mouseup, so the browser never fires `click` / `onSelectEvent`. Resolve a
  * click from the pointer pair instead when movement stays within threshold.
@@ -23,7 +35,8 @@ export function readRbcEventPointerDown(input: {
   clientY: number
 }): RbcEventPointerDown | null {
   const { target } = input
-  if (!(target instanceof Element)) return null
+  // `Element` is browser-only; guard so Node unit tests can pass null targets.
+  if (typeof Element === "undefined" || !(target instanceof Element)) return null
   if (target.closest(RESIZE_HANDLE_SELECTOR)) return null
 
   const eventRoot = target.closest(".rbc-event")
@@ -43,6 +56,24 @@ export function readRbcEventPointerDown(input: {
   }
 }
 
+/** Capture a candidate select; null means clear any prior pending. */
+export function capturePendingRbcEventSelect(input: {
+  target: EventTarget | null
+  clientX: number
+  clientY: number
+}): PendingRbcEventSelect | null {
+  const read = readRbcEventPointerDown(input)
+  if (!read) return null
+  const eventRoot =
+    typeof Element !== "undefined" && input.target instanceof Element
+      ? input.target.closest(".rbc-event")
+      : null
+  return {
+    ...read,
+    anchor: eventRoot instanceof HTMLElement ? eventRoot : null,
+  }
+}
+
 export function resolveRbcEventPointerSelect(input: {
   pointerDown: RbcEventPointerDown | null
   clientX: number
@@ -57,6 +88,24 @@ export function resolveRbcEventPointerSelect(input: {
   )
   if (distance > maxDistance) return null
   return input.pointerDown.eventId
+}
+
+/**
+ * Consume pending on pointerup. Always clears caller-held pending (assign null
+ * after calling). Null = no select (drag, or no prior down).
+ */
+export function consumePendingRbcEventSelect(input: {
+  pending: PendingRbcEventSelect | null
+  clientX: number
+  clientY: number
+}): { eventId: string; anchor: HTMLElement | null } | null {
+  const eventId = resolveRbcEventPointerSelect({
+    pointerDown: input.pending,
+    clientX: input.clientX,
+    clientY: input.clientY,
+  })
+  if (!eventId || !input.pending) return null
+  return { eventId, anchor: input.pending.anchor }
 }
 
 /** Prefer a live node after DnD remount; fall back to the press-time anchor. */

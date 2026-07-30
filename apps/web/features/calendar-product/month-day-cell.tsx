@@ -81,12 +81,10 @@ export const MonthDayCell = memo(function MonthDayCell({
       ref={setNodeRef}
       role="gridcell"
       aria-label={formatDayHeaderAccessibleLabel(date)}
-      aria-current={isToday ? "date" : undefined}
       data-calendar-day={dateKey}
       tabIndex={isFocused ? 0 : -1}
       onFocus={onFocus}
       onClick={(event) => onOpenAgenda(date, event.currentTarget)}
-      onDoubleClick={() => openMonthDayFromCell(date, onOpenDay)}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return
         // Enter on the cell is the keyboard route to every item for this day,
@@ -103,16 +101,26 @@ export const MonthDayCell = memo(function MonthDayCell({
       )}
     >
       <div className="calendar-month-cell-date">
-        <span
+        <button
+          type="button"
           className={cn(
-            "calendar-month-date",
+            "calendar-month-date-button",
             isToday && "calendar-month-date--today",
             !isToday && isOutsideMonth && "text-text-muted",
             !isToday && !isOutsideMonth && isPast && "calendar-month-date--past",
           )}
+          aria-label={`Open ${formatDayHeaderAccessibleLabel(date)} in day view`}
+          aria-current={isToday ? "date" : undefined}
+          // Roving tabindex lives on the gridcell; keep date buttons out of
+          // sequential tab order (42 stops). Keyboard Day path: agenda → Open day.
+          tabIndex={-1}
+          onClick={(event) => {
+            event.stopPropagation()
+            openMonthDayFromCell(date, onOpenDay)
+          }}
         >
           {formatMonthDateLabel(date)}
-        </span>
+        </button>
       </div>
 
       <div className="calendar-month-cell-stack">

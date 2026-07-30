@@ -33,7 +33,10 @@
   --color-calendar-tangerine: #f4511e;
   --color-calendar-peacock: #039be5;
   --color-calendar-graphite: #616161;
-  --color-calendar-blueberry: #3f51b5;
+  /* Founder screenshot default event blue (~medium saturated, violet lean). */
+  --color-calendar-blueberry: #4454b4;
+  /* Alias used by CSS fallbacks when no event/calendar color is set. */
+  --color-calendar-default: var(--color-calendar-blueberry);
   --color-calendar-basil: #0b8043;
   --color-calendar-tomato: #d50000;
   --color-calendar-rose: #ad1457;
@@ -58,19 +61,19 @@
   --color-ocean-tint: #ddebf1;
 
   /*
-   * Calendar grid event fills — opaque GCal-style blocks. Scoped here so pills,
-   * AI surfaces, and other tint consumers stay independent.
+   * Calendar grid event fills — solid accent (same as swatch / draft ghost).
+   * Past variants intentionally match current: do not paper-wash committed blocks.
    */
-  --color-calendar-event-fill-slate: var(--color-slate-tint);
-  --color-calendar-event-fill-marigold: var(--color-marigold-tint);
-  --color-calendar-event-fill-meadow: var(--color-meadow-tint);
-  --color-calendar-event-fill-brick: var(--color-brick-tint);
-  --color-calendar-event-fill-ocean: var(--color-ocean-tint);
-  --color-calendar-event-fill-slate-past: color-mix(in srgb, var(--color-slate) 20%, var(--color-paper));
-  --color-calendar-event-fill-marigold-past: color-mix(in srgb, var(--color-marigold) 20%, var(--color-paper));
-  --color-calendar-event-fill-meadow-past: color-mix(in srgb, var(--color-meadow) 20%, var(--color-paper));
-  --color-calendar-event-fill-brick-past: color-mix(in srgb, var(--color-brick) 20%, var(--color-paper));
-  --color-calendar-event-fill-ocean-past: color-mix(in srgb, var(--color-ocean) 20%, var(--color-paper));
+  --color-calendar-event-fill-slate: var(--color-slate);
+  --color-calendar-event-fill-marigold: var(--color-marigold);
+  --color-calendar-event-fill-meadow: var(--color-meadow);
+  --color-calendar-event-fill-brick: var(--color-brick);
+  --color-calendar-event-fill-ocean: var(--color-ocean);
+  --color-calendar-event-fill-slate-past: var(--color-calendar-event-fill-slate);
+  --color-calendar-event-fill-marigold-past: var(--color-calendar-event-fill-marigold);
+  --color-calendar-event-fill-meadow-past: var(--color-calendar-event-fill-meadow);
+  --color-calendar-event-fill-brick-past: var(--color-calendar-event-fill-brick);
+  --color-calendar-event-fill-ocean-past: var(--color-calendar-event-fill-ocean);
 
   /* Fonts (loaded via next/font in app/layout.tsx) */
   --font-sans: var(--font-general-sans), ui-sans-serif, system-ui, sans-serif;
@@ -220,6 +223,12 @@
   --color-calendar-today-disc: #6495ed;
   --color-calendar-today-disc-foreground: #ffffff;
   --color-calendar-today-label: #6495ed;
+  --color-calendar-day-hover-disc: color-mix(in srgb, var(--color-ink) 7%, transparent);
+  --color-calendar-today-disc-hover: color-mix(
+    in srgb,
+    var(--color-calendar-today-disc) 82%,
+    var(--color-ink)
+  );
   /*
    * Calendar elevation (light + dark): page/chrome stays paper; the day/week/
    * month grid is the shaded raised panel (surface-raised). Day view is a
@@ -245,6 +254,15 @@
   --size-event-popover-callout-beak-height: 1.5rem;
   --size-event-popover-callout-beak-half-height: 0.75rem;
   --size-event-popover-callout-beak-overlap: 0.5rem;
+  /* Custom color wheel — side-docked beside the event card. */
+  --size-calendar-color-wheel: 10rem;
+  --size-calendar-color-wheel-panel-width: 13.5rem;
+  --spacing-calendar-color-wheel-panel-padding: 0.75rem;
+  --spacing-calendar-color-wheel-gap: 0.75rem;
+  --radius-calendar-color-wheel-panel: var(--radius-calendar-event);
+  --motion-calendar-color-wheel-duration: 160ms;
+  --motion-calendar-color-wheel-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-calendar-color-wheel-enter-offset: 0.125rem;
 
   /* Month grid — CSS Grid engine. Ocean is the only chrome accent here. */
   --size-calendar-month-date-header: 1.5rem;
@@ -360,22 +378,28 @@
   --color-slate-tint: #443f57;
   --color-ocean-tint: #364954;
 
-  /* Calendar grid event fills — saturated opaque mixes (not translucent tints). */
-  --color-calendar-event-fill-slate: color-mix(in srgb, var(--color-slate) 70%, var(--color-paper));
-  --color-calendar-event-fill-marigold: color-mix(in srgb, var(--color-marigold) 70%, var(--color-paper));
-  --color-calendar-event-fill-meadow: color-mix(in srgb, var(--color-meadow) 70%, var(--color-paper));
-  --color-calendar-event-fill-brick: color-mix(in srgb, var(--color-brick) 70%, var(--color-paper));
-  --color-calendar-event-fill-ocean: color-mix(in srgb, var(--color-ocean) 70%, var(--color-paper));
-  --color-calendar-event-fill-slate-past: color-mix(in srgb, var(--color-slate) 40%, var(--color-paper));
-  --color-calendar-event-fill-marigold-past: color-mix(in srgb, var(--color-marigold) 40%, var(--color-paper));
-  --color-calendar-event-fill-meadow-past: color-mix(in srgb, var(--color-meadow) 40%, var(--color-paper));
-  --color-calendar-event-fill-brick-past: color-mix(in srgb, var(--color-brick) 40%, var(--color-paper));
-  --color-calendar-event-fill-ocean-past: color-mix(in srgb, var(--color-ocean) 40%, var(--color-paper));
+  /* Calendar grid event fills — solid accents (match light; no paper wash). */
+  --color-calendar-event-fill-slate: var(--color-slate);
+  --color-calendar-event-fill-marigold: var(--color-marigold);
+  --color-calendar-event-fill-meadow: var(--color-meadow);
+  --color-calendar-event-fill-brick: var(--color-brick);
+  --color-calendar-event-fill-ocean: var(--color-ocean);
+  --color-calendar-event-fill-slate-past: var(--color-calendar-event-fill-slate);
+  --color-calendar-event-fill-marigold-past: var(--color-calendar-event-fill-marigold);
+  --color-calendar-event-fill-meadow-past: var(--color-calendar-event-fill-meadow);
+  --color-calendar-event-fill-brick-past: var(--color-calendar-event-fill-brick);
+  --color-calendar-event-fill-ocean-past: var(--color-calendar-event-fill-ocean);
 
   /* Calendar today — solid cornflower (GCal-adjacent, opaque on dark) */
   --color-calendar-today-disc: #7eb0f5;
   --color-calendar-today-disc-foreground: #0c2d5c;
   --color-calendar-today-label: #7eb0f5;
+  --color-calendar-day-hover-disc: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  --color-calendar-today-disc-hover: color-mix(
+    in srgb,
+    var(--color-calendar-today-disc) 88%,
+    var(--color-paper)
+  );
 
   /*
    * Dark calendar elevation: canvas/chrome stays paper (#191919); the day/week/
@@ -799,6 +823,113 @@ html[data-library-collapsed="true"] .library-rail-boot {
   padding: 0;
 }
 
+/* Side-docked custom color wheel — portaled beside the event card. */
+.calendar-color-wheel-panel {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  width: var(--size-calendar-color-wheel-panel-width);
+  flex-direction: column;
+  gap: var(--spacing-calendar-color-wheel-gap);
+  border-radius: var(--radius-calendar-color-wheel-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  padding: var(--spacing-calendar-color-wheel-panel-padding);
+  box-shadow: none;
+}
+
+.calendar-color-wheel-panel[data-placement="right"],
+.calendar-color-wheel-panel[data-placement="left"],
+.calendar-color-wheel-panel[data-placement="below"],
+.calendar-color-wheel-panel[data-placement="above"] {
+  transform-origin: center center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .calendar-color-wheel-panel[data-ready="true"][data-placement="right"] {
+    animation: calendar-color-wheel-enter-from-left
+      var(--motion-calendar-color-wheel-duration)
+      var(--motion-calendar-color-wheel-ease)
+      both;
+  }
+
+  .calendar-color-wheel-panel[data-ready="true"][data-placement="left"] {
+    animation: calendar-color-wheel-enter-from-right
+      var(--motion-calendar-color-wheel-duration)
+      var(--motion-calendar-color-wheel-ease)
+      both;
+  }
+
+  .calendar-color-wheel-panel[data-ready="true"][data-placement="below"] {
+    animation: calendar-color-wheel-enter-from-above
+      var(--motion-calendar-color-wheel-duration)
+      var(--motion-calendar-color-wheel-ease)
+      both;
+  }
+
+  .calendar-color-wheel-panel[data-ready="true"][data-placement="above"] {
+    animation: calendar-color-wheel-enter-from-below
+      var(--motion-calendar-color-wheel-duration)
+      var(--motion-calendar-color-wheel-ease)
+      both;
+  }
+}
+
+/* Emerge from the card edge toward the docked side (placement-aware). */
+@keyframes calendar-color-wheel-enter-from-left {
+  from {
+    opacity: 0;
+    transform: scale(0.97)
+      translateX(calc(-1 * var(--motion-calendar-color-wheel-enter-offset)));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+@keyframes calendar-color-wheel-enter-from-right {
+  from {
+    opacity: 0;
+    transform: scale(0.97)
+      translateX(var(--motion-calendar-color-wheel-enter-offset));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+@keyframes calendar-color-wheel-enter-from-above {
+  from {
+    opacity: 0;
+    transform: scale(0.97)
+      translateY(calc(-1 * var(--motion-calendar-color-wheel-enter-offset)));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes calendar-color-wheel-enter-from-below {
+  from {
+    opacity: 0;
+    transform: scale(0.97)
+      translateY(var(--motion-calendar-color-wheel-enter-offset));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-color-wheel-panel {
+    animation: none;
+  }
+}
+
 /* The stretch of the quick-capture line that became the date. */
 .event-capture-highlight {
   border-radius: 3px;
@@ -1215,6 +1346,49 @@ html[data-library-collapsed="true"] .library-rail-boot {
   color: var(--color-calendar-today-disc-foreground);
 }
 
+.calendar-day-header-stack,
+.calendar-day-header-static {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-calendar-day-header-gap);
+}
+
+.calendar-day-header-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-calendar-today-disc);
+  min-height: var(--size-calendar-today-disc);
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-calendar-control);
+  outline: none;
+}
+
+.calendar-day-header-button:hover {
+  background: var(--color-calendar-day-hover-disc);
+}
+
+.calendar-day-header-button:hover:has(.calendar-day-number--today) {
+  background: transparent;
+}
+
+.calendar-day-header-button:hover .calendar-day-number--today {
+  background: var(--color-calendar-today-disc-hover);
+}
+
+.calendar-day-header-button:focus-visible {
+  outline: 2px solid var(--color-calendar-month-today-ring);
+  outline-offset: 2px;
+}
+
 .planevo-calendar-grid .calendar-month-date {
   font-size: var(--text-calendar-month-date);
   line-height: var(--text-calendar-month-date--line-height);
@@ -1374,16 +1548,9 @@ html[data-library-collapsed="true"] .library-rail-boot {
   overflow: visible;
 }
 
+/* GCal: hour lines only via .rbc-timeslot-group border-bottom. Suppress RBC
+ * per-slot borders so :15/:30/:45 stay invisible; snap still uses step=15. */
 .planevo-rbc .rbc-day-slot .rbc-time-slot {
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
-}
-
-.planevo-rbc .rbc-day-slot .rbc-timeslot-group .rbc-time-slot:nth-child(2) {
-  border-top-style: dotted;
-  border-top-color: var(--color-border);
-}
-
-.planevo-rbc .rbc-day-slot .rbc-timeslot-group .rbc-time-slot:first-child {
   border-top: none;
 }
 
@@ -1406,6 +1573,17 @@ html[data-library-collapsed="true"] .library-rail-boot {
   border-radius: var(--radius-calendar-event);
 }
 
+/* RBC ships `.rbc-day-slot .rbc-event { border: 1px solid #265985 }` — equal
+   specificity to `.planevo-rbc .rbc-event`, and the library CSS imports after
+   globals, so that navy outline wins unless we beat it here. */
+.planevo-rbc .rbc-day-slot .rbc-event,
+.planevo-rbc .rbc-day-slot .rbc-background-event {
+  border: none;
+  border-color: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
 .planevo-rbc .planevo-rbc-event {
   display: flex;
   flex-direction: column;
@@ -1416,22 +1594,13 @@ html[data-library-collapsed="true"] .library-rail-boot {
   border-left-style: solid;
   background: var(
     --planevo-rbc-event-bg,
-    var(--planevo-rbc-event-accent, var(--color-calendar-graphite))
+    var(--planevo-rbc-event-accent, var(--color-calendar-default))
   );
   color: var(--planevo-rbc-event-text, var(--color-paper));
   border-left-color: var(
     --planevo-rbc-event-accent,
-    var(--color-calendar-graphite)
+    var(--color-calendar-default)
   );
-}
-
-.planevo-rbc .planevo-rbc-event--past {
-  --planevo-rbc-event-bg: color-mix(
-    in srgb,
-    var(--planevo-rbc-event-accent, var(--color-calendar-graphite)) 48%,
-    var(--color-paper)
-  );
-  color: var(--color-ink);
 }
 
 .planevo-rbc .planevo-rbc-event__secondary {
@@ -1484,38 +1653,38 @@ html[data-library-collapsed="true"] .library-rail-boot {
   --planevo-rbc-event-bg: var(--color-calendar-event-fill-ocean-past);
 }
 
-/* Shared opaque event blocks — timeline, month agenda, and RBC use the same fills. */
+/* Shared solid event blocks — match swatch / draft / color-picker preview. */
 .calendar-event-block {
   border-left-width: 3px;
   border-left-style: solid;
   border-left-color: var(
     --calendar-event-color,
-    var(--color-calendar-graphite)
+    var(--color-calendar-default)
   );
-  background: color-mix(
-    in srgb,
-    var(--calendar-event-color, var(--color-calendar-graphite)) 20%,
-    var(--color-paper)
+  background: var(
+    --calendar-event-color,
+    var(--color-calendar-default)
   );
+  color: var(--calendar-event-text, var(--color-paper));
 }
 
 .calendar-event-block--past {
-  background: color-mix(
-    in srgb,
-    var(--calendar-event-color, var(--color-calendar-graphite)) 11%,
-    var(--color-paper)
+  /* Same solid fill as current — do not paper-wash committed blocks. */
+  background: var(
+    --calendar-event-color,
+    var(--color-calendar-default)
   );
 }
 
 .calendar-month-bar {
   background: var(
     --calendar-event-color,
-    var(--color-calendar-graphite)
+    var(--color-calendar-default)
   );
   color: var(--calendar-event-text, var(--color-paper));
   border-color: var(
     --calendar-event-color,
-    var(--color-calendar-graphite)
+    var(--color-calendar-default)
   );
 }
 
@@ -1523,7 +1692,7 @@ html[data-library-collapsed="true"] .library-rail-boot {
 .calendar-month-bar-edge {
   background: var(
     --calendar-event-color,
-    var(--color-calendar-graphite)
+    var(--color-calendar-default)
   );
 }
 
@@ -1572,14 +1741,15 @@ html[data-library-collapsed="true"] .library-rail-boot {
   background: var(--color-calendar-event-fill-ocean-past);
 }
 
-.planevo-rbc .rbc-event:focus {
+.planevo-rbc .rbc-event:focus,
+.planevo-rbc .rbc-day-slot .rbc-event:focus {
   outline: none;
 }
 
 .planevo-rbc .rbc-event.rbc-selected {
   background: var(
     --planevo-rbc-event-bg,
-    var(--planevo-rbc-event-accent, var(--color-calendar-graphite))
+    var(--planevo-rbc-event-accent, var(--color-calendar-default))
   );
 }
 
@@ -1735,10 +1905,150 @@ html[data-library-collapsed="true"] .library-rail-boot {
   animation: calendar-grid-skeleton-pulse 1.6s ease-in-out infinite;
 }
 
+/*
+ * Content-aware event ghosts — same chrome as live events (accent fill,
+ * 3px rail, event radius), pulsed faintly. Only paint when real remembered
+ * events exist; empty ranges stay chrome-only line-art scaffolding.
+ */
+.calendar-skeleton-event {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.0625rem;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-calendar-event);
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-left-color: var(
+    --planevo-rbc-event-accent,
+    var(--color-calendar-default)
+  );
+  background: var(
+    --planevo-rbc-event-accent,
+    var(--color-calendar-default)
+  );
+  color: var(--planevo-rbc-event-text, var(--color-paper));
+  padding: 0.125rem 0.375rem;
+  animation: calendar-skeleton-event-pulse 1.6s ease-in-out infinite;
+}
+
+.calendar-skeleton-event__time {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-product-meta);
+  line-height: var(--text-product-meta--line-height);
+  opacity: 0.72;
+}
+
+.calendar-skeleton-event__title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-product-meta);
+  line-height: var(--text-product-meta--line-height);
+  font-weight: 500;
+}
+
+.calendar-skeleton-event__title--empty {
+  display: block;
+  width: 55%;
+  height: 0.5rem;
+  margin-block: 0.125rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.calendar-skeleton-allday {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: var(--size-calendar-month-event-row);
+  overflow: hidden;
+  border-radius: var(--radius-calendar-event);
+  background: var(
+    --calendar-event-color,
+    var(--color-calendar-default)
+  );
+  color: var(--calendar-event-text, var(--color-paper));
+  padding-inline: var(--spacing-calendar-month-chip-inline);
+  animation: calendar-skeleton-event-pulse 1.6s ease-in-out infinite;
+}
+
+.calendar-skeleton-allday .calendar-skeleton-event__title,
+.calendar-skeleton-month-bar .calendar-skeleton-event__title {
+  color: inherit;
+}
+
+.calendar-skeleton-month-chip {
+  display: flex;
+  flex: 0 0 var(--size-calendar-month-event-row);
+  align-items: center;
+  gap: var(--spacing-calendar-month-chip-gap);
+  width: 100%;
+  min-width: 0;
+  height: var(--size-calendar-month-event-row);
+  padding-inline: var(--spacing-calendar-month-chip-inline);
+  border-radius: var(--radius-calendar-event);
+  animation: calendar-skeleton-event-pulse 1.6s ease-in-out infinite;
+}
+
+.calendar-skeleton-month-chip__title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-product-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-ink);
+  opacity: 0.55;
+}
+
+.calendar-skeleton-month-chip__title--empty {
+  display: block;
+  width: 60%;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  opacity: 0.7;
+}
+
+.calendar-skeleton-month-bar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: var(--size-calendar-month-event-row);
+  overflow: hidden;
+  border-radius: var(--radius-calendar-event);
+  background: var(
+    --calendar-event-color,
+    var(--color-calendar-default)
+  );
+  color: var(--calendar-event-text, var(--color-paper));
+  padding-inline: var(--spacing-calendar-month-chip-inline);
+  animation: calendar-skeleton-event-pulse 1.6s ease-in-out infinite;
+}
+
 @keyframes calendar-grid-skeleton-pulse {
   0%,
   100% {
-    opacity: 0.5;
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+/* Event ghosts stay more opaque so real titles remain readable. */
+@keyframes calendar-skeleton-event-pulse {
+  0%,
+  100% {
+    opacity: 0.68;
   }
   50% {
     opacity: 0.92;
@@ -1746,8 +2056,13 @@ html[data-library-collapsed="true"] .library-rail-boot {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .calendar-skeleton-placeholder {
+  .calendar-skeleton-placeholder,
+  .calendar-skeleton-event,
+  .calendar-skeleton-allday,
+  .calendar-skeleton-month-chip,
+  .calendar-skeleton-month-bar {
     animation: none;
+    opacity: 0.7;
   }
 }
 
@@ -1875,6 +2190,38 @@ html[data-library-collapsed="true"] .library-rail-boot {
   font-weight: var(--text-calendar-month-date--font-weight);
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
+}
+
+.calendar-month-date-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--size-calendar-month-date-header);
+  height: var(--size-calendar-month-date-header);
+  border: none;
+  border-radius: var(--radius-calendar-control);
+  padding: 0;
+  font-size: var(--text-calendar-month-date);
+  line-height: var(--text-calendar-month-date--line-height);
+  font-weight: var(--text-calendar-month-date--font-weight);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.calendar-month-date-button:hover {
+  background: var(--color-calendar-day-hover-disc);
+}
+
+.calendar-month-date-button.calendar-month-date--today:hover {
+  background: var(--color-calendar-today-disc-hover);
+}
+
+.calendar-month-date-button:focus-visible {
+  outline: 2px solid var(--color-calendar-month-today-ring);
+  outline-offset: 1px;
 }
 
 .calendar-month-date--today {

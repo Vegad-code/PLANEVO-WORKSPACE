@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import Skeleton from "react-loading-skeleton";
 import {
   ChevronDown,
@@ -16,12 +16,41 @@ import {
   getPlanningCollapsed,
   getPlanningWidth,
 } from "@/lib/calendar/planning-prefs";
+import { formatCompactMonthTime } from "@/lib/calendar/format-compact-month-time";
 import { cn } from "@/lib/utils";
+import {
+  CALENDAR_SKELETON_TIME_LABEL_MIN_HEIGHT_PERCENT,
+  calendarSkeletonColumnCount,
+  planCalendarGridSkeletonLayout,
+  type CalendarSkeletonAllDayItem,
+  type CalendarSkeletonMonthBarItem,
+  type CalendarSkeletonMonthSingleItem,
+  type CalendarSkeletonTimedItem,
+  type CalendarSkeletonView,
+} from "@/lib/calendar/calendar-grid-skeleton-layout";
+import { DAYS_PER_WEEK } from "@/lib/calendar/month-lane-layout";
+import type { CalendarSkeletonEventGeometry } from "@/lib/calendar/calendar-skeleton-event-memory";
+import { resolveCalendarSkeletonEvents } from "@/lib/calendar/calendar-skeleton-event-memory";
+import { monthGridDays } from "@/lib/calendar/month-grid-days";
+import { DEFAULT_MONTH_CAPACITY, planWeekLanes } from "@/lib/calendar/month-overflow";
+import {
+  parseCalendarDate,
+  parseCalendarView,
+} from "@/lib/calendar/calendar-range";
+import { VISIBLE_HOURS } from "@/lib/calendar/event-block-position";
+import {
+  calendarEventSurface,
+  isCustomCalendarColor,
+} from "@/lib/calendar/calendar-color";
+import type { CalendarColorValue } from "@planevo/core/types/calendar";
+import {
+  calendarColorStyle,
+  CALENDAR_COLOR_DOT_CLASS,
+} from "./calendar-color-dot";
+import { formatTimeLabel } from "./time-axis";
 
 const MINI_MONTH_CELLS = 35;
 const SKELETON_TASK_ROWS = 4;
-const SKELETON_TIME_ROWS = 8;
-const SKELETON_MONTH_ROWS = 6;
 const SKELETON_WEEK_COLUMNS = 7;
 
 function PlanningSectionHeader({ label }: { label: string }) {
@@ -170,31 +199,221 @@ function ToolbarSkeleton() {
   );
 }
 
-function GridPlaceholder({
-  compact = false,
+function timedGhostStyle(color: CalendarColorValue): CSSProperties {
+  const surface = calendarEventSurface(color)
+  return {
+    "--planevo-rbc-event-accent": surface.accent,
+    "--planevo-rbc-event-text": `var(--color-${surface.text})`,
+  } as CSSProperties
+}
+
+function TitleGhost({
+  title,
+  emptyClassName,
 }: {
-  compact?: boolean;
+  title: string;
+  emptyClassName: string;
+}) {
+  if (!title) {
+    return <span aria-hidden="true" className={emptyClassName} />;
+  }
+  return <span className="calendar-skeleton-event__title">{title}</span>;
+}
+
+/** Timed block — mirrors live RBC event chrome with the user's color + title. */
+function TimedEventGhost({
+  item,
+  columns,
+}: {
+  item: CalendarSkeletonTimedItem;
+  columns: number;
+}) {
+  const showTime =
+    item.heightPercent >= CALENDAR_SKELETON_TIME_LABEL_MIN_HEIGHT_PERCENT;
+  return (
+    <div
+      className="calendar-skeleton-event absolute"
+      style={{
+        ...timedGhostStyle(item.color),
+        left: `calc((100% / ${columns}) * ${item.column} + (100% / ${columns}) * ${item.left})`,
+        width: `calc((100% / ${columns}) * ${item.width} - 0.25rem)`,
+        top: `${item.topPercent}%`,
+        height: `${item.heightPercent}%`,
+      }}
+    >
+      {showTime ? (
+        <span className="calendar-skeleton-event__time">
+          {formatTimeLabel(item.startsAt)} - {formatTimeLabel(item.endsAt)}
+        </span>
+      ) : null}
+      <TitleGhost
+        title={item.title}
+        emptyClassName="calendar-skeleton-event__title--empty"
+      />
+    </div>
+  );
+}
+
+/** All-day chip — filled with the calendar color, real title ghost. */
+function AllDayEventGhost({
+  item,
+}: {
+  item: CalendarSkeletonAllDayItem;
 }) {
   return (
-    <span
-      className={cn(
-        "calendar-skeleton-placeholder block rounded-[var(--radius-calendar-event)] bg-paper",
-        compact ? "h-2.5 w-1/2" : "h-10 w-4/5 border-l-2 border-border-strong",
+    <div
+      className="calendar-skeleton-allday self-center"
+      style={{
+        ...calendarColorStyle(item.color),
+        gridColumn: `${item.columnStart + 2} / span ${item.columnSpan}`,
+        gridRow: item.row + 1,
+      }}
+    >
+      <TitleGhost
+        title={item.title}
+        emptyClassName="calendar-skeleton-event__title--empty"
+      />
+    </div>
+  );
+}
+
+/** Month single-day chip — colored dot + time + title, same density as live. */
+function MonthSingleGhost({
+  item,
+}: {
+  item: CalendarSkeletonMonthSingleItem;
+}) {
+  return (
+    <div
+      className="calendar-skeleton-month-chip"
+      style={calendarColorStyle(item.color)}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "calendar-month-chip-dot",
+          !isCustomCalendarColor(item.color) &&
+            CALENDAR_COLOR_DOT_CLASS[item.color],
+        )}
+        style={
+          isCustomCalendarColor(item.color)
+            ? { backgroundColor: item.color }
+            : undefined
+        }
+      />
+      {!item.allDay ? (
+        <span className="calendar-month-chip-time">
+          {formatCompactMonthTime(item.startsAt)}
+        </span>
+      ) : null}
+      {item.title ? (
+        <span className="calendar-skeleton-month-chip__title">{item.title}</span>
+      ) : (
+        <span
+          aria-hidden="true"
+          className="calendar-skeleton-month-chip__title--empty"
+        />
       )}
-    />
+    </div>
+  );
+}
+
+/** Multi-day month bar — solid calendar fill with title ghost. */
+function MonthBarGhost({
+  item,
+}: {
+  item: CalendarSkeletonMonthBarItem;
+}) {
+  return (
+    <div
+      className="calendar-skeleton-month-bar"
+      style={{
+        ...calendarColorStyle(item.color),
+        gridColumn: `${item.columnStart + 1} / span ${item.columnSpan}`,
+        gridRow: item.lane + 1,
+      }}
+    >
+      <TitleGhost
+        title={item.title}
+        emptyClassName="calendar-skeleton-event__title--empty"
+      />
+    </div>
   );
 }
 
 export function CalendarGridSkeleton({
-  view = "week",
+  view: viewProp,
   className,
+  anchor: anchorProp,
+  events = [],
 }: {
-  view?: "day" | "week" | "month";
+  view?: CalendarSkeletonView;
   className?: string;
+  /** Visible range anchor — same date the real grid uses. */
+  anchor?: Date;
+  /**
+   * Known events for this range. Placeholders only render where these sit;
+   * an empty list shows chrome with no invented event plots.
+   */
+  events?: ReadonlyArray<CalendarSkeletonEventGeometry>;
 }) {
-  const columns = view === "day" ? 1 : SKELETON_WEEK_COLUMNS;
+  const search =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : null;
+  const viewFromUrl = parseCalendarView(search?.get("view") ?? undefined);
+  const view: CalendarSkeletonView =
+    viewProp ??
+    (viewFromUrl === "day" || viewFromUrl === "week" || viewFromUrl === "month"
+      ? viewFromUrl
+      : "week");
+  const anchor =
+    anchorProp ?? parseCalendarDate(search?.get("date") ?? undefined);
+  const columns = calendarSkeletonColumnCount(view);
+  const skeletonEvents = resolveCalendarSkeletonEvents({
+    view,
+    anchor,
+    liveEvents: events,
+  });
+  const layout = planCalendarGridSkeletonLayout({
+    view,
+    anchor,
+    events: skeletonEvents,
+  });
+
+  const monthSinglesByCell = useMemo(() => {
+    const map = new Map<number, typeof layout.monthSingles>();
+    for (const item of layout.monthSingles) {
+      const list = map.get(item.cellIndex) ?? [];
+      list.push(item);
+      map.set(item.cellIndex, list);
+    }
+    return map;
+  }, [layout.monthSingles]);
+
+  const monthBarsByWeek = useMemo(() => {
+    const map = new Map<number, typeof layout.monthBars>();
+    for (const item of layout.monthBars) {
+      const list = map.get(item.weekIndex) ?? [];
+      list.push(item);
+      map.set(item.weekIndex, list);
+    }
+    return map;
+  }, [layout.monthBars]);
+
+  const allDayRowCount = useMemo(
+    () =>
+      layout.allDay.reduce(
+        (max, item) => Math.max(max, item.row + 1),
+        0,
+      ),
+    [layout.allDay],
+  );
+
+  const monthDays = useMemo(() => monthGridDays(anchor), [anchor]);
 
   if (view === "month") {
+    const monthCellCount = layout.monthRowCount * DAYS_PER_WEEK;
     return (
       <div
         aria-hidden="true"
@@ -219,25 +438,92 @@ export function CalendarGridSkeleton({
           ))}
         </div>
         <div
-          className="grid min-h-0 flex-1"
+          className="calendar-month-body min-h-0 flex-1"
           style={{
-            gridTemplateColumns: `repeat(${SKELETON_WEEK_COLUMNS}, minmax(0, 1fr))`,
-            gridTemplateRows: `repeat(${SKELETON_MONTH_ROWS}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${layout.monthRowCount}, minmax(0, 1fr))`,
           }}
         >
-          {Array.from({
-            length: SKELETON_MONTH_ROWS * SKELETON_WEEK_COLUMNS,
-          }).map((_, index) => (
+          {Array.from({ length: layout.monthRowCount }).map((_, weekIndex) => {
+            const weekDays = monthDays.slice(
+              weekIndex * DAYS_PER_WEEK,
+              (weekIndex + 1) * DAYS_PER_WEEK,
+            );
+            const bars = monthBarsByWeek.get(weekIndex) ?? [];
+            const barsPerColumn = weekDays.map((_, column) =>
+              bars.filter(
+                (segment) =>
+                  column >= segment.columnStart &&
+                  column < segment.columnStart + segment.columnSpan,
+              ),
+            );
+            const dayItemCounts = weekDays.map((_, column) => {
+              const cellIndex = weekIndex * DAYS_PER_WEEK + column;
+              const singles = monthSinglesByCell.get(cellIndex) ?? [];
+              return (barsPerColumn[column]?.length ?? 0) + singles.length;
+            });
+            const { visibleLaneCount } = planWeekLanes({
+              laneCountForWeek: layout.laneCountByWeek[weekIndex] ?? 0,
+              dayItemCounts,
+              capacity: DEFAULT_MONTH_CAPACITY,
+            });
+            const visibleBars = bars.filter(
+              (segment) => segment.lane < visibleLaneCount,
+            );
+            const roomForSingles = Math.max(
+              DEFAULT_MONTH_CAPACITY - visibleLaneCount,
+              0,
+            );
+
+            return (
             <div
-              key={index}
-              className="flex min-h-0 flex-col gap-2 border-l border-t border-border p-2 first:border-l-0"
+              key={weekIndex}
+              className="calendar-month-row calendar-month-week relative min-h-0"
             >
-              <span className="calendar-skeleton-placeholder ml-auto size-4 rounded-full bg-paper" />
-              {index % 5 === 1 || index % 11 === 4 ? (
-                <GridPlaceholder compact />
+              {weekDays.map((_, column) => {
+                const cellIndex = weekIndex * DAYS_PER_WEEK + column;
+                const singles = monthSinglesByCell.get(cellIndex) ?? [];
+                const hiddenBarCount =
+                  barsPerColumn[column]?.filter(
+                    (segment) => segment.lane >= visibleLaneCount,
+                  ).length ?? 0;
+                const fitsWithoutTrigger =
+                  hiddenBarCount === 0 && singles.length <= roomForSingles;
+                const visibleSingleCount = fitsWithoutTrigger
+                  ? singles.length
+                  : Math.max(roomForSingles - 1, 0);
+
+                return (
+                  <div
+                    key={cellIndex}
+                    className="calendar-month-cell flex min-h-0 flex-col gap-1.5"
+                  >
+                    <span className="ml-auto size-4 rounded-full border border-border bg-transparent" />
+                    {Array.from({ length: visibleLaneCount }).map((__, lane) => (
+                      <span
+                        key={`lane-${lane}`}
+                        aria-hidden="true"
+                        className="calendar-month-lane-spacer"
+                      />
+                    ))}
+                    {singles.slice(0, visibleSingleCount).map((item) => (
+                      <MonthSingleGhost key={item.key} item={item} />
+                    ))}
+                  </div>
+                );
+              })}
+              {visibleBars.length > 0 ? (
+                <div className="calendar-month-bar-layer" aria-hidden="true">
+                  {visibleBars.map((item) => (
+                    <MonthBarGhost key={item.key} item={item} />
+                  ))}
+                </div>
               ) : null}
             </div>
-          ))}
+            );
+          })}
+          {monthCellCount === 0 ? (
+            <div className="min-h-0 flex-1 border-t border-border" />
+          ) : null}
         </div>
       </div>
     );
@@ -267,35 +553,52 @@ export function CalendarGridSkeleton({
           </div>
         ))}
       </div>
+      {layout.allDay.length > 0 ? (
+        <div
+          className="relative grid shrink-0 border-b border-border"
+          style={{
+            gridTemplateColumns: `var(--size-calendar-time-gutter) repeat(${columns}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${allDayRowCount}, minmax(var(--size-calendar-allday-band), auto))`,
+          }}
+        >
+          <div />
+          {layout.allDay.map((item) => (
+            <AllDayEventGhost key={item.key} item={item} />
+          ))}
+        </div>
+      ) : null}
       <div
-        className="grid min-h-0 flex-1"
+        className="relative min-h-0 flex-1"
         style={{
+          display: "grid",
           gridTemplateColumns: `var(--size-calendar-time-gutter) repeat(${columns}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${SKELETON_TIME_ROWS}, minmax(var(--size-calendar-day-header-row), 1fr))`,
+          gridTemplateRows: `repeat(${VISIBLE_HOURS}, minmax(var(--size-calendar-day-header-row), 1fr))`,
         }}
       >
-        {Array.from({ length: SKELETON_TIME_ROWS }).flatMap((_, row) => [
+        {Array.from({ length: VISIBLE_HOURS }).flatMap((_, row) => [
           <div
             key={`time-${row}`}
             className="flex items-start justify-end border-t border-border pr-2 pt-1"
           >
             <span className="calendar-skeleton-placeholder h-2 w-7 rounded-full bg-paper" />
           </div>,
-          ...Array.from({ length: columns }).map((__, column) => {
-            const showEvent =
-              (row === 1 && column === Math.min(1, columns - 1)) ||
-              (row === 3 && column === Math.min(4, columns - 1)) ||
-              (row === 5 && column === 0);
-            return (
-              <div
-                key={`cell-${row}-${column}`}
-                className="min-h-0 border-l border-t border-border p-1.5"
-              >
-                {showEvent ? <GridPlaceholder /> : null}
-              </div>
-            );
-          }),
+          ...Array.from({ length: columns }).map((__, column) => (
+            <div
+              key={`cell-${row}-${column}`}
+              className="min-h-0 border-l border-t border-border"
+            />
+          )),
         ])}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            left: "var(--size-calendar-time-gutter)",
+          }}
+        >
+          {layout.timed.map((item) => (
+            <TimedEventGhost key={item.key} item={item} columns={columns} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -304,9 +607,11 @@ export function CalendarGridSkeleton({
 export function EmbeddedCalendarSkeleton({
   view = "month",
   height = "standard",
+  anchor,
 }: {
   view?: "day" | "week" | "month";
   height?: "compact" | "standard" | "tall";
+  anchor?: Date;
 }) {
   return (
     <div
@@ -326,7 +631,7 @@ export function EmbeddedCalendarSkeleton({
         </div>
       </div>
       <div className="calendar-embed-surface flex min-h-0">
-        <CalendarGridSkeleton view={view} />
+        <CalendarGridSkeleton view={view} anchor={anchor} />
       </div>
     </div>
   );

@@ -1,0 +1,39 @@
+---
+description: Use Serena MCP for semantic code intelligence by default
+alwaysApply: true
+---
+
+# Serena — default code intelligence
+
+When the `user-serena` MCP server is available, use it proactively for code work in this repo. Do not wait for the user to say "use Serena."
+
+## Session start (every chat)
+
+1. Call Serena `get_current_config`. If there is no active project, call `activate_project` with the workspace root.
+2. On the first substantive coding task, call Serena `initial_instructions` once per session if you have not already.
+
+## Prefer Serena over raw text tools
+
+Use Serena symbolic tools instead of built-in `Grep`, `Read`, or blind search-and-replace when exploring or editing code structure:
+
+| Task | Serena tool |
+|------|-------------|
+| Find a function, class, or type | `find_symbol` |
+| File / module outline | `get_symbols_overview` |
+| Who references a symbol | `find_referencing_symbols` |
+| Jump to declaration / implementation | `find_declaration`, `find_implementations` |
+| Replace a function or method body | `replace_symbol_body` |
+| Insert code next to a symbol | `insert_before_symbol`, `insert_after_symbol` |
+| Rename across files | `rename_symbol` |
+| Safe delete of a symbol | `safe_delete_symbol` |
+| TypeScript diagnostics on a file | `get_diagnostics_for_file` |
+
+Reserve built-in `Grep` and `Read` for non-code text (logs, markdown, env files), quick one-off string searches, or when Serena is unavailable.
+
+## Cross-file work
+
+Before multi-file refactors or renames, use `find_referencing_symbols` and `find_symbol` to map impact — do not rely on grep alone.
+
+## Memories
+
+Use `read_memory` at session start when relevant; use `write_memory` for durable project facts worth keeping across chats.

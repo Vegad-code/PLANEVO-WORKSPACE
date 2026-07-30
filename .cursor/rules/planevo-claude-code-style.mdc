@@ -1,0 +1,12 @@
+---
+description: Planevo code quality bar — points to AGENTS.md (do not fork)
+alwaysApply: true
+---
+
+# Planevo code quality
+
+Read and follow **`## Code quality`** in `AGENTS.md` at the repo root. That section is the
+canonical implementation bar (layering, comments, TypeScript, immutability, tests, React/UI,
+defensive coding).
+
+Do not restate or drift from it here.

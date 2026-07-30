@@ -21,6 +21,14 @@ import { toast } from "@/components/ui/toast";
 import { useSidebarLayout } from "@/features/shell/sidebar-layout-context";
 import { centeredAnchorRectFromElement } from "@/lib/calendar/event-popover-position";
 import { draftCreateCardAnchorRect } from "@/lib/calendar/event-popover-anchor";
+import {
+  allowCreateFromPointerGesture,
+  armCreateGestureSuppress,
+  clearCreateGestureSuppress,
+  initialCreateGestureSuppressState,
+  scheduleCreateGestureSuppressClear,
+  shouldArmSuppressOnOutsidePointer,
+} from "@/lib/calendar/create-gesture-suppress";
 import { defaultCalendarId } from "@/lib/calendar/default-calendar";
 import type { DraftCreateEventState } from "@/lib/calendar/rbc-event-adapter";
 import { CALENDAR_HOTKEY_SCOPE } from "@/lib/calendar/calendar-shortcut-map";
@@ -94,6 +102,10 @@ import { CalendarViewTransition } from "./calendar-view-transition";
 import { CalendarNowProvider } from "./calendar-now-context";
 import { EventRecurrenceScopeDialog } from "./event-recurrence-scope-dialog";
 import { CalendarGridSkeleton } from "./calendar-product-skeleton";
+import {
+  rememberCalendarSkeletonEvents,
+  skeletonEventsFromDisplay,
+} from "@/lib/calendar/calendar-skeleton-event-memory";
 
 type CalendarProductViewProps = {
   initialScope: CalendarScope;
@@ -207,6 +219,7 @@ function CalendarProductViewInner({
     useState<EventDraftPreview | null>(null);
   const [crossLinkPanel, setCrossLinkPanel] =
     useState<EventCrossLinkPanel | null>(null);
+  const [colorWheelOpen, setColorWheelOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [planningDrawerOpen, setPlanningDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -220,6 +233,41 @@ function CalendarProductViewInner({
   const [planningMotionEnabled, setPlanningMotionEnabled] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const undoStackRef = useRef(createUndoStack());
+  /** Panel-owned dismiss (silent-saves dirty edits). Escape / outside click use this. */
+  const panelDismissRef = useRef<(() => void) | null>(null);
+  /** Runs after a dismiss clears the panel — used to open another event without confirm. */
+  const afterPanelDismissRef = useRef<(() => void) | null>(null);
+  /**
+   * GCal: outside pointer closes create/edit without opening a new create on
+   * the same gesture (popover pointerdown → RBC selectSlot).
+   */
+  const createGestureSuppressRef = useRef(initialCreateGestureSuppressState());
+  /** Avoid arming suppress from an exiting AnimatePresence popover after close. */
+  const eventPanelRef = useRef(eventPanel);
+  eventPanelRef.current = eventPanel;
+
+  const providePanelDismiss = useCallback((dismiss: (() => void) | null) => {
+    panelDismissRef.current = dismiss;
+  }, []);
+
+  const armCreateSuppressForOutsidePointer = useCallback(() => {
+    createGestureSuppressRef.current = armCreateGestureSuppress(
+      createGestureSuppressRef.current,
+    );
+    scheduleCreateGestureSuppressClear({
+      onClear: () => {
+        createGestureSuppressRef.current = clearCreateGestureSuppress(
+          createGestureSuppressRef.current,
+        );
+      },
+    });
+  }, []);
+
+  function runAfterPanelDismiss() {
+    const next = afterPanelDismissRef.current;
+    afterPanelDismissRef.current = null;
+    next?.();
+  }
 
   const calendars = calendarQuery.calendars;
   const events = calendarQuery.events;
@@ -239,6 +287,29 @@ function CalendarProductViewInner({
       : calendars.find(({ is_main }) => is_main)?.id ??
         defaultCalendarId(calendars);
   const isFetchingNewRange = calendarQuery.isRangeFetching;
+
+  // Persist settled range geometry for content-aware loading skeletons.
+  // Skip the entire pending window so an in-flight empty list cannot wipe a
+  // good multi-range snapshot. Empty settled ranges ARE written (clears ghosts).
+  useEffect(() => {
+    if (calendarQuery.isRangePending) return;
+    if (view !== "day" && view !== "week" && view !== "month") return;
+    rememberCalendarSkeletonEvents({
+      view,
+      anchor: anchorDate,
+      events: skeletonEventsFromDisplay({
+        events: displayEvents,
+        calendars,
+      }),
+    });
+  }, [
+    anchorDate,
+    calendarQuery.isRangePending,
+    calendars,
+    displayEvents,
+    view,
+  ]);
+
 
   // Restore before paint so the first painted frame matches the loading
   // skeleton. The aside stays mounted (width 0 when collapsed) — unmounting
@@ -447,29 +518,24 @@ function CalendarProductViewInner({
     setDraftCreateEvent(null);
     setEventDraftPreview(null);
     setPendingRecurrence(pending);
+    // Scope dialog replaces the panel; chained opens were cleared by the caller.
   }
 
-  const closeEventPanel = useCallback(
-    (options?: { force?: boolean }) => {
-      // Create flow matches Google Calendar: Escape / outside click / Cancel
-      // always discards the draft with no confirm prompt.
-      const isCreate = eventPanel?.mode === "create";
-      if (
-        !options?.force &&
-        !isCreate &&
-        eventPanelDirty &&
-        !window.confirm("Discard unsaved changes?")
-      ) {
-        return;
-      }
-      setEventPanel(null);
-      setEventPanelDirty(false);
-      setCrossLinkPanel(null);
-      setDraftCreateEvent(null);
-      setEventDraftPreview(null);
-    },
-    [eventPanel?.mode, eventPanelDirty],
-  );
+  const closeEventPanel = useCallback((options?: { force?: boolean }) => {
+    // Non-force dismiss goes through the panel so dirty edits can silent-save
+    // (GCal parity). Never window.confirm.
+    if (!options?.force && panelDismissRef.current) {
+      panelDismissRef.current();
+      return;
+    }
+    setEventPanel(null);
+    setEventPanelDirty(false);
+    setCrossLinkPanel(null);
+    setColorWheelOpen(false);
+    setDraftCreateEvent(null);
+    setEventDraftPreview(null);
+    runAfterPanelDismiss();
+  }, []);
 
   function resolveFallbackAnchorRect(): DOMRect {
     if (gridContainerRef.current) {
@@ -485,6 +551,13 @@ function CalendarProductViewInner({
 
   const handleDraftSelecting = useCallback(
     (range: { startsAt: Date; endsAt: Date }) => {
+      if (
+        !allowCreateFromPointerGesture({
+          suppress: createGestureSuppressRef.current,
+        })
+      ) {
+        return;
+      }
       setDraftCreateEvent((current) => ({
         startsAt: range.startsAt.toISOString(),
         endsAt: range.endsAt.toISOString(),
@@ -501,27 +574,49 @@ function CalendarProductViewInner({
     range: { startsAt: Date; endsAt: Date },
     anchorRect?: DOMRect,
   ) {
-    if (eventPanelDirty && !window.confirm("Discard unsaved changes?")) return;
-    setCrossLinkPanel(null);
-    const startsAt = range.startsAt.toISOString();
-    const endsAt = range.endsAt.toISOString();
-    setDraftCreateEvent((current) => ({
-      startsAt,
-      endsAt,
-      title: current?.title ?? "",
-      calendarId: current?.calendarId ?? createCalendarId,
-      allDay: current?.allDay ?? false,
-      color: current?.color ?? null,
-    }));
-    setEventDraftPreview(null);
-    setEventPanel({
-      mode: "create",
-      sessionId: crypto.randomUUID(),
-      startsAt,
-      endsAt,
-      anchorRect: anchorRect ?? resolveFallbackAnchorRect(),
-    });
-    setEventPanelDirty(false);
+    if (
+      !allowCreateFromPointerGesture({
+        suppress: createGestureSuppressRef.current,
+      })
+    ) {
+      return;
+    }
+
+    const open = () => {
+      setCrossLinkPanel(null);
+      const startsAt = range.startsAt.toISOString();
+      const endsAt = range.endsAt.toISOString();
+      setDraftCreateEvent((current) => ({
+        startsAt,
+        endsAt,
+        title: current?.title ?? "",
+        calendarId: current?.calendarId ?? createCalendarId,
+        allDay: current?.allDay ?? false,
+        color: current?.color ?? null,
+      }));
+      setEventDraftPreview(null);
+      setEventPanel({
+        mode: "create",
+        sessionId: crypto.randomUUID(),
+        startsAt,
+        endsAt,
+        anchorRect: anchorRect ?? resolveFallbackAnchorRect(),
+      });
+      setEventPanelDirty(false);
+    };
+
+    // Dirty edit → silent-save first, then open create. No confirm.
+    if (
+      eventPanel?.mode === "edit" &&
+      eventPanelDirty &&
+      panelDismissRef.current
+    ) {
+      afterPanelDismissRef.current = open;
+      panelDismissRef.current();
+      return;
+    }
+
+    open();
   }
 
   const handleCreateDraftChange = useCallback(
@@ -608,38 +703,59 @@ function CalendarProductViewInner({
   }, [draftCreateEvent, eventPanel]);
 
   function openEditEventPanel(event: CalendarEventRow, anchorRect: DOMRect) {
-    if (eventPanelDirty && !window.confirm("Discard unsaved changes?")) return;
-    const mutationTarget = resolveEventMutationTarget(event);
-    if (!mutationTarget) {
-      console.warn("[calendar] invalid recurrence identity for event", {
+    const open = () => {
+      const mutationTarget = resolveEventMutationTarget(event);
+      if (!mutationTarget) {
+        console.warn("[calendar] invalid recurrence identity for event", {
+          eventId: event.id,
+          parentEventId: event.parent_event_id,
+          recurrenceId: event.recurrence_id,
+        });
+      }
+      setCrossLinkPanel(null);
+      setDraftCreateEvent(null);
+      setEventDraftPreview(null);
+      setEventPanel({
+        mode: "edit",
         eventId: event.id,
-        parentEventId: event.parent_event_id,
-        recurrenceId: event.recurrence_id,
+        event,
+        mutationTarget,
+        anchorRect,
       });
+      setEventPanelDirty(false);
+    };
+
+    // Dirty edit of a different event → silent-save first. No confirm.
+    if (
+      eventPanel?.mode === "edit" &&
+      eventPanel.eventId !== event.id &&
+      eventPanelDirty &&
+      panelDismissRef.current
+    ) {
+      afterPanelDismissRef.current = open;
+      panelDismissRef.current();
+      return;
     }
-    setCrossLinkPanel(null);
-    setDraftCreateEvent(null);
-    setEventDraftPreview(null);
-    setEventPanel({
-      mode: "edit",
-      eventId: event.id,
-      event,
-      mutationTarget,
-      anchorRect,
-    });
-    setEventPanelDirty(false);
+
+    open();
   }
 
   function handleHotkeyCreateEvent(range: { startsAt: Date; endsAt: Date }) {
     openCreateEventPanel(range, resolveFallbackAnchorRect());
   }
 
-  function handleEventPanelSave(payload: EventPanelSavePayload) {
+  function handleEventPanelSave(
+    payload: EventPanelSavePayload,
+    meta?: { reason: "explicit" | "dismiss" },
+  ) {
     if (!eventPanel) return;
+    const silent = meta?.reason === "dismiss";
 
     if (eventPanel.mode === "edit") {
       if (!eventPanel.mutationTarget) return;
       if (eventPanel.mutationTarget.kind !== "standalone") {
+        // Recurrence scope dialog owns the rest; don't chain another panel open.
+        afterPanelDismissRef.current = null;
         beginPendingRecurrence({
           kind: "save",
           event: eventPanel.event,
@@ -656,15 +772,17 @@ function CalendarProductViewInner({
       setEventPanelDirty(false);
       setDraftCreateEvent(null);
       setEventDraftPreview(null);
+      runAfterPanelDismiss();
     };
     const onError = () => {
       setPanelSavePending(false);
+      afterPanelDismissRef.current = null;
     };
 
     if (eventPanel.mode === "create") {
       calendarMutations.createEvent(payload, {
         onCommitted: () => {
-          toast("Event created");
+          if (!silent) toast("Event created");
           closeOnSuccess();
         },
         onError,
@@ -675,7 +793,7 @@ function CalendarProductViewInner({
         payload,
         {
           onCommitted: () => {
-            toast("Event saved");
+            if (!silent) toast("Event saved");
             closeOnSuccess();
           },
           onError,
@@ -1020,13 +1138,15 @@ function CalendarProductViewInner({
       if (keyEvent.key !== "Escape") return;
       if (keyEvent.defaultPrevented) return;
       if (crossLinkPanel) return;
+      // Color wheel owns Escape while open (its capture listener closes it).
+      if (colorWheelOpen) return;
       keyEvent.preventDefault();
       keyEvent.stopPropagation();
       closeEventPanel();
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [closeEventPanel, crossLinkPanel, eventPanel]);
+  }, [closeEventPanel, colorWheelOpen, crossLinkPanel, eventPanel]);
 
   useCalendarHotkeys({
     cheatSheetOpen,
@@ -1211,6 +1331,11 @@ function CalendarProductViewInner({
                 {calendarQuery.isRangePending ? (
                   <CalendarGridSkeleton
                     view={view === "year" ? "month" : view}
+                    anchor={anchorDate}
+                    // Pending ranges have no live slice yet — omit so the
+                    // skeleton loads remembered geometry for THIS range only
+                    // (never previous-range events as fake placement).
+                    events={undefined}
                   />
                 ) : view === "year" && context.kind === "main" ? (
                   <YearView
@@ -1333,8 +1458,24 @@ function CalendarProductViewInner({
             key={eventPanel.mode === "create" ? "create" : eventPanel.eventId}
             anchorRect={eventPanel.anchorRect}
             mouseContainerRef={gridContainerRef}
-            suppressDismiss={crossLinkPanel !== null}
-            onClose={() => closeEventPanel()}
+            // GCal: wheel open + click grid closes the wheel only; popover stays.
+            // Color wheel's own outside-click owns dismiss; suppressDismiss
+            // prevents the card from also tearing down on that same click.
+            suppressDismiss={crossLinkPanel !== null || colorWheelOpen}
+            onClose={(meta) => {
+              // Only arm while a panel is still open. An exiting AnimatePresence
+              // shell can still see pointerdown after eventPanel is already null;
+              // arming then would block the user's next intentional create.
+              if (
+                meta?.reason === "outside-pointer" &&
+                shouldArmSuppressOnOutsidePointer({
+                  panelOpen: eventPanelRef.current !== null,
+                })
+              ) {
+                armCreateSuppressForOutsidePointer();
+              }
+              closeEventPanel();
+            }}
           >
             <EventDetailPanel
               key={
@@ -1356,6 +1497,7 @@ function CalendarProductViewInner({
               }
               onClose={closeEventPanel}
               onSave={handleEventPanelSave}
+              onProvideDismiss={providePanelDismiss}
               onDelete={
                 eventPanel.mode === "edit" ? handleEventPanelDelete : undefined
               }
@@ -1374,6 +1516,7 @@ function CalendarProductViewInner({
                   ? setCrossLinkPanel
                   : undefined
               }
+              onCustomColorOpenChange={setColorWheelOpen}
               onDirtyChange={setEventPanelDirty}
               onDraftChange={
                 eventPanel.mode === "create"

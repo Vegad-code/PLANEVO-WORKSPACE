@@ -6,6 +6,7 @@ export function openMonthDayFromAgenda(
   onOpenDay(date)
 }
 
+/** Month grid date number — GCal opens Day view on single click. */
 export function openMonthDayFromCell(
   date: Date,
   onOpenDay: (date: Date) => void,

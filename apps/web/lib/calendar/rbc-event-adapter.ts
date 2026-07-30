@@ -6,6 +6,7 @@ import type {
   CalendarRow,
 } from "@planevo/core/types/calendar"
 import { isLinkedTaskComplete } from "./task-linked-events.ts"
+import { DEFAULT_CALENDAR_COLOR } from "./calendar-color.ts"
 import { calendarEventDisplayRange } from "./calendar-event-display-range.ts"
 
 export const DRAFT_CREATE_EVENT_ID = "__draft-create__"
@@ -53,7 +54,7 @@ export function toRbcEvents(
       const color =
         event.color ??
         colorByCalendarId.get(event.calendar_id) ??
-        "graphite"
+        DEFAULT_CALENDAR_COLOR
       const range = calendarEventDisplayRange(event)
       if (!range) return []
       return [{

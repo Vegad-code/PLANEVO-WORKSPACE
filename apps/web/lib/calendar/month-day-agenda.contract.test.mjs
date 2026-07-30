@@ -15,7 +15,7 @@ test("agenda Open day dispatches the selected day", () => {
   assert.equal(opened, date)
 })
 
-test("Month cell double-click dispatches the selected day", () => {
+test("Month cell date button dispatches the selected day", () => {
   const date = new Date(2026, 6, 24)
   let opened = null
 
@@ -46,7 +46,24 @@ test("Month components wire both explicit Day entry points to their dispatch con
 
   assert.match(agendaSource, /openMonthDayFromAgenda\(date, onOpenDay\)/)
   assert.match(cellSource, /openMonthDayFromCell\(date, onOpenDay\)/)
-  assert.match(cellSource, /onDoubleClick=/)
+  assert.match(cellSource, /calendar-month-date-button/)
+  assert.doesNotMatch(cellSource, /onDoubleClick/)
+})
+
+test("Week header wires number-only day button, not whole header stack", async () => {
+  const headerSource = await readFile(
+    new URL(
+      "../../features/calendar-product/rbc-day-header.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  )
+
+  assert.match(headerSource, /calendar-day-header-stack/)
+  assert.match(headerSource, /aria-current=\{isToday \? "date" : undefined\}/)
+  assert.match(headerSource, /\{weekdayLabel\}\s*<button/)
+  assert.match(headerSource, /calendar-day-header-button[\s\S]*\{dayNumberLabel\}/)
+  assert.doesNotMatch(headerSource, /<button[\s\S]*calendar-day-weekday/)
 })
 
 test("Month overflow anchors the agenda to a real element, never a fallback", async () => {

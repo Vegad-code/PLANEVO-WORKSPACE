@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react"
@@ -37,6 +38,14 @@ import { EventRecurrenceScopeDialog } from "@/features/calendar-product/event-re
 import type { CalendarQueryPayload } from "@/lib/calendar/fetch-calendar-page-data"
 import { calendarHref } from "@/lib/calendar/calendar-context"
 import { parseCalendarEmbedTarget } from "@/lib/calendar/embedded-calendar"
+import {
+  allowCreateFromPointerGesture,
+  armCreateGestureSuppress,
+  clearCreateGestureSuppress,
+  initialCreateGestureSuppressState,
+  scheduleCreateGestureSuppressClear,
+  shouldArmSuppressOnOutsidePointer,
+} from "@/lib/calendar/create-gesture-suppress"
 import { resolveEventMutationTarget } from "@/lib/calendar/event-mutation-target"
 import { recurrenceMutationPayload } from "@/lib/calendar/recurrence-mutation-payload"
 import {
@@ -122,6 +131,33 @@ export function EmbeddedCalendarView({
   const [pendingRecurrence, setPendingRecurrence] =
     useState<PendingRecurrenceMutation | null>(null)
   const [recurrencePending, startRecurrenceTransition] = useTransition()
+  const panelDismissRef = useRef<(() => void) | null>(null)
+  const createGestureSuppressRef = useRef(initialCreateGestureSuppressState())
+  const editorRef = useRef(editor)
+  editorRef.current = editor
+  const providePanelDismiss = useCallback((dismiss: (() => void) | null) => {
+    panelDismissRef.current = dismiss
+  }, [])
+  const armCreateSuppressForOutsidePointer = useCallback(() => {
+    createGestureSuppressRef.current = armCreateGestureSuppress(
+      createGestureSuppressRef.current,
+    )
+    scheduleCreateGestureSuppressClear({
+      onClear: () => {
+        createGestureSuppressRef.current = clearCreateGestureSuppress(
+          createGestureSuppressRef.current,
+        )
+      },
+    })
+  }, [])
+  const closeEditor = useCallback((options?: { force?: boolean }) => {
+    if (!options?.force && panelDismissRef.current) {
+      panelDismissRef.current()
+      return
+    }
+    setEditor(null)
+    setEventDraftPreview(null)
+  }, [])
   const normalizedHeight =
     height === "compact" || height === "tall" ? height : "standard"
 
@@ -278,7 +314,7 @@ export function EmbeddedCalendarView({
   }
 
   if (!payload) {
-    return <EmbeddedCalendarSkeleton view={view} height={normalizedHeight} />
+    return <EmbeddedCalendarSkeleton view={view} height={normalizedHeight} anchor={anchor} />
   }
 
   const activeCalendar =
@@ -392,6 +428,13 @@ export function EmbeddedCalendarView({
             taskDues={[]}
             onSlotSelect={(range, anchorRect) => {
               if (readOnlyCalendar) return
+              if (
+                !allowCreateFromPointerGesture({
+                  suppress: createGestureSuppressRef.current,
+                })
+              ) {
+                return
+              }
               setEditor({
                 mode: "create",
                 startsAt: range.startsAt.toISOString(),
@@ -481,9 +524,16 @@ export function EmbeddedCalendarView({
       {editor ? (
         <EventDetailPopover
           anchorRect={editor.anchorRect}
-          onClose={() => {
-            setEditor(null)
-            setEventDraftPreview(null)
+          onClose={(meta) => {
+            if (
+              meta?.reason === "outside-pointer" &&
+              shouldArmSuppressOnOutsidePointer({
+                panelOpen: editorRef.current !== null,
+              })
+            ) {
+              armCreateSuppressForOutsidePointer()
+            }
+            closeEditor()
           }}
         >
           <EventDetailPanel
@@ -499,10 +549,8 @@ export function EmbeddedCalendarView({
                   }
                 : undefined
             }
-            onClose={() => {
-              setEditor(null)
-              setEventDraftPreview(null)
-            }}
+            onClose={closeEditor}
+            onProvideDismiss={providePanelDismiss}
             onSave={(next) => void saveEvent(next)}
             onDraftChange={
               editor.mode === "edit"

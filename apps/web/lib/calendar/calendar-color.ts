@@ -3,6 +3,9 @@ import type {
   CalendarPaletteKey,
 } from "@planevo/core/types/calendar"
 
+/** System default for new Main calendars and missing color fallbacks. */
+export const DEFAULT_CALENDAR_COLOR = "blueberry" as const satisfies CalendarPaletteKey
+
 export const CALENDAR_PALETTE = [
   { key: "lavender", label: "Lavender" },
   { key: "sage", label: "Sage" },
@@ -72,4 +75,24 @@ export function contrastTextForCalendarColor(
   const blue = Number.parseInt(normalized.slice(5, 7), 16)
   const luminance = (red * 299 + green * 587 + blue * 114) / 1000
   return luminance >= 150 ? "ink" : "paper"
+}
+
+/**
+ * Solid event-block chrome — full accent fill matching the swatch / draft ghost.
+ * Legibility is text-only (ink vs paper). Never return a paper-washed fill.
+ */
+export type CalendarEventSurface = {
+  accent: string
+  text: "ink" | "paper"
+}
+
+export function calendarEventSurface(
+  color: CalendarColorValue,
+): CalendarEventSurface {
+  return {
+    accent: isCustomCalendarColor(color)
+      ? color
+      : `var(--color-calendar-${color})`,
+    text: contrastTextForCalendarColor(color),
+  }
 }

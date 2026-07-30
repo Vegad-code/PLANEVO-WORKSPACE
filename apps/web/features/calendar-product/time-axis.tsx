@@ -1,9 +1,26 @@
-/** Full-day window like Google Calendar: 12 AM through 11 PM (24 hours). */
-export const DAY_START_HOUR = 0;
-export const DAY_END_HOUR = 24;
+import {
+  DAY_END_HOUR,
+  DAY_START_HOUR,
+  DEFAULT_SCROLL_HOUR,
+  eventBlockPosition,
+  hoursIntoDayWindow,
+  MIN_EVENT_BLOCK_HEIGHT_PERCENT,
+  percentOffsetForTime,
+  VISIBLE_HOURS,
+  type EventBlockPosition,
+} from "@/lib/calendar/event-block-position";
 
-/** Fallback scroll target (hour) when today isn't in the visible range. */
-export const DEFAULT_SCROLL_HOUR = 8;
+export {
+  DAY_END_HOUR,
+  DAY_START_HOUR,
+  DEFAULT_SCROLL_HOUR,
+  eventBlockPosition,
+  hoursIntoDayWindow,
+  MIN_EVENT_BLOCK_HEIGHT_PERCENT,
+  percentOffsetForTime,
+  VISIBLE_HOURS,
+  type EventBlockPosition,
+};
 
 /**
  * Minimum row heights (rem). Rows are `flex-1` so they stretch to fill a tall
@@ -11,9 +28,8 @@ export const DEFAULT_SCROLL_HOUR = 8;
  * bottoming out exactly at midnight (no void below 11 PM).
  */
 export const HOUR_MIN_REM = 4.5;
-export const SLOT_MIN_REM = HOUR_MIN_REM / 2;
-
-export const VISIBLE_HOURS = DAY_END_HOUR - DAY_START_HOUR;
+/** One GCal snap slot (15 min) — hour group stays HOUR_MIN_REM. */
+export const SLOT_MIN_REM = HOUR_MIN_REM / 4;
 
 export function formatHourLabel(hour: number): string {
   if (hour === 0) return "12 AM";
@@ -33,35 +49,6 @@ export function formatTimeLabel(date: Date): string {
 export { formatNowIndicatorTime } from "@/lib/calendar/format-now-indicator-time";
 
 export { formatCompactMonthTime } from "@/lib/calendar/format-compact-month-time";
-
-/** Hours from the start of the day window, clamped to [0, VISIBLE_HOURS]. */
-export function hoursIntoDayWindow(date: Date): number {
-  const hoursIntoWindow =
-    date.getHours() + date.getMinutes() / 60 - DAY_START_HOUR;
-  return Math.min(Math.max(hoursIntoWindow, 0), VISIBLE_HOURS);
-}
-
-/** Percent offset from the top of the grid for a moment within the day. */
-export function percentOffsetForTime(date: Date): number {
-  return (hoursIntoDayWindow(date) / VISIBLE_HOURS) * 100;
-}
-
-export type EventBlockPosition = { topPercent: number; heightPercent: number };
-
-/** Absolute block geometry for an event, as % of the full-day grid. */
-export function eventBlockPosition(
-  startsAt: string,
-  endsAt: string,
-): EventBlockPosition {
-  const start = new Date(startsAt);
-  const end = new Date(endsAt);
-  const topPercent = percentOffsetForTime(start);
-  const bottomPercent = percentOffsetForTime(end);
-  // Events shorter than 30 minutes still get a readable block (~half hour).
-  const minHeightPercent = (0.5 / VISIBLE_HOURS) * 100;
-  const heightPercent = Math.max(bottomPercent - topPercent, minHeightPercent);
-  return { topPercent, heightPercent };
-}
 
 export function TimeAxis({ className }: { className?: string }) {
   const hours = Array.from(

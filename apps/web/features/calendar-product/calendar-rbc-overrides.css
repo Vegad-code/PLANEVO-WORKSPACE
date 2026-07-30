@@ -1,0 +1,11 @@
+/**
+ * Loaded after react-big-calendar CSS so Planevo event chrome wins the cascade.
+ * RBC ships `.rbc-day-slot .rbc-event { border: 1px solid #265985 }` at equal
+ * specificity to `.planevo-rbc .rbc-event`; import order alone is not enough.
+ */
+.planevo-rbc .rbc-day-slot .rbc-event,
+.planevo-rbc .rbc-day-slot .rbc-background-event,
+.planevo-rbc .rbc-day-slot .rbc-event.planevo-rbc-event {
+  border: none;
+  outline: none;
+}

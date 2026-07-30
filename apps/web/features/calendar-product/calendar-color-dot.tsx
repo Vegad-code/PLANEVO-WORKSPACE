@@ -4,6 +4,7 @@ import type {
 } from "@planevo/core/types/calendar"
 import { Check } from "lucide-react"
 import {
+  calendarEventSurface,
   contrastTextForCalendarColor,
   isCustomCalendarColor,
 } from "@/lib/calendar/calendar-color"
@@ -47,11 +48,10 @@ export const CALENDAR_COLOR_BORDER_CLASS: Record<string, string> =
 export function calendarColorStyle(
   color: CalendarColorValue,
 ): React.CSSProperties {
+  const surface = calendarEventSurface(color)
   return {
-    "--calendar-event-color": isCustomCalendarColor(color)
-      ? color
-      : `var(--color-calendar-${color})`,
-    "--calendar-event-text": `var(--color-${contrastTextForCalendarColor(color)})`,
+    "--calendar-event-color": surface.accent,
+    "--calendar-event-text": `var(--color-${surface.text})`,
   } as React.CSSProperties
 }
 

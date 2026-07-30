@@ -2,13 +2,25 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
   CALENDAR_PALETTE,
+  calendarEventSurface,
   contrastTextForCalendarColor,
+  DEFAULT_CALENDAR_COLOR,
   normalizeCalendarColor,
 } from "./calendar-color.ts"
 
 test("calendar palette provides sixteen named product colors", () => {
   assert.equal(CALENDAR_PALETTE.length, 16)
   assert.equal(new Set(CALENDAR_PALETTE.map(({ key }) => key)).size, 16)
+})
+
+test("system default calendar color is blueberry", () => {
+  assert.equal(DEFAULT_CALENDAR_COLOR, "blueberry")
+  assert.notEqual(DEFAULT_CALENDAR_COLOR, "graphite")
+  assert.ok(CALENDAR_PALETTE.some(({ key }) => key === DEFAULT_CALENDAR_COLOR))
+  assert.equal(
+    `--color-calendar-${DEFAULT_CALENDAR_COLOR}`,
+    "--color-calendar-blueberry",
+  )
 })
 
 test("palette keys and normalized custom hex values are accepted", () => {
@@ -35,4 +47,19 @@ test("event text selection keeps palette blocks readable", () => {
   assert.equal(contrastTextForCalendarColor("sky"), "ink")
   assert.equal(contrastTextForCalendarColor("grape"), "paper")
   assert.equal(contrastTextForCalendarColor("blueberry"), "paper")
+})
+
+test("event surface stays solid accent — never a paper-washed fill", () => {
+  const blueberry = calendarEventSurface("blueberry")
+  assert.equal(blueberry.accent, "var(--color-calendar-blueberry)")
+  assert.equal(blueberry.text, "paper")
+  assert.equal(blueberry.accent.includes("color-mix"), false)
+
+  const banana = calendarEventSurface("banana")
+  assert.equal(banana.accent, "var(--color-calendar-banana)")
+  assert.equal(banana.text, "ink")
+
+  const custom = calendarEventSurface("#4454B4")
+  assert.equal(custom.accent, "#4454B4")
+  assert.equal(custom.text, "paper")
 })

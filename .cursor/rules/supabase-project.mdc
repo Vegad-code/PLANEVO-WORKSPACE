@@ -1,0 +1,32 @@
+---
+description: Always use the Planevo hosted Supabase project aixvpsmpiucticxutngp
+alwaysApply: true
+---
+
+# Supabase project (Planevo)
+
+**Always use this hosted Supabase project for Planevo — never another one:**
+
+- **Project ref / id:** `aixvpsmpiucticxutngp`
+- **Region:** `ca-central-1`
+
+When using Supabase MCP, CLI, SQL Editor links, advisors, migrations, or any
+database work on this repo, target `aixvpsmpiucticxutngp` only.
+
+Do not invent, switch to, or apply changes against a different Supabase project
+(including `wuzignwkynhquevywbyd` / Plan Pilot) unless the founder explicitly
+names a different ref.
+
+## Running SQL
+
+Preferred agent path when MCP OAuth cannot see this project:
+
+1. Read `SUPABASE_ACCESS_TOKEN` from `apps/web/.env.local` (personal access token).
+2. Call Management API:
+   `POST https://api.supabase.com/v1/projects/aixvpsmpiucticxutngp/database/query`
+3. Use a normal browser `User-Agent` header (Cloudflare blocks bare Python UA).
+4. Never print or commit the token.
+
+For DDL, prefer recording via `apply_migration` when MCP has access; otherwise
+run the migration SQL through this query endpoint and keep the file under
+`supabase/migrations/` in sync.

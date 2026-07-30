@@ -204,13 +204,13 @@ export function MonthDayAgendaPopover({
                     onSelectEvent(item.event, clickEvent.currentTarget)
                   }
                 >
-                  <span className="w-12 shrink-0 text-product-meta text-text-secondary">
+                  <span className="w-12 shrink-0 text-product-meta opacity-75">
                     {timeLabel}
                   </span>
                   {item.linkedTask ? (
                     <span
                       aria-hidden="true"
-                      className="shrink-0 text-text-secondary"
+                      className="shrink-0 opacity-75"
                     >
                       <ListTodo aria-hidden="true" className="size-4" />
                     </span>
@@ -225,9 +225,7 @@ export function MonthDayAgendaPopover({
                   <span
                     className={cn(
                       "min-w-0 flex-1 truncate text-product-body",
-                      item.isTaskComplete
-                        ? "text-text-muted line-through"
-                        : "text-ink",
+                      item.isTaskComplete && "opacity-65 line-through",
                     )}
                   >
                     {item.title}
@@ -235,7 +233,7 @@ export function MonthDayAgendaPopover({
                   {item.isSyncedSource ? (
                     <span
                       aria-label="Synced calendar event"
-                      className="calendar-month-event-synced shrink-0 text-product-meta text-text-secondary"
+                      className="calendar-month-event-synced shrink-0 text-product-meta opacity-75"
                     >
                       ↗
                     </span>

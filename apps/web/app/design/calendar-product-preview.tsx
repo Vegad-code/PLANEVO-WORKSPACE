@@ -13,6 +13,7 @@ import { CalendarColorPicker } from "@/features/calendar-product/calendar-color-
 import { CalendarNowProvider } from "@/features/calendar-product/calendar-now-context";
 import { CalendarPlanningSidebar } from "@/features/calendar-product/calendar-planning-sidebar";
 import { CalendarGridSkeleton } from "@/features/calendar-product/calendar-product-skeleton";
+import { skeletonEventsFromDisplay } from "@/lib/calendar/calendar-skeleton-event-memory";
 import { CalendarSelector } from "@/features/calendar-product/calendar-selector";
 import { CalendarShortcutsCheatSheet } from "@/features/calendar-product/calendar-shortcuts-cheat-sheet";
 import { CalendarTasksSection } from "@/features/calendar-product/calendar-tasks-section";
@@ -77,7 +78,7 @@ export const DESIGN_CALENDARS: CalendarRow[] = [
     id: "cal-main",
     user_id: "design-owner",
     name: "Main",
-    color: "graphite",
+    color: "blueberry",
     color_mode: "inherit_override",
     is_main: true,
     is_included_in_main: true,
@@ -510,6 +511,7 @@ function EventDetailPanelDemo({
   label: string;
 }) {
   const peekEvent = DESIGN_EVENTS[3]!;
+  const [colorWheelOpen, setColorWheelOpen] = useState(false);
   const anchorRect = previewAnchorRect({
     left: 120,
     top: 120,
@@ -523,7 +525,11 @@ function EventDetailPanelDemo({
         {label}
       </figcaption>
       <div className="relative h-[36rem] transform-gpu overflow-hidden rounded-2xl border border-border bg-calendar-chrome">
-        <EventDetailPopover anchorRect={anchorRect} onClose={noop}>
+        <EventDetailPopover
+          anchorRect={anchorRect}
+          onClose={noop}
+          suppressDismiss={colorWheelOpen}
+        >
           <EventDetailPanel
             mode={mode}
             calendars={DESIGN_CALENDARS}
@@ -551,6 +557,7 @@ function EventDetailPanelDemo({
               mode === "edit" ? async () => ({ ok: true as const }) : undefined
             }
             onOpenCrossLink={mode === "edit" ? noop : undefined}
+            onCustomColorOpenChange={setColorWheelOpen}
           />
         </EventDetailPopover>
       </div>
@@ -755,15 +762,40 @@ export function CalendarProductPreview() {
 
       <figure className="w-full">
         <figcaption className="mb-2 text-label uppercase text-text-muted">
-          Calendar loading — day, week, and month geometry
+          Calendar loading — real title/color ghosts (not invented placeholders)
         </figcaption>
         <div className="grid gap-4 lg:grid-cols-3">
-          {(["day", "week", "month"] as const).map((loadingView) => (
+          {(
+            [
+              {
+                view: "day" as const,
+                anchor: DESIGN_DAY_ANCHOR,
+                events: DESIGN_MONTH_EVENTS,
+              },
+              {
+                view: "week" as const,
+                anchor: DESIGN_WEEK_START,
+                events: DESIGN_EVENTS,
+              },
+              {
+                view: "month" as const,
+                anchor: DESIGN_MONTH_ANCHOR,
+                events: DESIGN_MONTH_EVENTS,
+              },
+            ] as const
+          ).map(({ view: loadingView, anchor, events }) => (
             <div
               key={loadingView}
               className="flex h-80 min-w-0 flex-col overflow-hidden rounded-xl border border-border"
             >
-              <CalendarGridSkeleton view={loadingView} />
+              <CalendarGridSkeleton
+                view={loadingView}
+                anchor={anchor}
+                events={skeletonEventsFromDisplay({
+                  events,
+                  calendars: DESIGN_CALENDARS,
+                })}
+              />
             </div>
           ))}
         </div>
@@ -972,7 +1004,10 @@ function CalendarPalettePreview() {
       <figcaption className="mb-2 text-label uppercase text-text-muted">
         Calendar palette — named spectrum, custom color, keyboard + validation
       </figcaption>
-      <div className="rounded-xl border border-border bg-paper p-4">
+      <div
+        data-color-wheel-anchor=""
+        className="min-h-48 w-full max-w-sm rounded-xl border border-border bg-paper p-4"
+      >
         <CalendarColorPicker value={color} onChange={setColor} />
       </div>
     </figure>

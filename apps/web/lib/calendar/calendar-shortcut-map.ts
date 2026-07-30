@@ -3,6 +3,8 @@
  * Month-grid arrows / Enter stay in month-grid.tsx — not listed here.
  */
 
+import { snapDateUpToTimeGrid } from "./time-grid-snap.ts"
+
 export const CALENDAR_HOTKEY_SCOPE = "calendar-global" as const
 
 export type CalendarShortcutView = "day" | "week" | "month"
@@ -104,14 +106,9 @@ export function resolveCalendarShortcut(
 }
 
 export function createEventSlotFromNow(now: Date = new Date()): Date {
-  const slot = new Date(now)
-  slot.setSeconds(0, 0)
-  const minutes = slot.getMinutes()
-  const rounded = Math.ceil(minutes / 30) * 30
-  if (rounded >= 60) {
-    slot.setHours(slot.getHours() + 1, 0, 0, 0)
-    return slot
-  }
-  slot.setMinutes(rounded, 0, 0)
-  return slot
+  const snapped = snapDateUpToTimeGrid({ date: now })
+  if (snapped) return snapped
+  const fallback = new Date(now)
+  fallback.setSeconds(0, 0)
+  return fallback
 }

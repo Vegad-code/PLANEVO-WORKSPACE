@@ -52,15 +52,27 @@ test("hotkey scope constant is stable for calendar route", () => {
   assert.equal(CALENDAR_HOTKEY_SCOPE, "calendar-global")
 })
 
-test("createEventSlotFromNow rounds up to the next half hour", () => {
+test("createEventSlotFromNow rounds up to the next 15-minute snap", () => {
   const slot = createEventSlotFromNow(new Date(2026, 6, 24, 14, 17, 42))
   assert.equal(slot.getHours(), 14)
   assert.equal(slot.getMinutes(), 30)
   assert.equal(slot.getSeconds(), 0)
 })
 
-test("createEventSlotFromNow rolls to the next hour at :00 past half", () => {
+test("createEventSlotFromNow keeps an exact :45 on the 15-minute grid", () => {
   const slot = createEventSlotFromNow(new Date(2026, 6, 24, 14, 45, 0))
+  assert.equal(slot.getHours(), 14)
+  assert.equal(slot.getMinutes(), 45)
+})
+
+test("createEventSlotFromNow rolls to the next hour past :45", () => {
+  const slot = createEventSlotFromNow(new Date(2026, 6, 24, 14, 46, 0))
   assert.equal(slot.getHours(), 15)
   assert.equal(slot.getMinutes(), 0)
+})
+
+test("createEventSlotFromNow can land on :15", () => {
+  const slot = createEventSlotFromNow(new Date(2026, 6, 24, 14, 1, 0))
+  assert.equal(slot.getHours(), 14)
+  assert.equal(slot.getMinutes(), 15)
 })

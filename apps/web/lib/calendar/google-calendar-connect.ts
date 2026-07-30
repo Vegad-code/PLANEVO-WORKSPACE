@@ -4,6 +4,7 @@ import {
   CALENDAR_PALETTE_KEYS,
   type CalendarColor,
 } from "@planevo/core/types/calendar"
+import { DEFAULT_CALENDAR_COLOR } from "./calendar-color.ts"
 import {
   calendarTokenEncryptionKey,
   sealCalendarToken,
@@ -20,7 +21,8 @@ type CalendarAccount =
 
 function connectionColor(index: number): CalendarColor {
   return (
-    CALENDAR_PALETTE_KEYS[index % CALENDAR_PALETTE_KEYS.length] ?? "graphite"
+    CALENDAR_PALETTE_KEYS[index % CALENDAR_PALETTE_KEYS.length] ??
+    DEFAULT_CALENDAR_COLOR
   )
 }
 

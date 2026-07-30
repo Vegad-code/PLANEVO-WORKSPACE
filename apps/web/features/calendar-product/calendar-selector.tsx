@@ -9,6 +9,7 @@ import type {
   CalendarRow,
 } from "@planevo/core/types/calendar"
 import { calendarHref } from "@/lib/calendar/calendar-context"
+import { DEFAULT_CALENDAR_COLOR } from "@/lib/calendar/calendar-color"
 import {
   createCalendarWorkspacePageAction,
   disconnectCalendarAction,
@@ -51,12 +52,12 @@ export function CalendarSelector({
   const [creating, setCreating] = useState(false)
   const [managing, setManaging] = useState(false)
   const [name, setName] = useState("")
-  const [color, setColor] = useState<CalendarColorValue>("sky")
+  const [color, setColor] = useState<CalendarColorValue>(DEFAULT_CALENDAR_COLOR)
   const [submitting, setSubmitting] = useState(false)
   const [createdCalendarId, setCreatedCalendarId] = useState<string | null>(null)
   const [addingToWorkspace, setAddingToWorkspace] = useState(false)
   const [editColor, setEditColor] = useState<CalendarColorValue>(
-    activeCalendar?.color ?? "graphite",
+    activeCalendar?.color ?? DEFAULT_CALENDAR_COLOR,
   )
   const [editColorMode, setEditColorMode] = useState<
     "inherit_override" | "required_per_event"
@@ -84,7 +85,7 @@ export function CalendarSelector({
       const calendarId = await onCreateCalendar(normalizedName, color)
       if (!calendarId) return
       setName("")
-      setColor("sky")
+      setColor(DEFAULT_CALENDAR_COLOR)
       setCreating(false)
       setCreatedCalendarId(calendarId)
     } finally {
@@ -155,7 +156,7 @@ export function CalendarSelector({
         onClick={() => setOpen((current) => !current)}
         className="flex max-w-64 items-center gap-2 rounded-[var(--radius-calendar-control)] border border-border bg-surface-raised px-3 py-2 text-product-body font-medium text-ink outline-none hover:bg-paper focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
-        <CalendarColorDot color={activeCalendar?.color ?? "graphite"} />
+        <CalendarColorDot color={activeCalendar?.color ?? DEFAULT_CALENDAR_COLOR} />
         <span className="truncate">
           {context.kind === "main"
             ? "Main Calendar"

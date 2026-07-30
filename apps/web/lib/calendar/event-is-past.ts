@@ -1,6 +1,7 @@
 /**
  * Whether an event's end is strictly before `now`.
- * Cosmetic styling only — never gate edit/delete/drag/resize on this.
+ * Time/date helper only — event fills must stay solid (do not paper-wash
+ * past blocks; that made saved events look muted vs draft/swatch).
  */
 export function isCalendarEventPast(
   endsAt: string | Date,
