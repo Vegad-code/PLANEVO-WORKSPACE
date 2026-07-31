@@ -600,6 +600,7 @@ export function CalendarGridEngine({
               date={anchor}
               view={rbcView}
               views={["week", "day"]}
+              drilldownView={null}
               events={rbcEvents}
               getNow={() => now}
               toolbar={false}
