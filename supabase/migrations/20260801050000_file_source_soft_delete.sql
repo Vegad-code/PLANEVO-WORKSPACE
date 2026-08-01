@@ -40,7 +40,7 @@ declare
   v_deleted_at timestamptz;
   v_purge_after timestamptz;
 begin
-  if current_user <> 'service_role'
+  if auth.role() <> 'service_role'
     and (select auth.uid()) is distinct from p_owner_id
   then
     raise exception 'forbidden' using errcode = '42501';
@@ -118,7 +118,7 @@ as $$
 declare
   v_row public.file_sources;
 begin
-  if current_user <> 'service_role'
+  if auth.role() <> 'service_role'
     and (select auth.uid()) is distinct from p_owner_id
   then
     raise exception 'forbidden' using errcode = '42501';
@@ -190,7 +190,7 @@ declare
   v_storage_paths text[];
   v_cleanup_job_id uuid;
 begin
-  if current_user <> 'service_role'
+  if auth.role() <> 'service_role'
     and (select auth.uid()) is distinct from p_owner_id
   then
     raise exception 'forbidden' using errcode = '42501';

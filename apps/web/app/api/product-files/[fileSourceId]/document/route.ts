@@ -38,6 +38,7 @@ import {
   PDF_MIME_TYPE,
   parsePdfSaveMetadata,
   validatePdfBytes,
+  validatePdfSaveBytes,
 } from "@/features/files-product/pdf-document-transport";
 
 const MAX_NATIVE_DOCUMENT_BYTES = 2 * 1024 * 1024;
@@ -713,7 +714,7 @@ export async function PUT(
           { status: 400 },
         );
       }
-      if (format === "pdf" && !validatePdfBytes(bytes)) {
+      if (format === "pdf" && !validatePdfSaveBytes(bytes)) {
         return NextResponse.json(
           { error: "The PDF file is not a valid document." },
           { status: 400 },
@@ -1107,7 +1108,7 @@ export async function POST(
     if (state.format === "docx" && !validateDocxBytes(revisionBytes)) {
       throw new Error("The saved DOCX version is not a valid OOXML document.");
     }
-    if (state.format === "pdf" && !validatePdfBytes(revisionBytes)) {
+    if (state.format === "pdf" && !validatePdfSaveBytes(revisionBytes)) {
       throw new Error("The saved PDF version is not a valid document.");
     }
     const restoredText =

@@ -41,7 +41,7 @@ import {
 import { assertDocxCopyUsesDistinctFileSource } from "@/features/files-product/docx-save-copy";
 import {
   PDF_MIME_TYPE,
-  validatePdfBytes,
+  validatePdfSaveBytes,
 } from "@/features/files-product/pdf-document-transport";
 import { assertPdfCopyUsesDistinctFileSource, decodePdfBytesBase64 } from "@/features/files-product/pdf-save-copy";
 import { markdownToPlanevoBlocks } from "@/lib/files/markdown-to-planevo";
@@ -176,6 +176,7 @@ export async function createDocxCopyInFilesAction(input: {
       .select("id, folder_id")
       .eq("id", parsed.data.sourceFileSourceId)
       .eq("user_id", access.ownerId)
+      .is("deleted_at", null)
       .maybeSingle();
     if (sourceError) throw sourceError;
     if (!source) {
@@ -287,7 +288,7 @@ export async function createPdfCopyInFilesAction(input: {
         error: "This PDF copy is larger than the 25 MB limit.",
       };
     }
-    if (!validatePdfBytes(bytes)) {
+    if (!validatePdfSaveBytes(bytes)) {
       return { ok: false, error: "This PDF copy is not a valid document." };
     }
 
@@ -306,6 +307,7 @@ export async function createPdfCopyInFilesAction(input: {
       .select("id, folder_id")
       .eq("id", parsed.data.sourceFileSourceId)
       .eq("user_id", access.ownerId)
+      .is("deleted_at", null)
       .maybeSingle();
     if (sourceError) throw sourceError;
     if (!source) {
