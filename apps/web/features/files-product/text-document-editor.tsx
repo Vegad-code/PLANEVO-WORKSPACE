@@ -32,6 +32,11 @@ import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import {
+  observeEditorHostSize,
+  scheduleEditorMeasure,
+  syncEditorValue,
+} from "@/lib/files/codemirror-viewport-measure";
+import {
   applyMarkdownCommand,
   continueMarkdownList,
   type MarkdownCommand,
@@ -71,7 +76,7 @@ const baseTheme = EditorView.theme({
   },
   ".cm-scroller": { overflow: "auto" },
   ".cm-panels": {
-    backgroundColor: "var(--color-files-editor-solid)",
+    backgroundColor: "var(--color-files-editor-glass)",
     color: "var(--color-files-text)",
   },
   ".cm-searchMatch": {
@@ -177,10 +182,10 @@ function CodeMirrorTextEditor({
   onSaveNow?: () => void;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
-  const initialValue = useRef(value);
   const onChangeRef = useRef(onChange);
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onSaveNowRef = useRef(onSaveNow);
+  const viewRef = useRef<EditorView | null>(null);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -195,10 +200,13 @@ function CodeMirrorTextEditor({
       ? []
       : [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter()];
 
+    // Live `value` at mount — a stale initialValue ref left Document/Markdown empty
+    // when content arrived after first paint (Split still looked fine because
+    // ReactMarkdown reads `value` every render).
     const view = new EditorView({
       parent: host.current,
       state: EditorState.create({
-        doc: initialValue.current,
+        doc: value,
         extensions: [
           history(),
           search(),
@@ -262,12 +270,42 @@ function CodeMirrorTextEditor({
         ],
       }),
     });
+    viewRef.current = view;
     editorRef.current = view;
+
+    // Document/Markdown are full-width flex children: CM often constructs while
+    // the host still reports 0 height. Split gets a free remasure when the
+    // preview pane mounts beside it — these modes need an explicit one.
+    const measure = () => view.requestMeasure();
+    const cancelScheduled = scheduleEditorMeasure(measure);
+    const stopObserver = observeEditorHostSize({
+      host: host.current,
+      measure,
+    });
+
     return () => {
+      cancelScheduled();
+      stopObserver();
+      viewRef.current = null;
       editorRef.current = null;
       view.destroy();
     };
+    // `value` is read once at mount; external updates sync in the effect below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- remount on mode/variant only
   }, [editorRef, markdownMode, variant]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    syncEditorValue({
+      currentDoc: view.state.doc.toString(),
+      nextValue: value,
+      dispatch: (change) => {
+        view.dispatch({ changes: change });
+        view.requestMeasure();
+      },
+    });
+  }, [value]);
 
   return (
     <div
@@ -385,7 +423,7 @@ export function TextDocumentEditor({
 
   if (format === "text") {
     return (
-      <div className="min-h-0 flex-1 overflow-hidden bg-files-editor-solid">
+      <div className="files-editor-canvas flex min-h-0 flex-1 flex-col overflow-hidden">
         <CodeMirrorTextEditor
           value={value}
           onChange={onChange}
@@ -405,16 +443,19 @@ export function TextDocumentEditor({
   return (
     <div
       ref={hostRef}
-      className="relative flex min-h-0 flex-1 overflow-hidden bg-files-editor-solid"
+      className={`files-editor-canvas relative flex min-h-0 flex-1 overflow-hidden ${
+        isSplit ? "flex-row" : "flex-col"
+      }`}
     >
       <section
         aria-label={
           viewMode === "document" ? "Document" : "Markdown source"
         }
-        className="min-h-0 overflow-hidden"
-        style={isSplit ? { width: `${splitPercent}%` } : { width: "100%" }}
+        className="h-full min-h-0 flex-1 overflow-hidden"
+        style={isSplit ? { width: `${splitPercent}%`, flex: "none" } : undefined}
       >
         <CodeMirrorTextEditor
+          key={variant}
           value={value}
           onChange={onChange}
           markdownMode
@@ -476,8 +517,9 @@ export function TextDocumentEditor({
       {isSplit ? (
         <article
           aria-label="Markdown preview"
-          className="min-w-0 flex-1 overflow-auto p-5 text-files-text"
+          className="files-doc-page-host min-w-0 flex-1 overflow-auto text-files-text"
         >
+          <div className="files-doc-page">
           {!remoteImagesAllowed && /!\[[^\]]*\]\(https?:\/\//.test(value) ? (
             <button
               type="button"
@@ -514,6 +556,7 @@ export function TextDocumentEditor({
           >
             {value}
           </ReactMarkdown>
+          </div>
         </article>
       ) : null}
 

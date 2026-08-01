@@ -167,11 +167,42 @@
   --color-files-storage-pdfs: #2383e2;
   --color-files-storage-documents: #ff9f0a;
   --color-files-storage-available: var(--color-files-border-strong);
-  --color-files-editor-glass: color-mix(in srgb, var(--color-paper) 88%, transparent);
-  --color-files-editor-glass-strong: color-mix(in srgb, var(--color-paper) 94%, transparent);
+  /* Editor liquid glass — frosted token surfaces (backdrop-filter), not liquid-glass-react.
+     Recipe matches .calendar-panel-glass / .event-popover-glass-body craft. */
+  --color-files-editor-glass: color-mix(in srgb, var(--color-paper) 58%, transparent);
+  --color-files-editor-glass-strong: color-mix(in srgb, var(--color-paper) 74%, transparent);
   --color-files-editor-solid: var(--color-paper);
   --color-files-editor-overlay: color-mix(in srgb, var(--color-sidebar) 84%, transparent);
   --color-files-editor-focus: rgba(35, 131, 226, 0.42);
+  --color-files-editor-banner-bg: color-mix(
+    in srgb,
+    var(--color-files-surface-muted) 88%,
+    transparent
+  );
+  --color-files-editor-glass-border: color-mix(in srgb, var(--color-ink) 14%, transparent);
+  --color-files-editor-glass-highlight: color-mix(in srgb, var(--color-paper) 48%, transparent);
+  --shadow-files-editor-glass-inset: inset 0 1px 0 var(--color-files-editor-glass-highlight);
+  --blur-files-editor-glass: 28px;
+  --saturate-files-editor-glass: 150%;
+  --radius-files-editor: 1.25rem;
+  --spacing-files-editor-inset: 1rem;
+  /* Editor scrollbars — solid mixes (not alpha) so the thumb stays readable. */
+  --size-files-scrollbar: 12px;
+  --color-files-scrollbar-track: color-mix(
+    in srgb,
+    var(--color-ink) 8%,
+    var(--color-files-editor-solid)
+  );
+  --color-files-scrollbar-thumb: color-mix(
+    in srgb,
+    var(--color-ink) 40%,
+    var(--color-files-editor-solid)
+  );
+  --color-files-scrollbar-thumb-hover: color-mix(
+    in srgb,
+    var(--color-ink) 56%,
+    var(--color-files-editor-solid)
+  );
 
   /*
    * Document prose. Separate from the --text-h* product scale on purpose: those size headings
@@ -189,7 +220,10 @@
   --text-doc-h3--font-weight: 600;
   --text-doc-body: 16px;
   --text-doc-body--line-height: 1.65;
-  --files-doc-measure: 50rem;
+  /* Notion normal page — notion-enhancer/theming/variables.css (--theme--page-width / --theme--page-padding). */
+  --files-doc-page-width: 900px;
+  --files-doc-page-padding: 96px;
+  --files-doc-measure: var(--files-doc-page-width);
   --files-doc-pad-top: 32px;
   --files-doc-pad-bottom: 64px;
   --files-doc-pad-inline: 16px;
@@ -204,7 +238,7 @@
   --color-files-bubble-active: color-mix(in srgb, var(--color-ink) 13%, transparent);
   --shadow-files-bubble: 0 8px 24px color-mix(in srgb, var(--color-ink) 14%, transparent),
     0 1px 3px color-mix(in srgb, var(--color-ink) 8%, transparent);
-    --radius-files-card: 12px;
+  --radius-files-card: 12px;
   --radius-files-modal: 24px;
 
   /* Calendar product — Maximal soft (GCal-adjacent craft) */
@@ -387,6 +421,7 @@
   --color-meadow: #4dab9a;
   --color-ocean: #529cca;
   --color-slate: #9a6dd7;
+
   --color-marigold-tint: color-mix(in srgb, var(--color-marigold) 18%, var(--color-paper));
   --color-meadow-tint: color-mix(in srgb, var(--color-meadow) 18%, var(--color-paper));
   --color-brick-tint: color-mix(in srgb, var(--color-brick) 16%, var(--color-paper));
@@ -459,9 +494,37 @@
      code chips and rules that vanish against it. The canvas sits one step
      lighter than --color-files-bg so the document reads as a sheet on the app. */
   --color-files-editor-solid: color-mix(in srgb, var(--color-ink) 4%, var(--color-paper));
-  --color-files-editor-glass: color-mix(in srgb, var(--color-files-editor-solid) 88%, transparent);
-  --color-files-editor-glass-strong: color-mix(in srgb, var(--color-files-editor-solid) 94%, transparent);
+  --color-files-editor-glass: color-mix(
+    in srgb,
+    var(--color-files-editor-solid) 58%,
+    transparent
+  );
+  --color-files-editor-glass-strong: color-mix(
+    in srgb,
+    var(--color-files-editor-solid) 78%,
+    transparent
+  );
   --color-files-editor-overlay: color-mix(in srgb, var(--color-paper) 84%, transparent);
+  --color-files-editor-banner-bg: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  --color-files-editor-glass-border: color-mix(in srgb, var(--color-ink) 16%, transparent);
+  --color-files-editor-glass-highlight: color-mix(in srgb, var(--color-ink) 12%, transparent);
+  --shadow-files-editor-glass-inset: inset 0 1px 0 var(--color-files-editor-glass-highlight);
+  /* Dark: ink is warm paper — high mix so the pill reads against charcoal. */
+  --color-files-scrollbar-track: color-mix(
+    in srgb,
+    var(--color-ink) 16%,
+    var(--color-files-editor-solid)
+  );
+  --color-files-scrollbar-thumb: color-mix(
+    in srgb,
+    var(--color-ink) 72%,
+    var(--color-files-editor-solid)
+  );
+  --color-files-scrollbar-thumb-hover: color-mix(
+    in srgb,
+    var(--color-ink) 88%,
+    var(--color-files-editor-solid)
+  );
   --color-files-doc-selection: color-mix(in srgb, var(--color-ink) 16%, transparent);
   --color-files-doc-code-bg: color-mix(in srgb, var(--color-ink) 9%, transparent);
   --color-files-doc-rule: color-mix(in srgb, var(--color-ink) 16%, transparent);
@@ -2555,25 +2618,298 @@ html[data-library-collapsed="true"] .library-rail-boot {
  * ======================================================================== */
 
 /*
- * The editor follows the app theme — dark canvas in dark mode, paper in light.
- * It deliberately does NOT pin light ink: an earlier version re-bound every
- * token to paper values here, which forced a white sheet inside a dark app.
- * Both modes now work because [data-theme="dark"] defines the editor tokens
- * above; without those this rule would fall back to the light :root values.
+ * CLASS CONTRACT (document-editor-panel.tsx — Grok owns markup)
+ *
+ * Shell base:
+ *   .files-editor-shell              — ink lock + layout; frost only via ::before
+ *   .files-editor-shell--full        — full layout; radius + inset margin (flex) or absolute inset
+ *   .files-editor-shell--side        — right dock; frost + left radii clipped
+ *   .files-editor-shell--bottom      — bottom dock; frost + horizontal inset
+ *   .files-editor-shell--bleed       — edge-to-edge shell (transparent); canvas carries inset sheet
+ *
+ * Frost layer:
+ *   .files-editor-shell::before      — glass fill + backdrop-filter (never on the shell element —
+ *                                      scroll descendants fail to paint under ancestor blur)
+ *
+ * Inner sheet:
+ *   .files-editor-canvas             — document area; glass-strong (no nested backdrop-filter)
+ *
+ * Frost toggle (ancestor):
+ *   data-liquid-glass="on"           — force frost on shell (default for docked modifiers)
+ *   data-liquid-glass="off"          — solid shell + canvas, no backdrop-filter
+ *
+ * Nested .files-editor-shell inside .files-editor-shell → layout-only (no double frost).
+ *
+ * Planevo "liquid glass" is token + backdrop-filter (calendar / spotlight craft),
+ * never liquid-glass-react.
  */
 .files-editor-shell {
-  background: var(--color-files-editor-solid);
   color: var(--color-files-text);
 }
 
+/*
+ * Frosted shell — docked layouts, explicit opt-in, never on --bleed outer shell.
+ *
+ * CRITICAL: backdrop-filter must NOT live on this element. It is the ancestor of
+ * every document scroller (.cm-scroller, .overflow-auto, BlockNote, PDF). Putting
+ * blur on the scroll host breaks Chromium/WebKit paint (partial text, empty gaps
+ * until click). Frost sits on ::before (z-index: -1) inside isolation.
+ */
+.files-editor-shell.files-editor-shell--full:not(.files-editor-shell--bleed),
+.files-editor-shell.files-editor-shell--side,
+.files-editor-shell.files-editor-shell--bottom,
+[data-liquid-glass="on"] .files-editor-shell:not(.files-editor-shell--bleed) {
+  isolation: isolate;
+  background: transparent;
+  border: 1px solid var(--color-files-editor-glass-border);
+  box-shadow: var(--shadow-files-editor-glass-inset);
+}
+
+.files-editor-shell.files-editor-shell--full:not(.files-editor-shell--bleed)::before,
+.files-editor-shell.files-editor-shell--side::before,
+.files-editor-shell.files-editor-shell--bottom::before,
+[data-liquid-glass="on"] .files-editor-shell:not(.files-editor-shell--bleed)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--color-files-editor-glass);
+  -webkit-backdrop-filter: blur(var(--blur-files-editor-glass))
+    saturate(var(--saturate-files-editor-glass));
+  backdrop-filter: blur(var(--blur-files-editor-glass))
+    saturate(var(--saturate-files-editor-glass));
+}
+
+/*
+ * Editor scrollbars. Use ONLY ::-webkit-scrollbar — the standard
+ * scrollbar-color API keeps macOS overlay hairline thumbs and ignores width.
+ * WebKit pseudos force a classic gutter so the themed pill actually shows.
+ */
+.files-editor-shell .cm-scroller::-webkit-scrollbar,
+.files-editor-shell .overflow-auto::-webkit-scrollbar,
+.files-editor-shell .overflow-y-auto::-webkit-scrollbar {
+  width: var(--size-files-scrollbar);
+  height: var(--size-files-scrollbar);
+}
+
+.files-editor-shell .cm-scroller::-webkit-scrollbar-track,
+.files-editor-shell .overflow-auto::-webkit-scrollbar-track,
+.files-editor-shell .overflow-y-auto::-webkit-scrollbar-track {
+  background: var(--color-files-scrollbar-track);
+}
+
+.files-editor-shell .cm-scroller::-webkit-scrollbar-thumb,
+.files-editor-shell .overflow-auto::-webkit-scrollbar-thumb,
+.files-editor-shell .overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: var(--color-files-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--color-files-scrollbar-track);
+  background-clip: padding-box;
+}
+
+.files-editor-shell .cm-scroller::-webkit-scrollbar-thumb:hover,
+.files-editor-shell .overflow-auto::-webkit-scrollbar-thumb:hover,
+.files-editor-shell .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-files-scrollbar-thumb-hover);
+}
+
+/* Firefox — no WebKit pseudos; thin + themed is the available craft. */
+@supports not selector(::-webkit-scrollbar) {
+  .files-editor-shell .cm-scroller,
+  .files-editor-shell .overflow-auto,
+  .files-editor-shell .overflow-y-auto {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-files-scrollbar-thumb)
+      var(--color-files-scrollbar-track);
+  }
+}
+
+/* Layout insets — radius + gap live on tokens so utilities stay token-clean. */
+.files-editor-shell--full,
+.files-editor-shell--side,
+.files-editor-shell--bottom {
+  border-radius: var(--radius-files-editor);
+}
+
+.files-editor-shell--side {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Flex child (product shell): margin inset leaves files-bg visible for frost. */
+.files-editor-shell--full:not(.absolute) {
+  margin: var(--spacing-files-editor-inset);
+}
+
+.files-editor-shell--side:not(.absolute) {
+  margin-block: var(--spacing-files-editor-inset);
+  height: calc(100% - (2 * var(--spacing-files-editor-inset)));
+}
+
+/* Absolutely positioned (docked bottom + /design preview). */
+.files-editor-shell.absolute.files-editor-shell--full {
+  inset: var(--spacing-files-editor-inset);
+}
+
+.files-editor-shell.absolute.files-editor-shell--side {
+  top: var(--spacing-files-editor-inset);
+  bottom: var(--spacing-files-editor-inset);
+}
+
+.files-editor-shell--bottom {
+  inset-inline: var(--spacing-files-editor-inset);
+  bottom: var(--spacing-files-editor-inset);
+}
+
+/* Inner document sheet — default glass-strong; frosted layouts override below. */
+.files-editor-shell > .files-editor-canvas {
+  background: var(--color-files-editor-glass-strong);
+}
+
+/* Editor internals may nest .files-editor-canvas for layout — never stack opacity. */
+.files-editor-canvas .files-editor-canvas {
+  background: transparent;
+}
+
+/*
+ * Frosted layouts — every canvas host under the outer shell stays transparent so
+ * shell blur reads (production nests canvas inside a layout-only inner shell).
+ */
+.files-editor-shell--full:not(.files-editor-shell--bleed) .files-editor-canvas,
+.files-editor-shell--side .files-editor-canvas,
+.files-editor-shell--bottom .files-editor-canvas {
+  background: transparent;
+}
+
+/*
+ * Full document prose — shell frost is the surface; never paint cm-content as a
+ * glass-strong sheet (reads as opaque paper and hides rim / dimmed-library bleed).
+ * Measure/centering lives on .cm-content below — never on .cm-scroller.
+ */
+.files-editor-shell--full:not(.files-editor-shell--bleed) .files-doc-prose .cm-content {
+  background: transparent;
+  box-shadow: none;
+  /* Wide shell: 900px measure centered; no scroller pad, no extra inline pad. */
+  padding-inline: 0;
+}
+
+/*
+ * Notion page column for the ReactMarkdown split preview host only.
+ * NEVER put large padding-inline on .cm-scroller — CM derives wrap width /
+ * line-height maps from scroller geometry; scroller gutters desync cm-gap
+ * estimates (partial text, empty gaps until click → requestMeasure).
+ */
+.files-doc-page-host {
+  box-sizing: border-box;
+  padding-inline: max(
+    var(--files-doc-page-padding),
+    calc((100% - var(--files-doc-page-width)) / 2)
+  );
+}
+
+.files-editor-shell--side .files-doc-page-host,
+.files-editor-shell--bottom .files-doc-page-host,
+.files-editor-shell--side .planevo-editor .bn-container,
+.files-editor-shell--bottom .planevo-editor .bn-container {
+  padding-inline: var(--files-doc-pad-inline);
+}
+
+/*
+ * Full-bleed — shell stays layout-only; inset glass-strong sheet on canvas so the
+ * editor never reads as one flat opaque slab edge-to-edge.
+ */
+.files-editor-shell--bleed {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.files-editor-shell--bleed .files-editor-canvas {
+  margin: var(--spacing-files-editor-inset);
+  border-radius: var(--radius-files-editor);
+  border: 1px solid var(--color-files-editor-glass-border);
+  box-shadow: var(--shadow-files-editor-glass-inset);
+}
+
+[data-liquid-glass="off"] .files-editor-shell.files-editor-shell--full:not(.files-editor-shell--bleed),
+[data-liquid-glass="off"] .files-editor-shell.files-editor-shell--side,
+[data-liquid-glass="off"] .files-editor-shell.files-editor-shell--bottom,
+[data-liquid-glass="off"] .files-editor-shell:not(.files-editor-shell--bleed) {
+  isolation: auto;
+  background: var(--color-files-editor-solid);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+[data-liquid-glass="off"] .files-editor-shell.files-editor-shell--full:not(.files-editor-shell--bleed)::before,
+[data-liquid-glass="off"] .files-editor-shell.files-editor-shell--side::before,
+[data-liquid-glass="off"] .files-editor-shell.files-editor-shell--bottom::before,
+[data-liquid-glass="off"] .files-editor-shell:not(.files-editor-shell--bleed)::before {
+  content: none;
+  display: none;
+}
+
+[data-liquid-glass="off"] .files-editor-canvas {
+  background: var(--color-files-editor-solid);
+}
+
+[data-liquid-glass="off"] .files-editor-shell--bleed .files-editor-canvas {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Nested shells (e.g. ImportedDocumentEditor inside the panel aside) are layout-only. */
+.files-editor-shell .files-editor-shell {
+  isolation: auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.files-editor-shell .files-editor-shell::before,
+[data-liquid-glass="on"] .files-editor-shell .files-editor-shell::before,
+[data-liquid-glass="off"] .files-editor-shell .files-editor-shell::before {
+  content: none;
+  display: none;
+}
+
+/* Conversion + preview-only banners share one calm strip (DOCX + PDF parity). */
+.files-editor-banner {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-files-border);
+  background: var(--color-files-editor-banner-bg);
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-product-meta);
+  line-height: var(--text-product-meta--line-height);
+  color: var(--color-files-text-muted);
+}
+
+/*
+ * Document-mode measure lives on .cm-content (HEAD pattern), not the scroller.
+ * max-width + margin-inline centers the Notion column; CM's height oracle stays honest.
+ */
 .files-doc-prose .cm-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--files-doc-page-width);
+  margin-inline: auto;
   font-family: var(--font-sans);
   font-size: var(--text-doc-body);
   color: var(--color-files-text);
-  max-width: var(--files-doc-measure);
-  margin-inline: auto;
   padding: var(--files-doc-pad-top) var(--files-doc-pad-inline)
     var(--files-doc-pad-bottom);
+}
+
+.files-doc-page-host .cm-content,
+.files-doc-page {
+  width: 100%;
+  max-width: var(--files-doc-page-width);
+  margin-inline: auto;
+  padding: var(--files-doc-pad-top) 0 var(--files-doc-pad-bottom);
 }
 
 /* YAML front matter, claimed before the tree walk — metadata, not content. */
@@ -2696,5 +3032,37 @@ html[data-library-collapsed="true"] .library-rail-boot {
   .files-editor-control,
   .files-editor-resize {
     transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .files-editor-shell.files-editor-shell--full:not(.files-editor-shell--bleed),
+  .files-editor-shell.files-editor-shell--side,
+  .files-editor-shell.files-editor-shell--bottom,
+  [data-liquid-glass="on"] .files-editor-shell:not(.files-editor-shell--bleed) {
+    isolation: auto;
+    background: var(--color-files-editor-solid);
+    border-color: var(--color-files-border);
+    box-shadow: none;
+  }
+
+  .files-editor-shell.files-editor-shell--full:not(.files-editor-shell--bleed)::before,
+  .files-editor-shell.files-editor-shell--side::before,
+  .files-editor-shell.files-editor-shell--bottom::before,
+  [data-liquid-glass="on"] .files-editor-shell:not(.files-editor-shell--bleed)::before {
+    content: none;
+    display: none;
+  }
+
+  .files-editor-canvas,
+  .files-editor-shell--bleed .files-editor-canvas {
+    background: var(--color-files-editor-solid);
+    border-color: var(--color-files-border);
+    box-shadow: none;
+  }
+
+  .files-editor-shell .files-editor-shell {
+    background: transparent;
+    border: none;
   }
 }

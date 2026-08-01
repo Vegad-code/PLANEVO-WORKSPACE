@@ -1098,10 +1098,10 @@ export function DocumentEditorPanel({
         : undefined;
   const editorClass =
     mode === "full"
-      ? "files-editor-shell relative flex min-w-0 flex-1 flex-col overflow-hidden"
+      ? "files-editor-shell files-editor-shell--full relative flex min-w-0 flex-1 flex-col overflow-hidden"
       : mode === "side"
-        ? "files-editor-shell relative flex h-full shrink-0 flex-col overflow-hidden rounded-l-files-editor"
-        : "files-editor-shell absolute inset-x-3 bottom-3 z-40 flex max-h-full flex-col overflow-hidden rounded-files-editor";
+        ? "files-editor-shell files-editor-shell--side relative flex h-full shrink-0 flex-col overflow-hidden rounded-l-files-editor"
+        : "files-editor-shell files-editor-shell--bottom absolute inset-x-3 bottom-3 z-40 flex max-h-full flex-col overflow-hidden rounded-files-editor";
 
   const utilityLabels: Record<UtilityTab, string> = {
     details: "Details",
