@@ -1,5 +1,11 @@
 "use client";
 
+import { FILES_STORES, openFilesDatabase } from "./files-database";
+import {
+  DOCX_MIME_TYPE,
+  validateLocalEditableFileMetadata,
+} from "./local-document-content";
+
 type FilePermissionMode = "read" | "readwrite";
 
 type PlanevoFileHandle = {
@@ -58,18 +64,31 @@ export type LocalMirrorStatus =
   | { state: "missing"; name: string };
 
 export class LocalMirrorConflictError extends Error {
+  readonly kind:
+    | "local-file-conflict"
+    | "local-document-version-conflict" = "local-file-conflict";
+
   constructor(message = "The computer file changed outside Planevo.") {
     super(message);
     this.name = "LocalMirrorConflictError";
   }
 }
 
-import { FILES_STORES, openFilesDatabase } from "./files-database";
-
 const RECOVERY_STORE_NAME = FILES_STORES.documentRecovery;
 const STORE_NAME = FILES_STORES.localFileMirrors;
 const DELETION_STORE_NAME = FILES_STORES.deletionTombstones;
 const LOCAL_DOCUMENT_STORE_NAME = FILES_STORES.localDocumentSidecars;
+
+export type LocateLocalMirrorInput = {
+  fileSourceId: string;
+  /** The source identity captured when the document was last safely opened. */
+  expectedSourceHash?: string;
+  /** Convenience for callers that have the source bytes but not their hash. */
+  expectedContent?: Uint8Array;
+  format: "markdown" | "text" | "docx";
+  /** Only pass this after the user explicitly chose Save As. */
+  allowSaveAs?: boolean;
+};
 
 function pickerWindow(): Window & {
   showOpenFilePicker?: (options?: {
@@ -93,6 +112,46 @@ async function fileHash(file: Blob): Promise<string> {
   ).join("");
 }
 
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+function isDocxFile(file: File): boolean {
+  return fileExtension(file.name) === "docx" &&
+    (!file.type || file.type === DOCX_MIME_TYPE || file.type === "application/octet-stream");
+}
+
+function assertLocalEditableFile(file: File): void {
+  validateLocalEditableFileMetadata({
+    name: file.name,
+    mimeType: file.type,
+    sizeBytes: file.size,
+  });
+}
+
+/**
+ * One lock spans a local document's sidecar version check, disk write, and sidecar commit.
+ * Callers that are already inside this lock pass `alreadyLocked` to writeLocalMirror so we
+ * never request the non-reentrant Web Lock a second time.
+ */
+export async function withLocalFileLock<T>({
+  fileSourceId,
+  operation,
+}: {
+  fileSourceId: string;
+  operation: () => Promise<T>;
+}): Promise<T> {
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    throw new Error("Automatic computer writeback requires browser file locking.");
+  }
+  return navigator.locks.request(
+    `planevo-file-${fileSourceId}`,
+    { mode: "exclusive" },
+    operation,
+  );
+}
+
 export function supportsLocalFileMirror(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -113,10 +172,13 @@ export async function pickLocalEditableFile(): Promise<PickedLocalFile> {
     multiple: false,
     types: [
       {
-        description: "Markdown and text documents",
+        description: "Markdown, text, and DOCX documents",
         accept: {
           "text/plain": [".txt", ".md", ".markdown"],
           "text/markdown": [".md", ".markdown"],
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+            ".docx",
+          ],
         },
       },
     ],
@@ -127,6 +189,7 @@ export async function pickLocalEditableFile(): Promise<PickedLocalFile> {
     throw new Error("Planevo needs permission to save back to this file.");
   }
   const file = await handle.getFile();
+  assertLocalEditableFile(file);
   return {
     handle,
     file,
@@ -246,16 +309,38 @@ export async function connectLocalMirror(
   fileSourceId: string,
   expectedContent: Uint8Array,
 ): Promise<LocalMirrorStatus> {
+  return locateAndRebindLocalMirror({
+    fileSourceId,
+    expectedContent,
+    format: "text",
+  });
+}
+
+/**
+ * User-gesture-only recovery for a cleared or moved handle. Unless this is an explicit Save As,
+ * the selected source must still be byte-identical to the known source so reconnecting cannot
+ * redirect autosave onto a similarly named but different document.
+ */
+export async function locateAndRebindLocalMirror({
+  fileSourceId,
+  expectedSourceHash,
+  expectedContent,
+  format,
+  allowSaveAs = false,
+}: LocateLocalMirrorInput): Promise<LocalMirrorStatus> {
   const picker = pickerWindow().showOpenFilePicker;
   if (!supportsLocalFileMirror() || !picker) return { state: "unsupported" };
   const [handle] = await picker({
     multiple: false,
     types: [
       {
-        description: "Editable text documents",
+        description: "Editable Markdown, text, and DOCX documents",
         accept: {
           "text/plain": [".txt", ".md", ".markdown"],
           "text/markdown": [".md", ".markdown"],
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+            ".docx",
+          ],
         },
       },
     ],
@@ -266,23 +351,36 @@ export async function connectLocalMirror(
     return { state: "permission-needed", name: handle.name };
   }
   const file = await handle.getFile();
-  const [selectedHash, expectedHash] = await Promise.all([
-    fileHash(file),
-    fileHash(new Blob([expectedContent.slice().buffer as ArrayBuffer])),
-  ]);
-  if (selectedHash !== expectedHash) {
+  assertLocalEditableFile(file);
+  if (format === "docx" && !isDocxFile(file)) {
+    throw new LocalMirrorConflictError("Choose the original DOCX file to reconnect it.");
+  }
+  const selectedHash = await fileHash(file);
+  const contentHash = expectedContent
+    ? await fileHash(new Blob([expectedContent.slice().buffer as ArrayBuffer]))
+    : undefined;
+  const expectedHash = expectedSourceHash ?? contentHash;
+  if (!allowSaveAs && !expectedHash) {
+    throw new LocalMirrorConflictError(
+      "Planevo cannot verify this file without its original source fingerprint.",
+    );
+  }
+  if (!allowSaveAs && selectedHash !== expectedHash) {
     throw new LocalMirrorConflictError(
       "That file does not match the current Planevo document. Choose the original file before enabling automatic writeback.",
     );
   }
-  await writeRecord({
+  await withLocalFileLock({
     fileSourceId,
-    handle,
-    name: handle.name,
-    size: file.size,
-    lastModified: file.lastModified,
-    contentHash: selectedHash,
-    updatedAt: new Date().toISOString(),
+    operation: () => writeRecord({
+      fileSourceId,
+      handle,
+      name: handle.name,
+      size: file.size,
+      lastModified: file.lastModified,
+      contentHash: selectedHash,
+      updatedAt: new Date().toISOString(),
+    }),
   });
   return { state: "connected", name: handle.name, permission };
 }
@@ -352,24 +450,26 @@ async function writeWithHandle(
 export async function writeLocalMirror(
   fileSourceId: string,
   data: Uint8Array,
+  options: { alreadyLocked?: boolean } = {},
 ): Promise<void> {
-  const record = await readRecord(fileSourceId);
-  if (!record) return;
-  const permission = await record.handle.queryPermission({ mode: "readwrite" });
-  if (permission !== "granted") {
-    throw new Error("Reconnect the computer file to keep saving to it.");
+  const write = async () => {
+    const record = await readRecord(fileSourceId);
+    if (!record) {
+      throw new LocalMirrorConflictError(
+        "Planevo can no longer access the original computer file. Locate it before saving.",
+      );
+    }
+    const permission = await record.handle.queryPermission({ mode: "readwrite" });
+    if (permission !== "granted") {
+      throw new Error("Reconnect the computer file to keep saving to it.");
+    }
+    await writeWithHandle(record, data);
+  };
+  if (options.alreadyLocked) {
+    await write();
+    return;
   }
-
-  if (!navigator.locks) {
-    throw new Error(
-      "Automatic computer writeback requires browser file locking.",
-    );
-  }
-  await navigator.locks.request(
-    `planevo-file-${fileSourceId}`,
-    { mode: "exclusive" },
-    async () => writeWithHandle(record, data),
-  );
+  await withLocalFileLock({ fileSourceId, operation: write });
 }
 
 export async function forgetLocalMirror(fileSourceId: string): Promise<void> {

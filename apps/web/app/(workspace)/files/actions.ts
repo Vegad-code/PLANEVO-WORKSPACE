@@ -4,7 +4,11 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createDatabase } from "@planevo/core/mutations/create-database";
-import { updateFileTags } from "@planevo/core/mutations/product-files";
+import {
+  createFileSourceRecord,
+  deleteFileSource,
+  updateFileTags,
+} from "@planevo/core/mutations/product-files";
 // core moveFolder exists for folder reparent-by-drag but is intentionally not wired in v1.
 import {
   createFolder,
@@ -28,10 +32,28 @@ import {
   deleteError,
   isVirtualStoragePath,
   removeStorageObject,
-  removeStorageObjects,
   type DeleteResult,
 } from "@/lib/mutations/delete-entities";
+import {
+  DOCX_MIME_TYPE,
+  validateDocxBytes,
+} from "@/features/files-product/docx-document-transport";
+import { assertDocxCopyUsesDistinctFileSource } from "@/features/files-product/docx-save-copy";
+import {
+  PDF_MIME_TYPE,
+  validatePdfBytes,
+} from "@/features/files-product/pdf-document-transport";
+import { assertPdfCopyUsesDistinctFileSource, decodePdfBytesBase64 } from "@/features/files-product/pdf-save-copy";
 import { markdownToPlanevoBlocks } from "@/lib/files/markdown-to-planevo";
+import {
+  MAX_PRODUCT_FILE_BYTES,
+  PRODUCT_FILES_BUCKET,
+  requireProductFileSize,
+} from "@/lib/files/product-files";
+import {
+  enforceStorageQuota,
+  StorageQuotaError,
+} from "@/lib/files/storage-quota.server";
 
 export type FilesActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -70,8 +92,15 @@ const importDocumentSchema = z.object({
 const registerLocalFileSchema = z.object({
   name: z.string().trim().min(1).max(255),
   mimeType: z.string().max(255).nullable(),
-  sizeBytes: z.number().int().nonnegative().max(2_097_152),
+  sizeBytes: z.number().int().positive().max(MAX_PRODUCT_FILE_BYTES),
 });
+
+function localEditableFormat(name: string): "text" | "docx" | "pdf" | null {
+  if (/\.docx$/i.test(name)) return "docx";
+  if (/\.pdf$/i.test(name)) return "pdf";
+  if (/\.(md|markdown|txt)$/i.test(name)) return "text";
+  return null;
+}
 
 const createFolderSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -79,6 +108,280 @@ const createFolderSchema = z.object({
 });
 
 const FOLDER_CAP = 500;
+
+function cleanUploadedFileName(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
+  return cleaned || "upload";
+}
+
+function decodeDocxCopyBytes(value: string): Uint8Array | null {
+  try {
+    const buffer = Buffer.from(value, "base64");
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  } catch {
+    return null;
+  }
+}
+
+const createDocxCopySchema = z.object({
+  sourceFileSourceId: z.string().uuid(),
+  name: z.string().trim().min(1).max(255),
+  bytesBase64: z.string().min(1),
+});
+
+export async function createDocxCopyInFilesAction(input: {
+  sourceFileSourceId: string;
+  name: string;
+  bytesBase64: string;
+}): Promise<FilesActionResult<{ fileSourceId: string; fileName: string }>> {
+  let stagedSourceId: string | null = null;
+  let stagedStoragePath: string | null = null;
+  let access: Awaited<ReturnType<typeof requireMutationDataAccess>> | null = null;
+  try {
+    access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "files:docx-copy", RATE_LIMITS.mutate);
+    const parsed = createDocxCopySchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "This DOCX copy could not be saved to Files." };
+    }
+
+    const bytes = decodeDocxCopyBytes(parsed.data.bytesBase64);
+    if (!bytes) {
+      return { ok: false, error: "This DOCX copy could not be saved to Files." };
+    }
+    try {
+      requireProductFileSize(bytes.byteLength);
+    } catch {
+      return {
+        ok: false,
+        error: "This DOCX copy is larger than the 25 MB limit.",
+      };
+    }
+    if (!validateDocxBytes(bytes)) {
+      return { ok: false, error: "This DOCX copy is not a valid document." };
+    }
+
+    await enforceStorageQuota(access, bytes.byteLength);
+
+    const current = await getCurrentWorkspace();
+    if (!current || current.access.ownerId !== access.ownerId) {
+      return {
+        ok: false,
+        error: "Open a workspace before saving a copy to Files.",
+      };
+    }
+
+    const { data: source, error: sourceError } = await access.client
+      .from("file_sources")
+      .select("id, folder_id")
+      .eq("id", parsed.data.sourceFileSourceId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle();
+    if (sourceError) throw sourceError;
+    if (!source) {
+      return { ok: false, error: "The source file was not found." };
+    }
+
+    const fileName = parsed.data.name;
+    const storagePath = `${current.workspace.id}/${randomUUID()}-${cleanUploadedFileName(fileName)}`;
+    const sourceRecord = await createFileSourceRecord(access.client, access.ownerId, {
+      workspaceId: current.workspace.id,
+      storagePath,
+      name: fileName,
+      mimeType: DOCX_MIME_TYPE,
+      sizeBytes: bytes.byteLength,
+      operationKey: randomUUID(),
+    });
+    stagedSourceId = sourceRecord.id;
+    stagedStoragePath = storagePath;
+
+    const { error: uploadError } = await access.client.storage
+      .from(PRODUCT_FILES_BUCKET)
+      .upload(storagePath, bytes, {
+        contentType: DOCX_MIME_TYPE,
+        upsert: false,
+      });
+    if (uploadError) throw uploadError;
+
+    const { error: readyError } = await access.client
+      .from("file_sources")
+      .update({
+        ingestion_status: "ready",
+        size_bytes: bytes.byteLength,
+        folder_id: source.folder_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", sourceRecord.id)
+      .eq("user_id", access.ownerId);
+    if (readyError) throw readyError;
+
+    await linkResourceToWorkspace(access.client, access.ownerId, {
+      workspaceId: current.workspace.id,
+      resourceType: "file",
+      resourceId: sourceRecord.id,
+    });
+
+    assertDocxCopyUsesDistinctFileSource({
+      sourceFileSourceId: parsed.data.sourceFileSourceId,
+      createdFileSourceId: sourceRecord.id,
+    });
+
+    stagedSourceId = null;
+    stagedStoragePath = null;
+    revalidatePath("/files");
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      data: { fileSourceId: sourceRecord.id, fileName },
+    };
+  } catch (cause) {
+    if (access && stagedSourceId) {
+      if (stagedStoragePath) {
+        await access.client.storage
+          .from(PRODUCT_FILES_BUCKET)
+          .remove([stagedStoragePath])
+          .catch(() => undefined);
+      }
+      await deleteFileSource(access.client, access.ownerId, stagedSourceId).catch(
+        () => undefined,
+      );
+    }
+    if (cause instanceof StorageQuotaError) {
+      return { ok: false, error: cause.message, code: "STORAGE_QUOTA" };
+    }
+    return filesActionError(cause, "Could not save the DOCX copy to Files.");
+  }
+}
+
+const createPdfCopySchema = z.object({
+  sourceFileSourceId: z.string().uuid(),
+  name: z.string().trim().min(1).max(255),
+  bytesBase64: z.string().min(1),
+});
+
+export async function createPdfCopyInFilesAction(input: {
+  sourceFileSourceId: string;
+  name: string;
+  bytesBase64: string;
+}): Promise<FilesActionResult<{ fileSourceId: string; fileName: string }>> {
+  let stagedSourceId: string | null = null;
+  let stagedStoragePath: string | null = null;
+  let access: Awaited<ReturnType<typeof requireMutationDataAccess>> | null = null;
+  try {
+    access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "files:pdf-copy", RATE_LIMITS.mutate);
+    const parsed = createPdfCopySchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "This PDF copy could not be saved to Files." };
+    }
+
+    const bytes = decodePdfBytesBase64(parsed.data.bytesBase64);
+    if (!bytes) {
+      return { ok: false, error: "This PDF copy could not be saved to Files." };
+    }
+    try {
+      requireProductFileSize(bytes.byteLength);
+    } catch {
+      return {
+        ok: false,
+        error: "This PDF copy is larger than the 25 MB limit.",
+      };
+    }
+    if (!validatePdfBytes(bytes)) {
+      return { ok: false, error: "This PDF copy is not a valid document." };
+    }
+
+    await enforceStorageQuota(access, bytes.byteLength);
+
+    const current = await getCurrentWorkspace();
+    if (!current || current.access.ownerId !== access.ownerId) {
+      return {
+        ok: false,
+        error: "Open a workspace before saving a copy to Files.",
+      };
+    }
+
+    const { data: source, error: sourceError } = await access.client
+      .from("file_sources")
+      .select("id, folder_id")
+      .eq("id", parsed.data.sourceFileSourceId)
+      .eq("user_id", access.ownerId)
+      .maybeSingle();
+    if (sourceError) throw sourceError;
+    if (!source) {
+      return { ok: false, error: "The source file was not found." };
+    }
+
+    const fileName = parsed.data.name;
+    const storagePath = `${current.workspace.id}/${randomUUID()}-${cleanUploadedFileName(fileName)}`;
+    const sourceRecord = await createFileSourceRecord(access.client, access.ownerId, {
+      workspaceId: current.workspace.id,
+      storagePath,
+      name: fileName,
+      mimeType: PDF_MIME_TYPE,
+      sizeBytes: bytes.byteLength,
+      operationKey: randomUUID(),
+    });
+    stagedSourceId = sourceRecord.id;
+    stagedStoragePath = storagePath;
+
+    const { error: uploadError } = await access.client.storage
+      .from(PRODUCT_FILES_BUCKET)
+      .upload(storagePath, bytes, {
+        contentType: PDF_MIME_TYPE,
+        upsert: false,
+      });
+    if (uploadError) throw uploadError;
+
+    const { error: readyError } = await access.client
+      .from("file_sources")
+      .update({
+        ingestion_status: "ready",
+        size_bytes: bytes.byteLength,
+        folder_id: source.folder_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", sourceRecord.id)
+      .eq("user_id", access.ownerId);
+    if (readyError) throw readyError;
+
+    await linkResourceToWorkspace(access.client, access.ownerId, {
+      workspaceId: current.workspace.id,
+      resourceType: "file",
+      resourceId: sourceRecord.id,
+    });
+
+    assertPdfCopyUsesDistinctFileSource({
+      sourceFileSourceId: parsed.data.sourceFileSourceId,
+      createdFileSourceId: sourceRecord.id,
+    });
+
+    stagedSourceId = null;
+    stagedStoragePath = null;
+    revalidatePath("/files");
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      data: { fileSourceId: sourceRecord.id, fileName },
+    };
+  } catch (cause) {
+    if (access && stagedSourceId) {
+      if (stagedStoragePath) {
+        await access.client.storage
+          .from(PRODUCT_FILES_BUCKET)
+          .remove([stagedStoragePath])
+          .catch(() => undefined);
+      }
+      await deleteFileSource(access.client, access.ownerId, stagedSourceId).catch(
+        () => undefined,
+      );
+    }
+    if (cause instanceof StorageQuotaError) {
+      return { ok: false, error: cause.message, code: "STORAGE_QUOTA" };
+    }
+    return filesActionError(cause, "Could not save the PDF copy to Files.");
+  }
+}
 
 export async function createFolderAction(input: {
   name: string;
@@ -295,11 +598,30 @@ export async function registerLocalProductFileAction(input: {
     const access = await requireMutationDataAccess();
     await enforceRateLimit(access, "files:local-register", RATE_LIMITS.mutate);
     const parsed = registerLocalFileSchema.safeParse(input);
-    if (!parsed.success || !/\.(md|markdown|txt)$/i.test(parsed.data.name)) {
+    const format = parsed.success
+      ? localEditableFormat(parsed.data.name)
+      : null;
+    if (!parsed.success || !format) {
       return {
         ok: false,
-        error: "Choose a Markdown or text file up to 2 MB.",
+        error: "Choose a Markdown, text, DOCX, or PDF file up to 25 MB.",
       };
+    }
+    if (
+      format === "docx" &&
+      parsed.data.mimeType !== null &&
+      parsed.data.mimeType !== DOCX_MIME_TYPE &&
+      parsed.data.mimeType !== "application/octet-stream"
+    ) {
+      return { ok: false, error: "Choose a valid DOCX document." };
+    }
+    if (
+      format === "pdf" &&
+      parsed.data.mimeType !== null &&
+      parsed.data.mimeType !== PDF_MIME_TYPE &&
+      parsed.data.mimeType !== "application/octet-stream"
+    ) {
+      return { ok: false, error: "Choose a valid PDF document." };
     }
     const current = await getCurrentWorkspace();
     if (!current || current.access.ownerId !== access.ownerId) {
@@ -317,7 +639,14 @@ export async function registerLocalProductFileAction(input: {
       storage_path: `local:${fileSourceId}`,
       storage_kind: "local",
       name: parsed.data.name,
-      mime_type: parsed.data.mimeType,
+      // Browsers sometimes omit File.type for local DOCX/PDF files; the product record must still
+      // carry the canonical MIME so it consistently enters the binary editor path.
+      mime_type:
+        format === "docx"
+          ? DOCX_MIME_TYPE
+          : format === "pdf"
+            ? PDF_MIME_TYPE
+            : parsed.data.mimeType,
       size_bytes: parsed.data.sizeBytes,
       ingestion_status: "local_only",
       metadata_json: {
@@ -524,41 +853,81 @@ export async function deleteProductFileAction(input: {
       return { ok: false, error: "Choose a valid file." };
     }
 
-    const { data, error } = await access.client.rpc("delete_file_document", {
+    // Soft-delete only — blobs stay until purge so Restore can succeed.
+    const { error } = await access.client.rpc("delete_file_document", {
       p_owner_id: access.ownerId,
       p_file_source_id: parsed.data.fileSourceId,
     });
     if (error) throw error;
-    const deletion = data as {
-      cleanupJobId?: unknown;
-      storagePaths?: unknown;
-    } | null;
-    const cleanupJobId =
-      typeof deletion?.cleanupJobId === "string" ? deletion.cleanupJobId : null;
-    const storagePaths = Array.isArray(deletion?.storagePaths)
-      ? deletion.storagePaths.filter(
-          (path): path is string => typeof path === "string",
-        )
-      : [];
-
-    if (cleanupJobId && storagePaths.length > 0) {
-      try {
-        await removeStorageObjects(access, storagePaths);
-      } catch (cleanupCause) {
-        console.warn("[files:delete] storage cleanup queued", {
-          fileSourceId: parsed.data.fileSourceId,
-          cleanupJobId,
-          message:
-            cleanupCause instanceof Error
-              ? cleanupCause.message
-              : "Unknown storage cleanup error",
-        });
-      }
-    }
     revalidatePath("/files");
     return { ok: true, data: undefined };
   } catch (cause) {
     return filesActionError(cause, "Could not delete the file.");
+  }
+}
+
+const restoreProductFileSchema = z.object({
+  fileSourceId: z.string().uuid(),
+});
+
+const restoreProductFilesSchema = z.object({
+  fileSourceIds: z.array(z.string().uuid()).min(1).max(100),
+});
+
+export async function restoreProductFileAction(input: {
+  fileSourceId: string;
+}): Promise<FilesActionResult> {
+  try {
+    const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "files:restore", RATE_LIMITS.mutate);
+    const parsed = restoreProductFileSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose a valid file." };
+    }
+
+    const { error } = await access.client.rpc("restore_file_document", {
+      p_owner_id: access.ownerId,
+      p_file_source_id: parsed.data.fileSourceId,
+    });
+    if (error) throw error;
+    revalidatePath("/files");
+    return { ok: true, data: undefined };
+  } catch (cause) {
+    return filesActionError(cause, "Could not restore the file.");
+  }
+}
+
+export async function restoreProductFilesAction(input: {
+  fileSourceIds: string[];
+}): Promise<FilesActionResult<{ restoredIds: string[] }>> {
+  try {
+    const access = await requireMutationDataAccess();
+    await enforceRateLimit(access, "files:restore-bulk", RATE_LIMITS.mutate);
+    const parsed = restoreProductFilesSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Choose valid files to restore." };
+    }
+
+    const restoredIds: string[] = [];
+    for (const fileSourceId of parsed.data.fileSourceIds) {
+      const { error } = await access.client.rpc("restore_file_document", {
+        p_owner_id: access.ownerId,
+        p_file_source_id: fileSourceId,
+      });
+      if (error) {
+        if (restoredIds.length === 0) throw error;
+        break;
+      }
+      restoredIds.push(fileSourceId);
+    }
+
+    revalidatePath("/files");
+    if (restoredIds.length === 0) {
+      return { ok: false, error: "Could not restore the files." };
+    }
+    return { ok: true, data: { restoredIds } };
+  } catch (cause) {
+    return filesActionError(cause, "Could not restore the files.");
   }
 }
 

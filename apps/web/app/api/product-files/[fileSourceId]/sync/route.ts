@@ -37,6 +37,7 @@ async function ownedLocalSource(
     .select("id,workspace_id,storage_kind")
     .eq("id", fileSourceId)
     .eq("user_id", ownerId)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   return data?.storage_kind === "local" ? data : null;

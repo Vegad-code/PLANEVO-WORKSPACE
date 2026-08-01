@@ -7,6 +7,10 @@ import { FilesBreadcrumbHeader } from "@/features/files-product/files-breadcrumb
 import { FilesFolderCards } from "@/features/files-product/files-folder-cards";
 import { FilesKnowledgeSidebar } from "@/features/files-product/files-knowledge-sidebar";
 import { FilesTable, type ProductFileItem } from "@/features/files-product/files-table";
+import {
+  emptyFileListSelection,
+  reduceFileListSelection,
+} from "@/lib/files/file-selection";
 import { StorageMeter } from "@/features/files-product/storage-meter";
 import { SaveIndicator } from "@/features/editor/toolbar/save-indicator";
 import type {
@@ -117,6 +121,7 @@ export function FilesProductPreview() {
   const [activeTab, setActiveTab] = useState<"folders" | "tags">("folders");
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [listSelection, setListSelection] = useState(emptyFileListSelection);
 
   return (
     <div data-product="files" className="files-product-ui">
@@ -176,12 +181,21 @@ export function FilesProductPreview() {
                       files={DESIGN_FILES}
                       owner={DESIGN_OWNER}
                       folders={DESIGN_FOLDERS}
-                      selectedFileId="file-logo"
-                      onSelectFile={noop}
+                      openedFileId={null}
+                      previewFileId="file-logo"
+                      selection={listSelection}
+                      onSelectionChange={(intent) =>
+                        setListSelection((prev) =>
+                          reduceFileListSelection(prev, intent),
+                        )
+                      }
+                      onOpenFile={noop}
                       onDeleteFile={noop}
                       onAttachToTask={noop}
                       onLinkToEvent={noop}
                       onMoveFileToFolder={noop}
+                      onBulkDownload={noop}
+                      onBulkMoveToFolder={noop}
                     />
                   </div>
                 </section>

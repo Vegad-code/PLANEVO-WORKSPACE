@@ -49,12 +49,35 @@ export function documentRepositoryFor(
       storageKind: "local",
       load: () => loadLocalFileDocument(file),
       save: (input) => {
-        if (typeof input.content !== "string") {
-          throw new Error("Local files require exact text content.");
+        if (input.format === "docx" || input.format === "pdf") {
+          if (!(input.content instanceof Uint8Array)) {
+            throw new Error(
+              input.format === "pdf"
+                ? "Local PDF files require exact byte content."
+                : "Local DOCX files require exact byte content.",
+            );
+          }
+          return saveLocalFileDocument({
+            fileSourceId: file.id,
+            baseVersion: input.baseVersion,
+            format: input.format,
+            content: input.content,
+            checkpointReason:
+              input.checkpointReason === "close" ? "close" : "checkpoint",
+          });
+        }
+        if (
+          (input.format !== "markdown" && input.format !== "text") ||
+          typeof input.content !== "string"
+        ) {
+          throw new Error(
+            "Local files require exact text, DOCX, or PDF byte content.",
+          );
         }
         return saveLocalFileDocument({
           fileSourceId: file.id,
           baseVersion: input.baseVersion,
+          format: input.format,
           content: input.content,
           textMetadata: input.textMetadata ?? {
             hasUtf8Bom: false,
@@ -66,8 +89,8 @@ export function documentRepositoryFor(
         });
       },
       saveNote: (content) => saveLocalFileNote(file.id, content),
-      restoreRevision: (revisionId) =>
-        restoreLocalFileRevision(file.id, revisionId),
+      restoreRevision: (revisionId, baseVersion) =>
+        restoreLocalFileRevision(file.id, revisionId, baseVersion),
     };
   }
 

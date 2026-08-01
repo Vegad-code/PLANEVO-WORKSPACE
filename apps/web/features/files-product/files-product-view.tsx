@@ -5,12 +5,14 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ChevronDown,
   FileText,
   FolderOpen,
   PanelLeft,
@@ -30,7 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   documentFormatForFile,
-  isEditableDocumentFormat,
+  opensInDocumentEditorPanel,
 } from "@planevo/core/files/document-descriptor";
 import { Dialog } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/planevo-icon";
@@ -47,6 +49,8 @@ import {
   registerLocalProductFileAction,
   renameFileAction,
   renameFolderAction,
+  restoreProductFileAction,
+  restoreProductFilesAction,
   updateProductFileTagsAction,
 } from "@/app/(workspace)/files/actions";
 import {
@@ -90,6 +94,20 @@ import {
 import { FilesBreadcrumbHeader } from "./files-breadcrumb-header";
 import { FilesFolderCards } from "./files-folder-cards";
 import { FilesKnowledgeSidebar } from "./files-knowledge-sidebar";
+import {
+  emptyFileListSelection,
+  reduceFileListSelection,
+  type FileListSelectionState,
+} from "@/lib/files/file-selection";
+import {
+  formatBulkDeleteButtonLabel,
+  formatBulkDeleteConfirmBody,
+  formatBulkDeleteConfirmTitle,
+  formatFilesDeletedToastMessage,
+  formatFilesRestoredToastMessage,
+  listBulkDeleteFileNames,
+  shouldShowBulkDeleteFileList,
+} from "@/lib/files/file-delete-restore";
 import { FilesTable, type ProductFileItem } from "./files-table";
 import { FilesUploadDropzone } from "./files-upload-dropzone";
 import { FilesUploadModal } from "./files-upload-modal";
@@ -376,13 +394,36 @@ export function FilesProductView({
   const [fileToDelete, setFileToDelete] = useState<ProductFileItem | null>(
     null,
   );
+  const [filesToDelete, setFilesToDelete] = useState<ProductFileItem[] | null>(
+    null,
+  );
+  const [bulkDeleteListOpen, setBulkDeleteListOpen] = useState(false);
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
   const [folderToDelete, setFolderToDelete] = useState<FolderTreeItem | null>(
     null,
   );
+  const [listSelection, setListSelection] = useState<FileListSelectionState>(
+    emptyFileListSelection,
+  );
+  /** Lightweight reading pane — updated by single-click, never sets ?file=. */
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [crossLink, setCrossLink] = useState<{
-    file: ProductFileItem;
+    files: ProductFileItem[];
     target: FileCrossLinkTarget;
   } | null>(null);
+  const documentFlush = useRef<
+    ((reason: "checkpoint" | "close") => Promise<void>) | null
+  >(null);
+  const openFileRequest = useRef(0);
+  const handleDocumentFlushReady = useCallback(
+    (flush: ((reason: "checkpoint" | "close") => Promise<void>) | null) => {
+      documentFlush.current = flush;
+    },
+    [],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -462,6 +503,9 @@ export function FilesProductView({
   const selectedFile = selectedFileId
     ? (initialFiles.find((file) => file.id === selectedFileId) ?? null)
     : null;
+  const previewFile = previewFileId
+    ? (initialFiles.find((file) => file.id === previewFileId) ?? null)
+    : null;
 
   const selectedFormat = selectedFile
     ? documentFormatForFile({
@@ -493,8 +537,31 @@ export function FilesProductView({
     router.replace(query ? `/files?${query}` : "/files", { scroll: false });
   }
 
-  function openFile(file: ProductFileItem) {
+  /** Open file in the editor / preview pane. Owns ?file= URL. */
+  async function openFile(
+    file: ProductFileItem,
+    options?: { toggleSame?: boolean },
+  ) {
+    const toggleSame = options?.toggleSame ?? true;
+    const request = openFileRequest.current + 1;
+    openFileRequest.current = request;
+    const flush = documentFlush.current;
+    try {
+      if (flush) await flush("close");
+    } catch (cause) {
+      toast(
+        cause instanceof Error
+          ? cause.message
+          : "Planevo could not finish saving the open DOCX.",
+        { tone: "error" },
+      );
+      return;
+    }
+    if (request !== openFileRequest.current) return;
+
+    setPreviewFileId(file.id);
     if (file.id === selectedFileId) {
+      if (!toggleSame) return;
       setSelectedFileId(null);
       setEditorMode(getFileEditorPreferences().mode);
       replaceFilesUrl({ fileId: null, editor: null });
@@ -507,7 +574,10 @@ export function FilesProductView({
   }
 
   function closeFile() {
+    openFileRequest.current += 1;
+    documentFlush.current = null;
     setSelectedFileId(null);
+    setPreviewFileId(null);
     setEditorMode(getFileEditorPreferences().mode);
     replaceFilesUrl({ fileId: null, editor: null });
   }
@@ -523,6 +593,8 @@ export function FilesProductView({
       return;
     }
     setFilesScope(scope);
+    setListSelection(emptyFileListSelection());
+    setPreviewFileId(null);
     replaceFilesUrl({ scope });
   }
 
@@ -530,6 +602,14 @@ export function FilesProductView({
     setActiveSideTab("folders");
     setSelectedTag(null);
     setSelectedFolderId(folderId);
+    setListSelection(emptyFileListSelection());
+    setPreviewFileId(null);
+  }
+
+  function handleSelectTag(tag: string | null) {
+    setSelectedTag(tag);
+    setListSelection(emptyFileListSelection());
+    setPreviewFileId(null);
   }
 
   function handleUploadComplete() {
@@ -584,7 +664,11 @@ export function FilesProductView({
         fileId: result.data.fileSourceId,
         editor: preferredMode,
       });
-      toast("Local file opened. Its content stays on this device.");
+      toast(
+        picked.file.name.toLowerCase().endsWith(".docx")
+          ? "DOCX opened. Edits save back to this file automatically."
+          : "Local file opened. Its content stays on this device.",
+      );
       router.refresh();
     } catch (cause) {
       if ((cause as { name?: string })?.name !== "AbortError") {
@@ -643,20 +727,51 @@ export function FilesProductView({
   }
 
   function handleMoveFileToFolder(fileId: string, folderId: string | null) {
-    const file = initialFiles.find((candidate) => candidate.id === fileId);
-    if (file && (file.folder_id ?? null) === folderId) return;
+    handleBulkMoveToFolder([fileId], folderId);
+  }
+
+  function handleBulkMoveToFolder(fileIds: string[], folderId: string | null) {
+    if (fileIds.length === 0) return;
+    const needsMove = fileIds.filter((fileId) => {
+      const file = initialFiles.find((candidate) => candidate.id === fileId);
+      return !file || (file.folder_id ?? null) !== folderId;
+    });
+    if (needsMove.length === 0) return;
     startTransition(async () => {
       const result = await moveFileToFolderAction({
-        fileIds: [fileId],
+        fileIds: needsMove,
         folderId,
       });
       if (!result.ok) {
         toast(result.error, { tone: "error" });
         return;
       }
-      toast(folderId ? "Moved to folder" : "Removed from folder");
+      toast(
+        folderId
+          ? needsMove.length === 1
+            ? "Moved to folder"
+            : `Moved ${needsMove.length} files`
+          : needsMove.length === 1
+            ? "Removed from folder"
+            : `Removed ${needsMove.length} files from folder`,
+      );
+      setListSelection(emptyFileListSelection());
       router.refresh();
     });
+  }
+
+  function downloadFiles(files: ProductFileItem[]) {
+    for (const file of files) {
+      if (!file.previewUrl) continue;
+      const anchor = document.createElement("a");
+      anchor.href = file.previewUrl;
+      anchor.download = file.name;
+      anchor.target = "_blank";
+      anchor.rel = "noreferrer";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+    }
   }
 
   const handleRenameFile = useCallback(
@@ -690,36 +805,133 @@ export function FilesProductView({
     });
   }
 
+  async function deleteOneFile(
+    file: ProductFileItem,
+  ): Promise<LocalDocumentDeletionSnapshot | null> {
+    let localState: LocalDocumentDeletionSnapshot;
+    try {
+      localState = await detachLocalDocumentStateForDeletion(file.id);
+    } catch {
+      toast(
+        "Could not clear this file from browser recovery storage. The file was not deleted.",
+        { tone: "error" },
+      );
+      return null;
+    }
+    const result = await deleteProductFileAction({ fileSourceId: file.id });
+    if (!result.ok) {
+      try {
+        await restoreLocalDocumentStateAfterFailedDeletion(localState);
+      } catch {
+        toast(
+          "The file is still in Planevo, but its browser recovery state could not be restored.",
+          { tone: "error" },
+        );
+      }
+      toast(result.error, { tone: "error" });
+      return null;
+    }
+    if (selectedFileId === file.id) closeFile();
+    return localState;
+  }
+
+  function offerRestoreDeletedFiles(input: {
+    files: readonly ProductFileItem[];
+    snapshots: readonly LocalDocumentDeletionSnapshot[];
+  }) {
+    const fileSourceIds = input.files.map((file) => file.id);
+    const snapshotsById = new Map(
+      input.snapshots.map((snapshot) => [snapshot.fileSourceId, snapshot]),
+    );
+    toast(formatFilesDeletedToastMessage(fileSourceIds.length), {
+      action: {
+        label: "Restore",
+        onClick: () => {
+          startTransition(async () => {
+            const result =
+              fileSourceIds.length === 1
+                ? await restoreProductFileAction({
+                    fileSourceId: fileSourceIds[0]!,
+                  }).then((single) =>
+                    single.ok
+                      ? {
+                          ok: true as const,
+                          data: { restoredIds: fileSourceIds },
+                        }
+                      : single,
+                  )
+                : await restoreProductFilesAction({ fileSourceIds });
+            if (!result.ok) {
+              toast(result.error, { tone: "error" });
+              return;
+            }
+            for (const restoredId of result.data.restoredIds) {
+              const snapshot = snapshotsById.get(restoredId);
+              if (!snapshot) continue;
+              try {
+                await restoreLocalDocumentStateAfterFailedDeletion(snapshot);
+              } catch {
+                // Soft-delete restore succeeded in Postgres; local drafts are best-effort.
+              }
+            }
+            toast(
+              formatFilesRestoredToastMessage(result.data.restoredIds.length),
+            );
+            router.refresh();
+          });
+        },
+      },
+    });
+  }
+
   function handleConfirmDelete() {
     const file = fileToDelete;
     if (!file) return;
     startTransition(async () => {
-      let localState: LocalDocumentDeletionSnapshot;
-      try {
-        localState = await detachLocalDocumentStateForDeletion(file.id);
-      } catch {
-        toast(
-          "Could not clear this file from browser recovery storage. The file was not deleted.",
-          { tone: "error" },
-        );
-        return;
-      }
-      const result = await deleteProductFileAction({ fileSourceId: file.id });
+      const snapshot = await deleteOneFile(file);
       setFileToDelete(null);
-      if (!result.ok) {
-        try {
-          await restoreLocalDocumentStateAfterFailedDeletion(localState);
-        } catch {
-          toast(
-            "The file is still in Planevo, but its browser recovery state could not be restored.",
-            { tone: "error" },
-          );
-        }
-        toast(result.error, { tone: "error" });
-        return;
+      if (!snapshot) return;
+      setListSelection((prev) =>
+        reduceFileListSelection(prev, {
+          type: "set",
+          ids: prev.selectedIds.filter((id) => id !== file.id),
+        }),
+      );
+      offerRestoreDeletedFiles({ files: [file], snapshots: [snapshot] });
+      router.refresh();
+    });
+  }
+
+  function handleConfirmBulkDelete() {
+    const files = filesToDelete;
+    if (!files || files.length === 0) return;
+    startTransition(async () => {
+      setBulkDeleteProgress({ completed: 0, total: files.length });
+      const deleted: ProductFileItem[] = [];
+      const snapshots: LocalDocumentDeletionSnapshot[] = [];
+      for (const file of files) {
+        const snapshot = await deleteOneFile(file);
+        if (!snapshot) break;
+        deleted.push(file);
+        snapshots.push(snapshot);
+        setBulkDeleteProgress({
+          completed: deleted.length,
+          total: files.length,
+        });
       }
-      if (selectedFileId === file.id) closeFile();
-      toast("File deleted");
+      const deletedIds = new Set(deleted.map((file) => file.id));
+      const remaining = files.filter((file) => !deletedIds.has(file.id));
+      setFilesToDelete(remaining.length > 0 ? remaining : null);
+      setBulkDeleteProgress(null);
+      if (remaining.length === 0) setBulkDeleteListOpen(false);
+      setListSelection((prev) =>
+        reduceFileListSelection(prev, {
+          type: "set",
+          ids: prev.selectedIds.filter((id) => !deletedIds.has(id)),
+        }),
+      );
+      if (deleted.length === 0) return;
+      offerRestoreDeletedFiles({ files: deleted, snapshots });
       router.refresh();
     });
   }
@@ -805,9 +1017,17 @@ export function FilesProductView({
             <div className="min-h-0 flex-1 overflow-y-auto">
               <FilesKnowledgeSidebar
                 activeTab={activeSideTab}
-                onTabChange={setActiveSideTab}
+                onTabChange={(tab) => {
+                  setActiveSideTab(tab);
+                  setListSelection(emptyFileListSelection());
+                  setPreviewFileId(null);
+                }}
                 search={search}
-                onSearchChange={setSearch}
+                onSearchChange={(value) => {
+                  setSearch(value);
+                  setListSelection(emptyFileListSelection());
+                  setPreviewFileId(null);
+                }}
                 onCollapse={() => setSidebarCollapsedFromUser(true)}
                 folders={folders}
                 selectedFolderId={selectedFolderId}
@@ -821,7 +1041,7 @@ export function FilesProductView({
                 }
                 tags={tags}
                 selectedTag={selectedTag}
-                onSelectTag={setSelectedTag}
+                onSelectTag={handleSelectTag}
               />
             </div>
             <div className="relative w-full shrink-0 bg-files-bg shadow-[inset_0_1px_0_0_var(--color-files-border-strong)]">
@@ -851,11 +1071,14 @@ export function FilesProductView({
           </div>
         </aside>
 
-        <div className="relative flex min-w-0 flex-1 overflow-hidden">
+        <div className="relative flex min-w-0 flex-1 overflow-hidden bg-files-bg">
           <div
             className={cn(
               "min-w-0 flex-1 flex-col overflow-y-auto bg-files-bg",
-              selectedFile && editorMode === "full" ? "hidden" : "flex",
+              // Full editor floats as glass over the library — keep cards visible for frost.
+              selectedFile && editorMode === "full"
+                ? "pointer-events-none flex opacity-55"
+                : "flex",
             )}
           >
             <div className="sticky top-0 z-10 bg-files-bg/95 px-6 pt-4 pb-3 backdrop-blur-sm lg:px-8">
@@ -903,7 +1126,7 @@ export function FilesProductView({
                         <Badge asChild variant="secondary">
                           <button
                             type="button"
-                            onClick={() => setSelectedTag(null)}
+                            onClick={() => handleSelectTag(null)}
                             className="outline-none focus-visible:outline focus-visible:outline-offset-1 focus-visible:outline-files-cta"
                           >
                             #{selectedTag}
@@ -926,7 +1149,7 @@ export function FilesProductView({
                     className="flex items-center gap-1.5 rounded-files-card border border-files-border bg-files-surface px-3 py-2 text-product-body font-medium text-files-text outline-none hover:bg-files-surface-muted focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <FileText aria-hidden="true" className="size-4" />
-                    {isOpeningLocal ? "Opening…" : "Open local"}
+                    {isOpeningLocal ? "Opening…" : "Open from computer"}
                   </button>
                   <button
                     type="button"
@@ -963,7 +1186,15 @@ export function FilesProductView({
                   />
                 ) : null}
 
-                <section className="mt-10" aria-label="Files">
+                <section
+                  className="mt-10"
+                  aria-label="Files"
+                  onClick={(event) => {
+                    if (event.target === event.currentTarget) {
+                      setListSelection(emptyFileListSelection());
+                    }
+                  }}
+                >
                   <h2 className="text-product-body font-medium text-files-text-muted">
                     Files
                   </h2>
@@ -981,16 +1212,39 @@ export function FilesProductView({
                         files={visibleFiles}
                         owner={owner}
                         folders={folders}
-                        selectedFileId={selectedFileId}
-                        onSelectFile={openFile}
-                        onDeleteFile={setFileToDelete}
-                        onAttachToTask={(file) =>
-                          setCrossLink({ file, target: "task" })
+                        openedFileId={selectedFileId}
+                        previewFileId={previewFileId}
+                        selection={listSelection}
+                        onSelectionChange={(intent) =>
+                          setListSelection((prev) =>
+                            reduceFileListSelection(prev, intent),
+                          )
                         }
-                        onLinkToEvent={(file) =>
-                          setCrossLink({ file, target: "event" })
+                        onOpenFile={(file, options) => void openFile(file, options)}
+                        onDeleteFile={setFileToDelete}
+                        onAttachToTask={(files) =>
+                          setCrossLink({ files, target: "task" })
+                        }
+                        onLinkToEvent={(files) =>
+                          setCrossLink({ files, target: "event" })
                         }
                         onMoveFileToFolder={handleMoveFileToFolder}
+                        onBulkDownload={downloadFiles}
+                        onBulkMoveToFolder={(files, folderId) =>
+                          handleBulkMoveToFolder(
+                            files.map((file) => file.id),
+                            folderId,
+                          )
+                        }
+                        onBulkDelete={(files) => {
+                          setBulkDeleteListOpen(false);
+                          setBulkDeleteProgress(null);
+                          setFilesToDelete(files);
+                        }}
+                        bulkDeleteBusy={
+                          isPending &&
+                          Boolean(filesToDelete && filesToDelete.length > 1)
+                        }
                       />
                     )}
                   </div>
@@ -1001,9 +1255,7 @@ export function FilesProductView({
 
           {selectedFile &&
           selectedFormat &&
-          (isEditableDocumentFormat(selectedFormat) ||
-            selectedFormat === "pdf" ||
-            selectedFormat === "docx") ? (
+          opensInDocumentEditorPanel(selectedFormat) ? (
             <DocumentEditorPanel
               key={selectedFile.id}
               file={selectedFile}
@@ -1016,20 +1268,32 @@ export function FilesProductView({
               onRenameFile={handleRenameFile}
               onImportedDocument={(fileSourceId) => {
                 setSelectedFileId(fileSourceId);
+                setPreviewFileId(fileSourceId);
                 const preferredMode = getFileEditorPreferences().mode;
                 setEditorMode(preferredMode);
                 replaceFilesUrl({ fileId: fileSourceId, editor: preferredMode });
                 router.refresh();
               }}
               onFileSynchronized={() => router.refresh()}
+              onFlushReady={handleDocumentFlushReady}
             />
           ) : selectedFile ? (
             <FilePreviewPanel
-              key={selectedFile.id}
+              key={`open:${selectedFile.id}`}
               file={selectedFile}
               onClose={closeFile}
               onUpdateTags={(nextTags) =>
                 handleUpdateTags(selectedFile, nextTags)
+              }
+              onRenameFile={handleRenameFile}
+            />
+          ) : previewFile ? (
+            <FilePreviewPanel
+              key={`peek:${previewFile.id}`}
+              file={previewFile}
+              onClose={() => setPreviewFileId(null)}
+              onUpdateTags={(nextTags) =>
+                handleUpdateTags(previewFile, nextTags)
               }
               onRenameFile={handleRenameFile}
             />
@@ -1059,10 +1323,10 @@ export function FilesProductView({
           />
         ) : null}
 
-        {crossLink ? (
+        {crossLink && crossLink.files.length > 0 ? (
           <FileCrossLinkDialog
-            key={`${crossLink.file.id}-${crossLink.target}`}
-            file={crossLink.file}
+            key={`${crossLink.files.map((file) => file.id).join(",")}-${crossLink.target}`}
+            files={crossLink.files}
             target={crossLink.target}
             onClose={() => setCrossLink(null)}
           />
@@ -1071,7 +1335,10 @@ export function FilesProductView({
         {fileToDelete ? (
           <Dialog
             open
-            onClose={() => setFileToDelete(null)}
+            onClose={() => {
+              if (isPending) return;
+              setFileToDelete(null);
+            }}
             labelledBy="delete-file-title"
             className="m-4 w-[min(100%,24rem)] rounded-files-modal border border-files-border bg-files-surface p-5 text-files-text shadow-lg backdrop:bg-files-text/40 sm:m-auto"
           >
@@ -1082,25 +1349,148 @@ export function FilesProductView({
               Delete “{fileToDelete.name}”?
             </h2>
             <p className="mt-2 text-body text-files-text-muted">
-              This permanently removes the file from storage and any tasks or
-              events it is attached to. This can&apos;t be undone.
+              {formatBulkDeleteConfirmBody(1)}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
+                disabled={isPending}
                 onClick={() => setFileToDelete(null)}
-                className="rounded-files-card px-3 py-2 text-small font-medium text-files-text-muted outline-none hover:text-files-text focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta"
+                className="rounded-files-card px-3 py-2 text-small font-medium text-files-text-muted outline-none hover:text-files-text focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
-              <button
+              <motion.button
                 type="button"
                 disabled={isPending}
                 onClick={handleConfirmDelete}
-                className="rounded-files-card bg-brick px-4 py-2 text-small font-medium text-paper outline-none hover:opacity-85 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta disabled:cursor-not-allowed disabled:opacity-50"
+                animate={
+                  isPending && !prefersReducedMotion
+                    ? { opacity: [1, 0.55, 1] }
+                    : { opacity: 1 }
+                }
+                transition={
+                  isPending && !prefersReducedMotion
+                    ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
+                    : { duration: 0.15 }
+                }
+                className="rounded-files-card bg-brick px-4 py-2 text-small font-medium text-paper outline-none hover:opacity-85 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta disabled:cursor-not-allowed"
               >
-                Delete file
+                {formatBulkDeleteButtonLabel({
+                  count: 1,
+                  isDeleting: isPending,
+                })}
+              </motion.button>
+            </div>
+          </Dialog>
+        ) : null}
+
+        {filesToDelete && filesToDelete.length > 0 ? (
+          <Dialog
+            open
+            onClose={() => {
+              if (isPending) return;
+              setBulkDeleteListOpen(false);
+              setBulkDeleteProgress(null);
+              setFilesToDelete(null);
+            }}
+            labelledBy="delete-files-title"
+            className="m-4 w-[min(100%,24rem)] rounded-files-modal border border-files-border bg-files-surface p-5 text-files-text shadow-lg backdrop:bg-files-text/40 sm:m-auto"
+          >
+            <h2
+              id="delete-files-title"
+              className="text-h3 font-semibold text-files-text"
+            >
+              {formatBulkDeleteConfirmTitle(filesToDelete)}
+            </h2>
+            <p className="mt-2 text-body text-files-text-muted">
+              {formatBulkDeleteConfirmBody(filesToDelete.length)}
+            </p>
+            {shouldShowBulkDeleteFileList(filesToDelete.length) ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  aria-expanded={bulkDeleteListOpen}
+                  onClick={() => setBulkDeleteListOpen((open) => !open)}
+                  className="flex w-full items-center justify-between rounded-files-card border border-files-border bg-files-surface-muted px-3 py-2 text-left text-small font-medium text-files-text outline-none hover:bg-files-surface focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta"
+                >
+                  <span>
+                    {bulkDeleteListOpen
+                      ? "Hide file list"
+                      : `Show ${filesToDelete.length} files`}
+                  </span>
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={`size-4 text-files-text-muted transition-transform duration-150 motion-reduce:transition-none ${
+                      bulkDeleteListOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                <AnimatePresence initial={false}>
+                  {bulkDeleteListOpen ? (
+                    <motion.ul
+                      key="bulk-delete-file-list"
+                      initial={{
+                        height: 0,
+                        opacity: 0,
+                      }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{
+                        duration: prefersReducedMotion ? 0 : 0.18,
+                      }}
+                      className="mt-2 max-h-40 overflow-auto rounded-files-card border border-files-border bg-files-surface px-3 py-2"
+                    >
+                      {listBulkDeleteFileNames(filesToDelete).map(
+                        (name, index) => (
+                          <li
+                            key={`${filesToDelete[index]!.id}-${name}`}
+                            className="truncate py-1 text-small text-files-text"
+                          >
+                            {name}
+                          </li>
+                        ),
+                      )}
+                    </motion.ul>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  setBulkDeleteListOpen(false);
+                  setBulkDeleteProgress(null);
+                  setFilesToDelete(null);
+                }}
+                className="rounded-files-card px-3 py-2 text-small font-medium text-files-text-muted outline-none hover:text-files-text focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
               </button>
+              <motion.button
+                type="button"
+                disabled={isPending}
+                onClick={handleConfirmBulkDelete}
+                animate={
+                  isPending && !prefersReducedMotion
+                    ? { opacity: [1, 0.55, 1], scale: [1, 0.98, 1] }
+                    : { opacity: 1, scale: 1 }
+                }
+                transition={
+                  isPending && !prefersReducedMotion
+                    ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
+                    : { duration: 0.15 }
+                }
+                className="rounded-files-card bg-brick px-4 py-2 text-small font-medium text-paper outline-none hover:opacity-85 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta disabled:cursor-not-allowed"
+              >
+                {formatBulkDeleteButtonLabel({
+                  count: filesToDelete.length,
+                  isDeleting: isPending,
+                  completed: bulkDeleteProgress?.completed ?? 0,
+                })}
+              </motion.button>
             </div>
           </Dialog>
         ) : null}

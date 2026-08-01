@@ -90,6 +90,7 @@ export async function setFileFolder(
     .from("file_sources")
     .update({ folder_id: folderId })
     .in("id", fileIds)
-    .eq("user_id", ownerId);
+    .eq("user_id", ownerId)
+    .is("deleted_at", null);
   if (error) throw error;
 }

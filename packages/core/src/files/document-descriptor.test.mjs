@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   documentFormatForFile,
   isEditableDocumentFormat,
+  opensInDocumentEditorPanel,
+  requiresRuntimeEditProbe,
 } from "./document-descriptor.ts";
 
 test("page-backed sources are Planevo documents", () => {
@@ -44,7 +46,7 @@ test("recognizes lossless Markdown and plain-text formats", () => {
   );
 });
 
-test("keeps PDF, DOCX, and unknown binary files out of the text editor", () => {
+test("keeps PDFs and unknown binary files out of the editor", () => {
   assert.equal(
     documentFormatForFile({
       name: "brief.pdf",
@@ -73,5 +75,13 @@ test("keeps PDF, DOCX, and unknown binary files out of the text editor", () => {
   assert.equal(isEditableDocumentFormat("planevo"), true);
   assert.equal(isEditableDocumentFormat("markdown"), true);
   assert.equal(isEditableDocumentFormat("text"), true);
+  assert.equal(isEditableDocumentFormat("docx"), true);
   assert.equal(isEditableDocumentFormat("pdf"), false);
+});
+
+test("PDF editability is runtime-probed, not static", () => {
+  assert.equal(requiresRuntimeEditProbe("pdf"), true);
+  assert.equal(requiresRuntimeEditProbe("docx"), false);
+  assert.equal(opensInDocumentEditorPanel("pdf"), true);
+  assert.equal(opensInDocumentEditorPanel("binary"), false);
 });

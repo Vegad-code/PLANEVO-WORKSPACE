@@ -4,6 +4,19 @@ import type {
   DocumentDescriptor,
   DocumentFormat,
 } from "@planevo/core/files/document-descriptor";
+import {
+  buildDocxLoadRequest,
+  buildDocxSaveRequest,
+  parseDocxResponseVersion,
+  shouldRetryDocxLoad,
+  type DocumentCheckpointReason,
+} from "./docx-document-transport";
+import {
+  buildPdfLoadRequest,
+  buildPdfSaveRequest,
+  parsePdfResponseVersion,
+  shouldRetryPdfLoad,
+} from "./pdf-document-transport";
 
 export type TextDocumentMetadata = {
   hasUtf8Bom: boolean;
@@ -67,6 +80,7 @@ async function responsePayload(
 export async function loadFileDocument(
   fileSourceId: string,
   signal?: AbortSignal,
+  retryOnVersionMismatch = true,
 ): Promise<LoadedFileDocument> {
   const response = await fetch(
     `/api/product-files/${encodeURIComponent(fileSourceId)}/document`,
@@ -80,7 +94,75 @@ export async function loadFileDocument(
         : "Could not open this document.",
     );
   }
-  return payload as LoadedFileDocument;
+  const document = payload as LoadedFileDocument;
+  if (
+    document.descriptor.format !== "docx" &&
+    document.descriptor.format !== "pdf"
+  ) {
+    return document;
+  }
+
+  const isPdf = document.descriptor.format === "pdf";
+  const binaryResponse = await fetch(
+    isPdf
+      ? buildPdfLoadRequest({ fileSourceId })
+      : buildDocxLoadRequest({ fileSourceId }),
+    { signal, cache: "no-store" },
+  );
+  if (!binaryResponse.ok) {
+    const shouldRetry = isPdf
+      ? shouldRetryPdfLoad({
+          status: binaryResponse.status,
+          retryHeader: binaryResponse.headers.get("x-planevo-pdf-retry"),
+          hasRetried: !retryOnVersionMismatch,
+        })
+      : shouldRetryDocxLoad({
+          status: binaryResponse.status,
+          retryHeader: binaryResponse.headers.get("x-planevo-docx-retry"),
+          hasRetried: !retryOnVersionMismatch,
+        });
+    if (shouldRetry) {
+      return loadFileDocument(fileSourceId, signal, false);
+    }
+    const binaryPayload = await responsePayload(binaryResponse);
+    throw new Error(
+      typeof binaryPayload.error === "string"
+        ? binaryPayload.error
+        : isPdf
+          ? "Could not load this PDF document."
+          : "Could not load this DOCX document.",
+    );
+  }
+  const loadedVersion = isPdf
+    ? parsePdfResponseVersion(
+        binaryResponse.headers.get("x-planevo-document-version"),
+      )
+    : parseDocxResponseVersion(
+        binaryResponse.headers.get("x-planevo-document-version"),
+      );
+  if (
+    loadedVersion !== null &&
+    loadedVersion !== document.descriptor.currentVersion &&
+    retryOnVersionMismatch
+  ) {
+    // A save landed between descriptor and byte reads. One reload aligns the
+    // optimistic version with the opaque bytes without trusting stale data.
+    return loadFileDocument(fileSourceId, signal, false);
+  }
+  const loadedHash = binaryResponse.headers.get("x-planevo-content-hash");
+  return {
+    ...document,
+    descriptor:
+      loadedVersion !== null &&
+      loadedVersion !== document.descriptor.currentVersion
+        ? {
+            ...document.descriptor,
+            currentVersion: loadedVersion,
+            contentHash: loadedHash || null,
+          }
+        : document.descriptor,
+    content: new Uint8Array(await binaryResponse.arrayBuffer()),
+  };
 }
 
 export async function saveFileDocument(input: {
@@ -89,24 +171,52 @@ export async function saveFileDocument(input: {
   baseVersion: number;
   content: unknown;
   textMetadata?: TextDocumentMetadata;
-  checkpointReason?: "checkpoint" | "close" | "import" | "restore";
+  checkpointReason?: DocumentCheckpointReason;
 }): Promise<FileDocumentSaveResult> {
-  const response = await fetch(
-    `/api/product-files/${encodeURIComponent(input.fileSourceId)}/document`,
-    {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        format: input.format,
-        baseVersion: input.baseVersion,
-        content: input.content,
-        ...(input.textMetadata ? { textMetadata: input.textMetadata } : {}),
-        ...(input.checkpointReason
-          ? { checkpointReason: input.checkpointReason }
-          : {}),
-      }),
-    },
-  );
+  const request =
+    input.format === "docx"
+      ? (() => {
+          if (!(input.content instanceof Uint8Array)) {
+            throw new Error("DOCX saves require exact byte content.");
+          }
+          return buildDocxSaveRequest({
+            fileSourceId: input.fileSourceId,
+            baseVersion: input.baseVersion,
+            content: input.content,
+            checkpointReason: input.checkpointReason,
+          });
+        })()
+      : input.format === "pdf"
+        ? (() => {
+            if (!(input.content instanceof Uint8Array)) {
+              throw new Error("PDF saves require exact byte content.");
+            }
+            return buildPdfSaveRequest({
+              fileSourceId: input.fileSourceId,
+              baseVersion: input.baseVersion,
+              content: input.content,
+              checkpointReason: input.checkpointReason,
+            });
+          })()
+      : {
+          url: `/api/product-files/${encodeURIComponent(input.fileSourceId)}/document`,
+          init: {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              format: input.format,
+              baseVersion: input.baseVersion,
+              content: input.content,
+              ...(input.textMetadata
+                ? { textMetadata: input.textMetadata }
+                : {}),
+              ...(input.checkpointReason
+                ? { checkpointReason: input.checkpointReason }
+                : {}),
+            }),
+          },
+        };
+  const response = await fetch(request.url, request.init);
   const payload = await responsePayload(response);
   if (response.status === 409) {
     throw new DocumentVersionConflictError(

@@ -83,7 +83,8 @@ export async function loadFolderTree(
   const { data: files, error: filesError } = await client
     .from("file_sources")
     .select("folder_id")
-    .eq("user_id", ownerId);
+    .eq("user_id", ownerId)
+    .is("deleted_at", null);
   if (filesError) throw filesError;
 
   const fileCountByFolder = new Map<string, number>();

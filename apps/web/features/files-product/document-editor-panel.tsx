@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Columns2,
+  Copy,
   Download,
   Eye,
   FileText,
@@ -31,7 +32,7 @@ import {
   type MarkdownViewMode,
 } from "@/lib/files/editor-prefs";
 import { formatBytes } from "./storage-meter";
-import { importProductDocumentAction } from "@/app/(workspace)/files/actions";
+import { importProductDocumentAction, createDocxCopyInFilesAction, createPdfCopyInFilesAction } from "@/app/(workspace)/files/actions";
 import { toast } from "@/components/ui/toast";
 import {
   updateFileDocumentSidebar,
@@ -41,6 +42,24 @@ import {
   documentRepositoryFor,
   type FileDocumentRepository,
 } from "./document-repository";
+import type { DocxDocumentSaveState } from "./docx-document-editor";
+import { docxBytes } from "./docx-document-content";
+import { openDocxDocument } from "./docx-document-open";
+import {
+  encodeDocxBytesBase64,
+  type DocxDownload,
+  type DocxSaveCopyHandlers,
+} from "./docx-save-copy";
+import type { PdfDocumentSaveState } from "./pdf-document-editor";
+import { pdfBytes } from "./pdf-document-content";
+import { openPdfDocument } from "./pdf-document-open";
+import {
+  createPdfSaveCopyHandlersFromBytes,
+  encodePdfBytesBase64,
+  resolvePdfPreviewOnlyBanner,
+  type PdfDownload,
+  type PdfSaveCopyHandlers,
+} from "./pdf-save-copy";
 import {
   clearDocumentRecoveryDraft,
   readDocumentRecoveryDraft,
@@ -89,6 +108,22 @@ const LazyTextDocumentEditor = dynamic(
   },
 );
 
+const LazyDocxDocumentEditor = dynamic(
+  () =>
+    import("./docx-document-editor").then(
+      (module) => module.DocxDocumentEditor,
+    ),
+  { ssr: false },
+);
+
+const LazyPdfDocumentEditor = dynamic(
+  () =>
+    import("./pdf-document-editor").then(
+      (module) => module.PdfDocumentEditor,
+    ),
+  { ssr: false },
+);
+
 const LazyReadOnlyDocumentViewer = dynamic(
   () =>
     import("./read-only-document-viewer").then(
@@ -98,6 +133,81 @@ const LazyReadOnlyDocumentViewer = dynamic(
 );
 
 type UtilityTab = "details" | "notes" | "comments" | "history";
+
+function DocxSaveCopyMenu({
+  disabled,
+  busy,
+  onSaveToComputer,
+  onSaveToFiles,
+}: {
+  disabled: boolean;
+  busy: boolean;
+  onSaveToComputer: () => Promise<void>;
+  onSaveToFiles: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  function close() {
+    setOpen(false);
+  }
+
+  async function choose(run: () => Promise<void>) {
+    close();
+    await run();
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Save a copy"
+        disabled={disabled || busy}
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        className="files-editor-control flex items-center gap-1.5 rounded-files-card border border-files-border-strong bg-files-surface px-3 py-1.5 text-product-meta font-medium text-files-text outline-none transition-colors hover:bg-files-surface-muted disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta"
+      >
+        <Copy aria-hidden="true" className="size-3.5" />
+        <span>{busy ? "Saving copy…" : "Save a copy"}</span>
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close save-a-copy menu"
+            tabIndex={-1}
+            className="fixed inset-0 z-[100] cursor-default"
+            onClick={close}
+          />
+          <div
+            role="menu"
+            className="absolute right-0 z-[110] mt-1 w-60 rounded-files-card border border-files-border bg-files-surface p-1"
+          >
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => void choose(onSaveToComputer)}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-files-text hover:bg-files-surface-muted"
+            >
+              <Download aria-hidden="true" className="size-4 shrink-0" />
+              Save to my computer…
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => void choose(onSaveToFiles)}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-product-body text-files-text hover:bg-files-surface-muted"
+            >
+              <Copy aria-hidden="true" className="size-4 shrink-0" />
+              Save a copy in Planevo
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export type { DocumentEditorMode } from "@/lib/files/editor-prefs";
 
 const MIN_SIDE_WIDTH = 420;
@@ -241,6 +351,18 @@ function downloadTextCopy(file: ProductFileItem, content: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Fallback download when File System Access picker is unavailable (preview-only PDF copies). */
+function downloadPdfCopyBytes(copy: PdfDownload): void {
+  const bytes = new Uint8Array(copy.bytes);
+  const blob = new Blob([bytes.buffer], { type: copy.contentType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = copy.fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function TextEditorWorkspace({
   file,
   loaded,
@@ -368,7 +490,7 @@ function PlanevoDocumentWorkspace({
     // pt-16 is not decoration: the block editor floats its formatting toolbar ~44px above the
     // selection, so the first block needs at least that much clearance or the toolbar lands on
     // the chrome. Matches the markdown view's top padding in spirit.
-    <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-16">
+    <div className="files-editor-canvas min-h-0 flex-1 overflow-auto pb-4 pt-16">
       <LazyPlanevoEditor
         initialContent={recoveredContent}
         pageId={loaded.descriptor.pageId ?? undefined}
@@ -731,6 +853,7 @@ export function DocumentEditorPanel({
   onRenameFile,
   onImportedDocument,
   onFileSynchronized,
+  onFlushReady,
 }: {
   file: ProductFileItem;
   mode: DocumentEditorMode;
@@ -740,6 +863,9 @@ export function DocumentEditorPanel({
   onRenameFile: (name: string) => Promise<boolean>;
   onImportedDocument: (fileSourceId: string) => void;
   onFileSynchronized: () => void;
+  onFlushReady?: (
+    flush: ((reason: "checkpoint" | "close") => Promise<void>) | null,
+  ) => void;
 }) {
   const [activeUtility, setActiveUtility] = useState<UtilityTab | null>(() => {
     const stored = getFileEditorPreferences().utilityTab;
@@ -748,6 +874,18 @@ export function DocumentEditorPanel({
   const [loaded, setLoaded] = useState<LoadedFileDocument | null>(null);
   const [recoveredContent, setRecoveredContent] = useState<unknown>(null);
   const [recovered, setRecovered] = useState(false);
+  const [docxOpen, setDocxOpen] = useState<{
+    markdown: string;
+    warnings: readonly string[];
+  } | null>(null);
+  const [pdfOpen, setPdfOpen] = useState<{
+    kind: "editable";
+    markdown: string;
+    warnings: readonly string[];
+  } | null>(null);
+  const [pdfPreviewOnly, setPdfPreviewOnly] = useState<{
+    bannerText: string;
+  } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
   const [sideWidth, setSideWidth] = useState(
@@ -765,10 +903,18 @@ export function DocumentEditorPanel({
   const [mirrorStatus, setMirrorStatus] = useState<LocalMirrorStatus | null>(null);
   const [mirrorBusy, setMirrorBusy] = useState(false);
   const [mirrorMessage, setMirrorMessage] = useState<string | null>(null);
-  const [docxText, setDocxText] = useState<string | null>(null);
   const [importingDocument, setImportingDocument] = useState(false);
   const [syncingLocalFile, setSyncingLocalFile] = useState(false);
   const [saveState, setSaveState] = useState<DocumentSaveState | null>(null);
+  const [documentFlush, setDocumentFlush] = useState<
+    ((reason: "checkpoint" | "close") => Promise<void>) | null
+  >(null);
+  const [docxSaveCopyHandlers, setDocxSaveCopyHandlers] =
+    useState<DocxSaveCopyHandlers | null>(null);
+  const [pdfSaveCopyHandlers, setPdfSaveCopyHandlers] =
+    useState<PdfSaveCopyHandlers | null>(null);
+  const [saveCopyBusy, setSaveCopyBusy] = useState(false);
+  const [closingDocument, setClosingDocument] = useState(false);
   const repository = useMemo(
     () =>
       documentRepositoryFor({
@@ -777,13 +923,157 @@ export function DocumentEditorPanel({
         name: file.name,
         mime_type: file.mime_type,
       }),
-    [file.id, file.mime_type, file.name, file.storage_kind],
+    [file.id, file.mime_type, file.storage_kind],
   );
   const drag = useRef<{
     kind: "side" | "bottom" | "utility";
     start: number;
     size: number;
   } | null>(null);
+  const onFlushReadyRef = useRef(onFlushReady);
+  onFlushReadyRef.current = onFlushReady;
+
+  const handleDocxSaveStateChange = useCallback((state: DocxDocumentSaveState) => {
+    setSaveState({
+      status: state.status,
+      savedLabel: state.savedLabel,
+      savingLabel: state.savingLabel,
+    });
+  }, []);
+
+  const handlePdfSaveStateChange = useCallback((state: PdfDocumentSaveState) => {
+    setSaveState({
+      status: state.status,
+      savedLabel: state.savedLabel,
+      savingLabel: state.savingLabel,
+    });
+  }, []);
+
+  const handleDocumentFlushReady = useCallback(
+    (
+      flush: ((reason: "checkpoint" | "close") => Promise<void>) | null,
+    ) => {
+      setDocumentFlush(() => flush);
+      onFlushReadyRef.current?.(flush);
+    },
+    [],
+  );
+
+  const handleDocxSaveCopyReady = useCallback(
+    (handlers: DocxSaveCopyHandlers | null) => {
+      setDocxSaveCopyHandlers(handlers);
+    },
+    [],
+  );
+
+  const handlePdfSaveCopyReady = useCallback(
+    (handlers: PdfSaveCopyHandlers | null) => {
+      setPdfSaveCopyHandlers(handlers);
+    },
+    [],
+  );
+
+  const createDocxCopyInFiles = useCallback(
+    async (copy: DocxDownload) => {
+      const result = await createDocxCopyInFilesAction({
+        sourceFileSourceId: file.id,
+        name: copy.fileName,
+        bytesBase64: encodeDocxBytesBase64(copy.bytes),
+      });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    [file.id],
+  );
+
+  const createPdfCopyInFiles = useCallback(
+    async (copy: PdfDownload) => {
+      const result = await createPdfCopyInFilesAction({
+        sourceFileSourceId: file.id,
+        name: copy.fileName,
+        bytesBase64: encodePdfBytesBase64(copy.bytes),
+      });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    [file.id],
+  );
+
+  const saveDocxCopyToComputer = useCallback(async () => {
+    if (!docxSaveCopyHandlers) return;
+    setSaveCopyBusy(true);
+    try {
+      await docxSaveCopyHandlers.saveToComputer();
+    } catch (cause) {
+      toast(
+        cause instanceof Error
+          ? cause.message
+          : "The DOCX copy could not be saved.",
+        { tone: "error" },
+      );
+    } finally {
+      setSaveCopyBusy(false);
+    }
+  }, [docxSaveCopyHandlers]);
+
+  const savePdfCopyToComputer = useCallback(async () => {
+    if (!pdfSaveCopyHandlers) return;
+    setSaveCopyBusy(true);
+    try {
+      await pdfSaveCopyHandlers.saveToComputer();
+    } catch (cause) {
+      toast(
+        cause instanceof Error
+          ? cause.message
+          : "The PDF copy could not be saved.",
+        { tone: "error" },
+      );
+    } finally {
+      setSaveCopyBusy(false);
+    }
+  }, [pdfSaveCopyHandlers]);
+
+  const saveDocxCopyToFiles = useCallback(async () => {
+    if (!docxSaveCopyHandlers) return;
+    setSaveCopyBusy(true);
+    try {
+      const result = await docxSaveCopyHandlers.saveToFiles(createDocxCopyInFiles);
+      toast(`Saved ${result.fileName} to Files.`);
+      onFileSynchronized();
+    } catch (cause) {
+      toast(
+        cause instanceof Error
+          ? cause.message
+          : "The DOCX copy could not be saved to Files.",
+        { tone: "error" },
+      );
+    } finally {
+      setSaveCopyBusy(false);
+    }
+  }, [createDocxCopyInFiles, docxSaveCopyHandlers, onFileSynchronized]);
+
+  const savePdfCopyToFiles = useCallback(async () => {
+    if (!pdfSaveCopyHandlers) return;
+    setSaveCopyBusy(true);
+    try {
+      const result = await pdfSaveCopyHandlers.saveToFiles(createPdfCopyInFiles);
+      toast(`Saved ${result.fileName} to Files.`);
+      onFileSynchronized();
+    } catch (cause) {
+      toast(
+        cause instanceof Error
+          ? cause.message
+          : "The PDF copy could not be saved to Files.",
+        { tone: "error" },
+      );
+    } finally {
+      setSaveCopyBusy(false);
+    }
+  }, [createPdfCopyInFiles, pdfSaveCopyHandlers, onFileSynchronized]);
 
   const persistEditorPreferences = useCallback(
     (patch: Partial<ReturnType<typeof getFileEditorPreferences>>) => {
@@ -796,13 +1086,80 @@ export function DocumentEditorPanel({
     persistEditorPreferences({ mode });
   }, [mode, persistEditorPreferences]);
 
+  useEffect(
+    () => () => {
+      onFlushReadyRef.current?.(null);
+    },
+    [],
+  );
+
   const isMarkdown = loaded?.descriptor.format === "markdown";
-  const isDirty = saveState?.status === "saving";
+  const isDocx = loaded?.descriptor.format === "docx";
+  const isPdf = loaded?.descriptor.format === "pdf";
+  const showsMarkdownViewControls = isMarkdown || isDocx || (isPdf && pdfOpen !== null);
+
+  // DOCX/PDF open in split by default (orchestrator). Ephemeral until the user picks a view via
+  // the header toggles or Cmd/Ctrl+Shift+V — only those paths call persistEditorPreferences.
+  useEffect(() => {
+    if (!loaded) return;
+    if (
+      loaded.descriptor.format === "docx" ||
+      loaded.descriptor.format === "pdf"
+    ) {
+      setMarkdownView("split");
+      return;
+    }
+    if (loaded.descriptor.format === "markdown") {
+      setMarkdownView(getFileEditorPreferences().markdownView);
+    }
+  }, [file.id, loaded?.descriptor.format]);
+  const hasUnsavedChanges =
+    saveState?.status === "dirty" ||
+    saveState?.status === "saving" ||
+    saveState?.status === "error" ||
+    saveState?.status === "conflict";
+  const editableDocxBytes = useMemo(() => {
+    if (loaded?.descriptor.format !== "docx") return null;
+    return docxBytes(recoveredContent) ?? docxBytes(loaded.content);
+  }, [loaded, recoveredContent]);
+  const editablePdfBytes = useMemo(() => {
+    if (loaded?.descriptor.format !== "pdf") return null;
+    return pdfBytes(recoveredContent) ?? pdfBytes(loaded.content);
+  }, [loaded, recoveredContent]);
+
+  // Preview-only PDFs never mount PdfDocumentEditor, so the panel owns save-a-copy
+  // handlers from the loaded source bytes. Editable PDFs still publish via onSaveCopyReady.
+  useEffect(() => {
+    if (pdfOpen || !editablePdfBytes) {
+      if (!pdfOpen) setPdfSaveCopyHandlers(null);
+      return;
+    }
+    const pickerWindow = window as Window & {
+      showSaveFilePicker?: Parameters<
+        typeof createPdfSaveCopyHandlersFromBytes
+      >[0]["showSaveFilePicker"];
+    };
+    const picker =
+      typeof pickerWindow.showSaveFilePicker === "function"
+        ? pickerWindow.showSaveFilePicker.bind(pickerWindow)
+        : undefined;
+    setPdfSaveCopyHandlers(
+      createPdfSaveCopyHandlersFromBytes({
+        fileName: file.name,
+        bytes: editablePdfBytes,
+        showSaveFilePicker: picker,
+        download: downloadPdfCopyBytes,
+      }),
+    );
+    return () => {
+      setPdfSaveCopyHandlers(null);
+    };
+  }, [editablePdfBytes, file.name, pdfOpen, pdfPreviewOnly]);
 
   // Cmd/Ctrl+Shift+V flips between prose and source, matching the editor most people arrive from.
   // Unlike that editor's one-way toggle, every view stays reachable from the segmented control.
   useEffect(() => {
-    if (!isMarkdown) return;
+    if (!showsMarkdownViewControls) return;
     function onKeyDown(event: KeyboardEvent) {
       if (!event.shiftKey || event.key.toLowerCase() !== "v") return;
       if (!event.metaKey && !event.ctrlKey) return;
@@ -815,27 +1172,111 @@ export function DocumentEditorPanel({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isMarkdown, persistEditorPreferences]);
+  }, [showsMarkdownViewControls, persistEditorPreferences]);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
       setLoadError(null);
+      setSaveState(null);
+      setDocxOpen(null);
+      setPdfOpen(null);
+      setPdfPreviewOnly(null);
       try {
         const next = await repository.load(signal);
         const draft = await readDocumentRecoveryDraft(file.id);
+        const recoveredDocx =
+          next.descriptor.format === "docx"
+            ? docxBytes(draft?.content)
+            : null;
+        const recoveredPdf =
+          next.descriptor.format === "pdf"
+            ? pdfBytes(draft?.content)
+            : null;
         const useDraft =
           draft !== null &&
           draft.baseVersion === next.descriptor.currentVersion &&
           (next.descriptor.format === "planevo"
             ? Array.isArray(draft.content)
-            : typeof draft.content === "string");
+            : next.descriptor.format === "docx"
+              ? recoveredDocx !== null
+              : next.descriptor.format === "pdf"
+                ? recoveredPdf !== null
+                : typeof draft.content === "string");
+        const nextContent = useDraft
+          ? next.descriptor.format === "docx"
+            ? recoveredDocx
+            : next.descriptor.format === "pdf"
+              ? recoveredPdf
+              : draft.content
+          : next.content;
+
+        let nextDocxOpen: {
+          markdown: string;
+          warnings: readonly string[];
+        } | null = null;
+        let nextPdfOpen: {
+          kind: "editable";
+          markdown: string;
+          warnings: readonly string[];
+        } | null = null;
+        let nextPdfPreviewOnly: { bannerText: string } | null = null;
+
+        if (next.descriptor.format === "docx") {
+          const sourceBytes = docxBytes(nextContent);
+          if (sourceBytes) {
+            const opened = await openDocxDocument({ bytes: sourceBytes });
+            if (signal?.aborted) return;
+            if (opened.kind === "error") {
+              setLoadError(opened.error);
+              setLoaded(null);
+              setRecoveredContent(null);
+              setDocxOpen(null);
+              return;
+            }
+            nextDocxOpen = {
+              markdown: opened.markdown,
+              warnings: opened.warnings,
+            };
+          }
+        }
+
+        if (next.descriptor.format === "pdf") {
+          const sourceBytes = pdfBytes(nextContent);
+          if (sourceBytes) {
+            const opened = await openPdfDocument({ bytes: sourceBytes });
+            if (signal?.aborted) return;
+            if (opened.kind === "error") {
+              setLoadError(opened.error);
+              setLoaded(null);
+              setRecoveredContent(null);
+              setPdfOpen(null);
+              setPdfPreviewOnly(null);
+              return;
+            }
+            if (opened.kind === "preview-only") {
+              nextPdfPreviewOnly = { bannerText: opened.bannerText };
+            } else {
+              nextPdfOpen = {
+                kind: "editable",
+                markdown: opened.markdown,
+                warnings: opened.warnings,
+              };
+            }
+          }
+        }
+
         setLoaded(next);
-        setRecoveredContent(useDraft ? draft.content : next.content);
+        setRecoveredContent(nextContent);
         setRecovered(useDraft);
+        setDocxOpen(nextDocxOpen);
+        setPdfOpen(nextPdfOpen);
+        setPdfPreviewOnly(nextPdfPreviewOnly);
         if (
           next.descriptor.capabilities.localMirror &&
           (next.descriptor.format === "markdown" ||
-            next.descriptor.format === "text")
+            next.descriptor.format === "text" ||
+            next.descriptor.format === "docx" ||
+            next.descriptor.format === "pdf")
         ) {
           setMirrorStatus(await localMirrorStatus(file.id));
         } else {
@@ -865,6 +1306,23 @@ export function DocumentEditorPanel({
       await reconnectLocalMirror(file.id);
     }
     await load();
+  }
+
+  async function closeDocument() {
+    if (closingDocument) return;
+    setClosingDocument(true);
+    try {
+      await documentFlush?.("close");
+      onClose();
+    } catch (cause) {
+      toast(
+        cause instanceof Error
+          ? cause.message
+          : "Planevo could not finish saving this document. The editor is still open.",
+        { tone: "error" },
+      );
+      setClosingDocument(false);
+    }
   }
 
   function startResize(
@@ -1098,10 +1556,10 @@ export function DocumentEditorPanel({
         : undefined;
   const editorClass =
     mode === "full"
-      ? "files-editor-shell files-editor-shell--full relative flex min-w-0 flex-1 flex-col overflow-hidden"
+      ? "files-editor-shell files-editor-shell--full absolute z-40 flex flex-col overflow-hidden"
       : mode === "side"
-        ? "files-editor-shell files-editor-shell--side relative flex h-full shrink-0 flex-col overflow-hidden rounded-l-files-editor"
-        : "files-editor-shell files-editor-shell--bottom absolute inset-x-3 bottom-3 z-40 flex max-h-full flex-col overflow-hidden rounded-files-editor";
+        ? "files-editor-shell files-editor-shell--side relative flex shrink-0 flex-col overflow-hidden"
+        : "files-editor-shell files-editor-shell--bottom absolute z-40 flex max-h-full flex-col overflow-hidden";
 
   const utilityLabels: Record<UtilityTab, string> = {
     details: "Details",
@@ -1147,14 +1605,14 @@ export function DocumentEditorPanel({
         a row of its own.
       */}
       {/*
-        Opaque and above the document on purpose. Editors float their own toolbars near the
-        selection, and a block selected close to the top of the scroll area puts that toolbar
-        right where the breadcrumb is. Chrome has to occlude scrolling content, not blend with it.
+        Above the document on purpose (z-index). Editors float toolbars near the selection, and a
+        block near the top would collide with the breadcrumb. Chrome stays transparent
+        so the frosted shell can read — never glass-strong or solid lids over the glass.
       */}
-      <header className="relative z-20 shrink-0 bg-files-editor-solid">
+      <header className="relative z-[110] shrink-0 bg-transparent">
         <div className="flex items-stretch gap-2 border-b border-files-border pr-2">
           <div
-            className="flex min-w-0 items-center gap-2 border-t-2 border-files-cta bg-files-editor-solid px-3 py-2"
+            className="flex min-w-0 items-center gap-2 border-t-2 border-files-cta bg-transparent px-3 py-2"
             aria-current="page"
           >
             <FileText
@@ -1167,11 +1625,12 @@ export function DocumentEditorPanel({
             <button
               type="button"
               aria-label="Close document editor"
-              onClick={onClose}
+              disabled={closingDocument}
+              onClick={() => void closeDocument()}
               className="files-editor-control flex size-5 shrink-0 items-center justify-center rounded text-files-text-muted outline-none hover:bg-files-surface-muted hover:text-files-text"
             >
               {/* A dot rather than an × while unsaved, matching the editor convention. */}
-              {isDirty ? (
+              {hasUnsavedChanges ? (
                 <span
                   aria-hidden="true"
                   className="size-1.5 rounded-full bg-files-text-muted"
@@ -1183,7 +1642,7 @@ export function DocumentEditorPanel({
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-2">
-            {isMarkdown ? (
+            {showsMarkdownViewControls ? (
               <div
                 role="group"
                 aria-label="Markdown view"
@@ -1210,6 +1669,22 @@ export function DocumentEditorPanel({
                 ))}
               </div>
             ) : null}
+            {isDocx ? (
+              <DocxSaveCopyMenu
+                disabled={!docxSaveCopyHandlers || !editableDocxBytes}
+                busy={saveCopyBusy}
+                onSaveToComputer={saveDocxCopyToComputer}
+                onSaveToFiles={saveDocxCopyToFiles}
+              />
+            ) : null}
+            {isPdf && editablePdfBytes ? (
+              <DocxSaveCopyMenu
+                disabled={!pdfSaveCopyHandlers}
+                busy={saveCopyBusy}
+                onSaveToComputer={savePdfCopyToComputer}
+                onSaveToFiles={savePdfCopyToFiles}
+              />
+            ) : null}
             <DocumentLayoutPicker mode={mode} onModeChange={onModeChange} />
             <button
               type="button"
@@ -1234,8 +1709,10 @@ export function DocumentEditorPanel({
                 ? "Planevo document"
                 : formatBytes(file.size_bytes)}
             </span>
-            {/* Conflicts get the full-width alert row instead; this stays the quiet channel. */}
-            {saveState && saveState.status !== "conflict" ? (
+            {/* Conflicts and errors get the full-width alert row instead. */}
+            {saveState &&
+            saveState.status !== "conflict" &&
+            saveState.status !== "error" ? (
               <SaveIndicator
                 state={saveState.status}
                 savedLabel={saveState.savedLabel}
@@ -1262,7 +1739,10 @@ export function DocumentEditorPanel({
           </button>
         </div>
       ) : !loaded ? (
-        <p className="p-4 text-product-body text-files-text-muted">
+        <p
+          role="status"
+          className="p-4 text-product-body text-files-text-muted"
+        >
           Opening document…
         </p>
       ) : (
@@ -1301,12 +1781,73 @@ export function DocumentEditorPanel({
                 onSaveStateChange={setSaveState}
                 repository={repository}
               />
+            ) : loaded.descriptor.format === "docx" ? (
+              editableDocxBytes && docxOpen ? (
+                <LazyDocxDocumentEditor
+                  key={`${file.id}-${loaded.descriptor.currentVersion}`}
+                  fileSourceId={file.id}
+                  fileName={file.name}
+                  initialBytes={editableDocxBytes}
+                  initialMarkdown={docxOpen.markdown}
+                  importWarnings={docxOpen.warnings}
+                  initialVersion={loaded.descriptor.currentVersion}
+                  repository={repository}
+                  mirrorStatus={mirrorStatus}
+                  viewMode={markdownView}
+                  onReload={() => void load()}
+                  onSaveStateChange={handleDocxSaveStateChange}
+                  onFlushReady={handleDocumentFlushReady}
+                  onSaveCopyReady={handleDocxSaveCopyReady}
+              />
+              ) : (
+                <div
+                  role="alert"
+                  className="m-4 rounded-files-card border border-brick bg-brick-tint p-4 text-product-body text-brick"
+                >
+                  Planevo could not read the DOCX bytes. The original file has
+                  not been changed.
+                </div>
+              )
+            ) : loaded.descriptor.format === "pdf" ? (
+              editablePdfBytes && pdfOpen ? (
+                <LazyPdfDocumentEditor
+                  key={`${file.id}-${loaded.descriptor.currentVersion}`}
+                  fileSourceId={file.id}
+                  fileName={file.name}
+                  initialBytes={editablePdfBytes}
+                  initialMarkdown={pdfOpen.markdown}
+                  importWarnings={pdfOpen.warnings}
+                  initialVersion={loaded.descriptor.currentVersion}
+                  repository={repository}
+                  mirrorStatus={mirrorStatus}
+                  viewMode={markdownView}
+                  onReload={() => void load()}
+                  onSaveStateChange={handlePdfSaveStateChange}
+                  onFlushReady={handleDocumentFlushReady}
+                  onSaveCopyReady={handlePdfSaveCopyReady}
+                />
+              ) : (
+                <section
+                  aria-label={`${file.name} document editor`}
+                  className="files-editor-canvas flex min-h-0 flex-1 flex-col overflow-auto"
+                >
+                  <LazyReadOnlyDocumentViewer
+                    format={loaded.descriptor.format}
+                    previewUrl={file.previewUrl}
+                    previewOnlyBanner={
+                      resolvePdfPreviewOnlyBanner(
+                        pdfPreviewOnly?.bannerText,
+                      ) ??
+                      "This PDF has no editable text. Preview only — use Save a copy to keep a separate PDF on your computer or in Planevo Files."
+                    }
+                  />
+                </section>
+              )
             ) : (
-              <div className="min-h-0 flex-1 overflow-auto bg-files-surface-muted">
+              <div className="files-editor-canvas min-h-0 flex-1 overflow-auto">
                 <LazyReadOnlyDocumentViewer
                   format={loaded.descriptor.format}
                   previewUrl={file.previewUrl}
-                  onTextExtracted={setDocxText}
                 />
               </div>
             )}
@@ -1501,21 +2042,6 @@ export function DocumentEditorPanel({
                         </p>
                       ) : null}
                     </div>
-                  ) : null}
-
-                  {loaded.descriptor.format === "docx" ? (
-                    <button
-                      type="button"
-                      disabled={!docxText || importingDocument}
-                      onClick={() =>
-                        void importAsDocument(docxText ?? "", /\.docx$/i)
-                      }
-                      className="mt-4 rounded-files-card bg-files-cta px-3 py-2 text-product-body font-medium text-files-cta-text outline-none hover:opacity-90 disabled:opacity-50"
-                    >
-                      {importingDocument
-                        ? "Importing…"
-                        : "Import as Planevo document"}
-                    </button>
                   ) : null}
 
                   {/*

@@ -415,9 +415,9 @@ export interface Database {
         Relationships: [];
       };
       file_sources: {
-        Row: { id: string; workspace_id: string; page_id: string | null; created_by: string; user_id: string; folder_id: string | null; operation_key: string | null; reservation_expires_at: string | null; storage_path: string; storage_kind: "local" | "synced" | "cloud" | "page"; name: string; mime_type: string | null; size_bytes: number | null; ingestion_status: string; metadata_json: Json; created_at: string; updated_at: string };
-        Insert: { id?: string; workspace_id: string; page_id?: string | null; created_by: string; user_id: string; folder_id?: string | null; operation_key?: string | null; reservation_expires_at?: string | null; storage_path: string; storage_kind?: "local" | "synced" | "cloud" | "page"; name: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
-        Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; user_id?: string; folder_id?: string | null; operation_key?: string | null; reservation_expires_at?: string | null; storage_path?: string; storage_kind?: "local" | "synced" | "cloud" | "page"; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; created_at?: string; updated_at?: string };
+        Row: { id: string; workspace_id: string; page_id: string | null; created_by: string; user_id: string; folder_id: string | null; operation_key: string | null; reservation_expires_at: string | null; storage_path: string; storage_kind: "local" | "synced" | "cloud" | "page"; name: string; mime_type: string | null; size_bytes: number | null; ingestion_status: string; metadata_json: Json; deleted_at: string | null; purge_after: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; page_id?: string | null; created_by: string; user_id: string; folder_id?: string | null; operation_key?: string | null; reservation_expires_at?: string | null; storage_path: string; storage_kind?: "local" | "synced" | "cloud" | "page"; name: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; deleted_at?: string | null; purge_after?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; page_id?: string | null; created_by?: string; user_id?: string; folder_id?: string | null; operation_key?: string | null; reservation_expires_at?: string | null; storage_path?: string; storage_kind?: "local" | "synced" | "cloud" | "page"; name?: string; mime_type?: string | null; size_bytes?: number | null; ingestion_status?: string; metadata_json?: Json; deleted_at?: string | null; purge_after?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
       file_document_state: {
@@ -881,6 +881,14 @@ export interface Database {
         Returns: Json;
       };
       delete_file_document: {
+        Args: { p_owner_id: string; p_file_source_id: string };
+        Returns: Json;
+      };
+      restore_file_document: {
+        Args: { p_owner_id: string; p_file_source_id: string };
+        Returns: Json;
+      };
+      purge_file_document: {
         Args: { p_owner_id: string; p_file_source_id: string };
         Returns: Json;
       };

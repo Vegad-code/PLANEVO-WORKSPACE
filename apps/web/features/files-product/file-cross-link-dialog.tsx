@@ -16,7 +16,7 @@ import type { ProductFileItem } from "./files-table";
 export type FileCrossLinkTarget = "task" | "event";
 
 type FileCrossLinkDialogProps = {
-  file: ProductFileItem;
+  files: ProductFileItem[];
   target: FileCrossLinkTarget;
   onClose: () => void;
 };
@@ -33,19 +33,25 @@ function formatEventStart(iso: string): string {
   });
 }
 
+function filesLabel(files: ProductFileItem[]): string {
+  if (files.length === 1) return `“${files[0]!.name}”`;
+  return `${files.length} files`;
+}
+
 export function FileCrossLinkDialog({
-  file,
+  files,
   target,
   onClose,
 }: FileCrossLinkDialogProps) {
   const router = useRouter();
+  const primary = files[0]!;
   const [targets, setTargets] = useState<FileLinkTargets | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadFileLinkTargetsAction({ fileSourceId: file.id })
+    loadFileLinkTargetsAction({ fileSourceId: primary.id })
       .then((result) => {
         if (cancelled) return;
         if (!result.ok) {
@@ -63,20 +69,28 @@ export function FileCrossLinkDialog({
     return () => {
       cancelled = true;
     };
-  }, [file.id]);
+  }, [primary.id]);
 
   async function linkToTask(taskId: string, taskTitle: string) {
     setPendingId(taskId);
     try {
-      const result = await attachFileToProductTaskAction({
-        taskId,
-        fileSourceId: file.id,
-      });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        return;
+      let attached = 0;
+      for (const file of files) {
+        const result = await attachFileToProductTaskAction({
+          taskId,
+          fileSourceId: file.id,
+        });
+        if (!result.ok) {
+          toast(result.error, { tone: "error" });
+          return;
+        }
+        attached += 1;
       }
-      toast(`Attached to ${taskTitle}`);
+      toast(
+        attached === 1
+          ? `Attached to ${taskTitle}`
+          : `Attached ${attached} files to ${taskTitle}`,
+      );
       onClose();
       router.refresh();
     } finally {
@@ -87,15 +101,23 @@ export function FileCrossLinkDialog({
   async function linkToEvent(eventId: string, eventTitle: string) {
     setPendingId(eventId);
     try {
-      const result = await attachFileToEventAction({
-        eventId,
-        fileSourceId: file.id,
-      });
-      if (!result.ok) {
-        toast(result.error, { tone: "error" });
-        return;
+      let linked = 0;
+      for (const file of files) {
+        const result = await attachFileToEventAction({
+          eventId,
+          fileSourceId: file.id,
+        });
+        if (!result.ok) {
+          toast(result.error, { tone: "error" });
+          return;
+        }
+        linked += 1;
       }
-      toast(`Linked to ${eventTitle}`);
+      toast(
+        linked === 1
+          ? `Linked to ${eventTitle}`
+          : `Linked ${linked} files to ${eventTitle}`,
+      );
       onClose();
       router.refresh();
     } finally {
@@ -106,8 +128,8 @@ export function FileCrossLinkDialog({
   const title = target === "task" ? "Attach to task" : "Link to event";
   const description =
     target === "task"
-      ? `Attach “${file.name}” to one of your open tasks.`
-      : `Link “${file.name}” to one of your events.`;
+      ? `Attach ${filesLabel(files)} to one of your open tasks.`
+      : `Link ${filesLabel(files)} to one of your events.`;
 
   return (
     <Dialog
@@ -129,7 +151,7 @@ export function FileCrossLinkDialog({
           type="button"
           onClick={onClose}
           aria-label={`Close ${title.toLowerCase()}`}
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-ink"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-files-cta"
         >
           <X aria-hidden="true" className="size-4" />
         </button>

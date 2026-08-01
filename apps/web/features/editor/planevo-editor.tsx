@@ -63,7 +63,7 @@ function parseInitialContent(content: unknown): PlanevoPartialBlock[] | undefine
 }
 
 /** Follows the data-theme attribute the appearance settings write to <html>. */
-function useResolvedTheme(): "light" | "dark" {
+export function useResolvedTheme(): "light" | "dark" {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   useEffect(() => {
     const root = document.documentElement;

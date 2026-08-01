@@ -13,6 +13,7 @@ import {
   openFilesDatabase,
   withFilesStore,
 } from "./files-database";
+import { createDocumentRecoveryWriter } from "./document-recovery-writer";
 
 const STORE_NAME = FILES_STORES.documentRecovery;
 const DELETION_STORE_NAME = FILES_STORES.deletionTombstones;
@@ -39,42 +40,31 @@ export async function readDocumentRecoveryDraft(
   }
 }
 
+function filesDocumentRecoveryWriter() {
+  return createDocumentRecoveryWriter({
+    isAvailable: filesDatabaseAvailable,
+    open: openFilesDatabase,
+    recoveryStoreName: STORE_NAME,
+    deletionStoreName: DELETION_STORE_NAME,
+  });
+}
+
 export async function writeDocumentRecoveryDraft(
   draft: DocumentRecoveryDraft,
 ): Promise<void> {
-  if (!filesDatabaseAvailable()) return;
-  // Opening has to be inside the try: callers invoke this as `void write…()` on every idle
-  // keystroke burst, so a rejection here surfaces as an unhandled rejection rather than a
-  // recoverable failure. Recovery drafts are best-effort — the canonical save is the real one.
-  let database: IDBDatabase;
-  try {
-    database = await openFilesDatabase();
-  } catch {
-    return;
-  }
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const transaction = database.transaction(
-        [STORE_NAME, DELETION_STORE_NAME],
-        "readwrite",
-      );
-      const tombstoneRequest = transaction
-        .objectStore(DELETION_STORE_NAME)
-        .get(draft.fileSourceId);
-      tombstoneRequest.onsuccess = () => {
-        if (tombstoneRequest.result === undefined) {
-          transaction.objectStore(STORE_NAME).put(draft);
-        }
-      };
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error);
-    });
-  } catch {
-    // Canonical save remains available when browser recovery storage is blocked.
-  } finally {
-    database.close();
-  }
+  // Text/Planevo callers invoke this as `void write…()` on every idle keystroke
+  // burst — keep best-effort so blocked storage never becomes an unhandled rejection.
+  await filesDocumentRecoveryWriter().writeBestEffort(draft);
+}
+
+/**
+ * DOCX autosave must observe a durable recovery draft before replacing the
+ * original. Unavailable storage, open failure, abort, and quota reject.
+ */
+export async function writeDocumentRecoveryDraftStrict(
+  draft: DocumentRecoveryDraft,
+): Promise<void> {
+  await filesDocumentRecoveryWriter().writeStrict(draft);
 }
 
 export async function clearDocumentRecoveryDraft(

@@ -30,9 +30,15 @@ test("loadProductFiles returns user files newest first with folder and tags lift
       return {
         select: () => ({
           eq: () => ({
-            order: () => ({
-              limit: async () => ({ data: rows, error: null }),
-            }),
+            is: (column, value) => {
+              assert.equal(column, "deleted_at");
+              assert.equal(value, null);
+              return {
+                order: () => ({
+                  limit: async () => ({ data: rows, error: null }),
+                }),
+              };
+            },
           }),
         }),
       };
@@ -57,7 +63,9 @@ test("loadProductFiles hides unclaimed task-attachment reservations", async () =
     from: () => ({
       select: () => ({
         eq: () => ({
-          order: () => ({ limit: async () => ({ data: rows, error: null }) }),
+          is: () => ({
+            order: () => ({ limit: async () => ({ data: rows, error: null }) }),
+          }),
         }),
       }),
     }),
@@ -83,8 +91,10 @@ test("loadProductFiles workspace scope includes files in that workspace", async 
         select: () => ({
           eq: () => ({
             eq: () => ({
-              order: () => ({
-                limit: async () => ({ data: rows, error: null }),
+              is: () => ({
+                order: () => ({
+                  limit: async () => ({ data: rows, error: null }),
+                }),
               }),
             }),
           }),

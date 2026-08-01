@@ -56,8 +56,16 @@
   }
 }
 
-/* Classic BlockNote CSS variables (menus, editor chrome). */
+/*
+ * Notion page column on BlockNote — same tokens as Files markdown (.files-doc-page-host).
+ * Outer host centers the 900px column; inner .bn-editor keeps BlockNote's 54px side-menu gutter.
+ */
 .planevo-editor .bn-container {
+  box-sizing: border-box;
+  padding-inline: max(
+    var(--files-doc-page-padding),
+    calc((100% - var(--files-doc-page-width)) / 2)
+  );
   --bn-colors-editor-background: var(--color-paper);
   --bn-colors-editor-text: var(--color-ink);
   --bn-colors-menu-background: var(--color-surface-raised);
@@ -75,4 +83,10 @@
   --bn-colors-side-menu: var(--color-text-muted);
   --bn-font-family: var(--font-sans);
   --bn-border-radius: 8px;
+}
+
+.planevo-editor .bn-editor {
+  width: 100%;
+  max-width: var(--files-doc-page-width);
+  margin-inline: auto;
 }

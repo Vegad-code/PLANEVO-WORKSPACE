@@ -23,11 +23,22 @@ import {
   MAX_PRODUCT_FILE_BYTES,
   PRODUCT_FILES_BUCKET,
 } from "@/lib/files/product-files";
+import { loadUsedStorageBytes } from "@/lib/files/storage-quota.server";
 import { resolveUserPlan } from "@/lib/files/user-plan";
 import {
   enforceRateLimit,
   RATE_LIMITS,
 } from "@/lib/security/rate-limit.server";
+import {
+  DOCX_MIME_TYPE,
+  parseDocxSaveMetadata,
+  validateDocxBytes,
+} from "@/features/files-product/docx-document-transport";
+import {
+  PDF_MIME_TYPE,
+  parsePdfSaveMetadata,
+  validatePdfBytes,
+} from "@/features/files-product/pdf-document-transport";
 
 const MAX_NATIVE_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000;
@@ -153,6 +164,7 @@ async function ownedFileSource(
     .select("id,workspace_id,page_id,storage_path,name,mime_type,size_bytes")
     .eq("id", fileSourceId)
     .eq("user_id", access.ownerId)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -297,25 +309,22 @@ async function revisionExpiry(
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-async function replacementFitsStorageCap(
-  access: Awaited<ReturnType<typeof requireMutationDataAccess>>,
-  currentSize: number,
-  nextSize: number,
-): Promise<boolean> {
-  if (nextSize <= currentSize) return true;
-  const [{ data, error }, plan] = await Promise.all([
-    access.client
-      .from("file_sources")
-      .select("size_bytes")
-      .eq("user_id", access.ownerId),
-    resolveUserPlan(access),
-  ]);
-  if (error) throw error;
-  const usedBytes = (data ?? []).reduce(
-    (total, file) => total + (file.size_bytes ?? 0),
-    0,
-  );
-  return usedBytes - currentSize + nextSize <= storageCapBytesForPlan(plan);
+function rejectOversizedDocumentBody(request: Request): NextResponse | null {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength === null) {
+    return NextResponse.json(
+      { error: "This file is larger than the 25 MB editing limit." },
+      { status: 413 },
+    );
+  }
+  const size = Number(contentLength);
+  if (!Number.isFinite(size) || size > MAX_PRODUCT_FILE_BYTES) {
+    return NextResponse.json(
+      { error: "This file is larger than the 25 MB editing limit." },
+      { status: 413 },
+    );
+  }
+  return null;
 }
 
 async function recordRevision(input: {
@@ -404,7 +413,7 @@ async function enqueueDocumentIndex(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ fileSourceId: string }> },
 ) {
   try {
@@ -415,16 +424,86 @@ export async function GET(
       return NextResponse.json({ error: "File not found." }, { status: 404 });
     }
 
-    const [state, plan, sidebar] = await Promise.all([
-      documentState(access, source.id),
-      resolveUserPlan(access),
-      loadDocumentSidebarData(access, source.id),
-    ]);
     const format = documentFormatForFile({
       name: source.name,
       mimeType: source.mime_type,
       pageId: source.page_id,
     });
+    const wantsDocxContent =
+      new URL(request.url).searchParams.get("content") === "docx";
+    const wantsPdfContent =
+      new URL(request.url).searchParams.get("content") === "pdf";
+    if (wantsDocxContent || wantsPdfContent) {
+      if (wantsDocxContent && format !== "docx") {
+        return NextResponse.json(
+          { error: "This file is not a DOCX document." },
+          { status: 409 },
+        );
+      }
+      if (wantsPdfContent && format !== "pdf") {
+        return NextResponse.json(
+          { error: "This file is not a PDF document." },
+          { status: 409 },
+        );
+      }
+      const [state, blob] = await Promise.all([
+        documentState(access, source.id),
+        access.client.storage
+          .from(PRODUCT_FILES_BUCKET)
+          .download(source.storage_path),
+      ]);
+      if (blob.error) throw blob.error;
+      const bytes = new Uint8Array(await blob.data.arrayBuffer());
+      if (bytes.byteLength > MAX_PRODUCT_FILE_BYTES) {
+        return NextResponse.json(
+          { error: "This file is too large to edit." },
+          { status: 413 },
+        );
+      }
+      if (wantsDocxContent && !validateDocxBytes(bytes)) {
+        return NextResponse.json(
+          { error: "This file is not a valid OOXML document." },
+          { status: 422 },
+        );
+      }
+      if (wantsPdfContent && !validatePdfBytes(bytes)) {
+        return NextResponse.json(
+          { error: "This file is not a valid PDF document." },
+          { status: 422 },
+        );
+      }
+      const contentHash = hashBytes(bytes);
+      if (state?.content_hash && state.content_hash !== contentHash) {
+        // A storage-pointer swap can race this independent state read. Never
+        // pair bytes from one revision with metadata from another one.
+        return NextResponse.json(
+          { error: "This document changed while it was opening." },
+          {
+            status: 409,
+            headers: {
+              "cache-control": "no-store",
+              ...(wantsDocxContent
+                ? { "x-planevo-docx-retry": "document-content-mismatch" }
+                : { "x-planevo-pdf-retry": "document-content-mismatch" }),
+            },
+          },
+        );
+      }
+      return new NextResponse(bytes, {
+        headers: {
+          "cache-control": "no-store",
+          "content-type": wantsDocxContent ? DOCX_MIME_TYPE : PDF_MIME_TYPE,
+          "x-planevo-document-version": String(state?.current_version ?? 0),
+          "x-planevo-content-hash": contentHash,
+        },
+      });
+    }
+
+    const [state, plan, sidebar] = await Promise.all([
+      documentState(access, source.id),
+      resolveUserPlan(access),
+      loadDocumentSidebarData(access, source.id),
+    ]);
     const descriptor = descriptorFor(
       source,
       format,
@@ -443,6 +522,12 @@ export async function GET(
         content: await loadNativeContent(access, source.page_id),
         ...sidebar,
       });
+    }
+
+    // DOCX/PDF are intentionally fetched from this authenticated route in raw form.
+    // Returning them through JSON would decode and re-encode opaque bytes.
+    if (format === "docx" || format === "pdf") {
+      return NextResponse.json({ descriptor, content: null, ...sidebar });
     }
 
     const textDocument = await loadTextContent(access, source.storage_path);
@@ -475,10 +560,16 @@ export async function PUT(
       RATE_LIMITS.mutate,
     );
     const { fileSourceId } = await context.params;
-    const parsed = saveDocumentSchema.safeParse(
-      await request.json().catch(() => null),
-    );
-    if (!parsed.success) {
+    const docxMetadata = parseDocxSaveMetadata(request.headers);
+    const pdfMetadata = docxMetadata
+      ? null
+      : parsePdfSaveMetadata(request.headers);
+    const parsed =
+      docxMetadata || pdfMetadata
+        ? null
+        : saveDocumentSchema.safeParse(await request.json().catch(() => null));
+    const saveInput = parsed?.success ? parsed.data : null;
+    if (!docxMetadata && !pdfMetadata && !saveInput) {
       return NextResponse.json(
         { error: "The document save was invalid." },
         { status: 400 },
@@ -494,7 +585,12 @@ export async function PUT(
       mimeType: source.mime_type,
       pageId: source.page_id,
     });
-    if (expectedFormat !== parsed.data.format) {
+    const format = docxMetadata
+      ? "docx"
+      : pdfMetadata
+        ? "pdf"
+        : saveInput!.format;
+    if (expectedFormat !== format) {
       return NextResponse.json(
         { error: "This file cannot be saved with that editor." },
         { status: 409 },
@@ -502,11 +598,24 @@ export async function PUT(
     }
 
     const state = await documentState(access, source.id);
-    const checkpointReason = parsed.data.checkpointReason ?? "checkpoint";
+    const baseVersion = docxMetadata
+      ? docxMetadata.baseVersion
+      : pdfMetadata
+        ? pdfMetadata.baseVersion
+        : saveInput!.baseVersion;
+    const checkpointReason = docxMetadata
+      ? docxMetadata.checkpointReason
+      : pdfMetadata
+        ? pdfMetadata.checkpointReason
+        : (saveInput!.checkpointReason ?? "checkpoint");
     const checkpoint = shouldCheckpoint(state, checkpointReason);
 
-    if (parsed.data.format === "planevo") {
-      const { hash, serialized } = hashJson(parsed.data.content);
+    if (format === "planevo") {
+      const planevo = saveInput!;
+      if (planevo.format !== "planevo") {
+        throw new Error("Planevo content was not provided.");
+      }
+      const { hash, serialized } = hashJson(planevo.content);
       if (Buffer.byteLength(serialized) > MAX_NATIVE_DOCUMENT_BYTES) {
         return NextResponse.json(
           { error: "This document is too large to save." },
@@ -535,7 +644,7 @@ export async function PUT(
       if (checkpoint && source.page_id) {
         previousContent = await loadNativeContent(access, source.page_id);
         const previous = hashJson(previousContent);
-        revisionPath = `${source.workspace_id}/revisions/${source.id}/${parsed.data.baseVersion}-${randomUUID()}.json`;
+        revisionPath = `${source.workspace_id}/revisions/${source.id}/${baseVersion}-${randomUUID()}.json`;
         const { error: revisionUploadError } = await access.client.storage
           .from(PRODUCT_FILES_BUCKET)
           .upload(revisionPath, previous.serialized, {
@@ -551,8 +660,8 @@ export async function PUT(
         {
           p_owner_id: access.ownerId,
           p_file_source_id: source.id,
-          p_base_version: parsed.data.baseVersion,
-          p_content_json: parsed.data.content as Json,
+          p_base_version: baseVersion,
+          p_content_json: planevo.content as Json,
           p_content_hash: hash,
         },
       );
@@ -563,7 +672,7 @@ export async function PUT(
         const revisionRecorded = await tryRecordRevision({
           access,
           source,
-          version: parsed.data.baseVersion,
+          version: baseVersion,
           path: revisionPath,
           sizeBytes: Buffer.byteLength(previous.serialized),
           contentHash: state?.content_hash ?? previous.hash,
@@ -578,7 +687,7 @@ export async function PUT(
       }
 
       const result = data as { version?: number; contentHash?: string } | null;
-      const version = result?.version ?? parsed.data.baseVersion + 1;
+      const version = result?.version ?? baseVersion + 1;
       const indexQueued = await enqueueDocumentIndex(
         access,
         source.id,
@@ -592,31 +701,61 @@ export async function PUT(
       });
     }
 
-    const editable: EditableTextDocument = {
-      text: parsed.data.content,
-      ...parsed.data.textMetadata,
-    };
-    const bytes = encodeEditableText(editable);
+    let bytes: Uint8Array;
+    let encodingJson: Json;
+    if (format === "docx" || format === "pdf") {
+      const oversizedBody = rejectOversizedDocumentBody(request);
+      if (oversizedBody) return oversizedBody;
+      bytes = new Uint8Array(await request.arrayBuffer());
+      if (format === "docx" && !validateDocxBytes(bytes)) {
+        return NextResponse.json(
+          { error: "The DOCX file is not a valid OOXML document." },
+          { status: 400 },
+        );
+      }
+      if (format === "pdf" && !validatePdfBytes(bytes)) {
+        return NextResponse.json(
+          { error: "The PDF file is not a valid document." },
+          { status: 400 },
+        );
+      }
+      encodingJson = {};
+    } else {
+      const textDocument = saveInput!;
+      if (textDocument.format !== "markdown" && textDocument.format !== "text") {
+        throw new Error("Editable text content was not provided.");
+      }
+      const editable: EditableTextDocument = {
+        text: textDocument.content,
+        ...textDocument.textMetadata,
+      };
+      bytes = encodeEditableText(editable);
+      encodingJson = textDocument.textMetadata;
+    }
     if (bytes.byteLength > MAX_PRODUCT_FILE_BYTES) {
       return NextResponse.json(
         { error: "This file is larger than the 25 MB editing limit." },
         { status: 413 },
       );
     }
-    if (
-      !(await replacementFitsStorageCap(
-        access,
-        source.size_bytes ?? 0,
-        bytes.byteLength,
-      ))
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "This edit would exceed your Planevo storage limit. Free space or upgrade before saving.",
-        },
-        { status: 413 },
-      );
+    const currentSize = source.size_bytes ?? 0;
+    if (bytes.byteLength > currentSize) {
+      const [usedBytes, plan] = await Promise.all([
+        loadUsedStorageBytes(access),
+        resolveUserPlan(access),
+      ]);
+      if (
+        usedBytes - currentSize + bytes.byteLength >
+        storageCapBytesForPlan(plan)
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "This edit would exceed your Planevo storage limit. Free space or upgrade before saving.",
+          },
+          { status: 413 },
+        );
+      }
     }
 
     const hash = hashBytes(bytes);
@@ -636,12 +775,20 @@ export async function PUT(
         indexQueued,
       });
     }
+    // Stage first, then the RPC atomically advances this same file source. This
+    // avoids a Storage overwrite winning after an optimistic-version conflict.
     stagedPath = `${source.workspace_id}/edits/${source.id}/${randomUUID()}-${source.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}`;
     const { error: uploadError } = await access.client.storage
       .from(PRODUCT_FILES_BUCKET)
       .upload(stagedPath, bytes, {
         contentType:
-          parsed.data.format === "markdown" ? "text/markdown" : "text/plain",
+          format === "docx"
+            ? DOCX_MIME_TYPE
+            : format === "pdf"
+              ? PDF_MIME_TYPE
+              : format === "markdown"
+                ? "text/markdown"
+                : "text/plain",
         upsert: false,
       });
     if (uploadError) throw uploadError;
@@ -651,12 +798,12 @@ export async function PUT(
       {
         p_owner_id: access.ownerId,
         p_file_source_id: source.id,
-        p_base_version: parsed.data.baseVersion,
+        p_base_version: baseVersion,
         p_storage_path: stagedPath,
         p_size_bytes: bytes.byteLength,
         p_content_hash: hash,
-        p_format: parsed.data.format,
-        p_encoding_json: parsed.data.textMetadata,
+        p_format: format,
+        p_encoding_json: encodingJson,
       },
     );
     if (error) throw error;
@@ -673,7 +820,7 @@ export async function PUT(
       const revisionRecorded = await tryRecordRevision({
         access,
         source,
-        version: parsed.data.baseVersion,
+        version: baseVersion,
         path: previousPath,
         sizeBytes: source.size_bytes ?? 0,
         contentHash: state?.content_hash ?? null,
@@ -707,7 +854,7 @@ export async function PUT(
       }
     }
 
-    const version = result?.version ?? parsed.data.baseVersion + 1;
+    const version = result?.version ?? baseVersion + 1;
     const indexQueued = await enqueueDocumentIndex(access, source.id, version);
     return NextResponse.json({
       version,
@@ -943,7 +1090,12 @@ export async function POST(
       return NextResponse.json({ ok: true, version });
     }
 
-    if (state?.format !== "markdown" && state?.format !== "text") {
+    if (
+      state?.format !== "markdown" &&
+      state?.format !== "text" &&
+      state?.format !== "docx" &&
+      state?.format !== "pdf"
+    ) {
       return NextResponse.json(
         { error: "This file type cannot be restored in the editor." },
         { status: 409 },
@@ -952,14 +1104,29 @@ export async function POST(
     if (revisionBytes.byteLength > MAX_PRODUCT_FILE_BYTES) {
       throw new Error("The saved version is too large to restore.");
     }
-    const restoredText = decodeEditableText(revisionBytes);
+    if (state.format === "docx" && !validateDocxBytes(revisionBytes)) {
+      throw new Error("The saved DOCX version is not a valid OOXML document.");
+    }
+    if (state.format === "pdf" && !validatePdfBytes(revisionBytes)) {
+      throw new Error("The saved PDF version is not a valid document.");
+    }
+    const restoredText =
+      state.format === "docx" || state.format === "pdf"
+        ? null
+        : decodeEditableText(revisionBytes);
     const restoredHash = hashBytes(revisionBytes);
     stagedPath = `${source.workspace_id}/edits/${source.id}/${randomUUID()}-${source.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}`;
     const { error: uploadError } = await access.client.storage
       .from(PRODUCT_FILES_BUCKET)
       .upload(stagedPath, revisionBytes, {
         contentType:
-          state.format === "markdown" ? "text/markdown" : "text/plain",
+          state.format === "docx"
+            ? DOCX_MIME_TYPE
+            : state.format === "pdf"
+              ? PDF_MIME_TYPE
+              : state.format === "markdown"
+                ? "text/markdown"
+                : "text/plain",
         upsert: false,
       });
     if (uploadError) throw uploadError;
@@ -973,11 +1140,14 @@ export async function POST(
         p_size_bytes: revisionBytes.byteLength,
         p_content_hash: restoredHash,
         p_format: state.format,
-        p_encoding_json: {
-          hasUtf8Bom: restoredText.hasUtf8Bom,
-          newline: restoredText.newline,
-          trailingNewline: restoredText.trailingNewline,
-        },
+        p_encoding_json:
+          state.format === "docx" || state.format === "pdf"
+            ? {}
+            : {
+                hasUtf8Bom: restoredText!.hasUtf8Bom,
+                newline: restoredText!.newline,
+                trailingNewline: restoredText!.trailingNewline,
+              },
       },
     );
     if (error) throw error;

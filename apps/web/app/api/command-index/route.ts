@@ -47,6 +47,7 @@ export async function GET() {
         .from("file_sources")
         .select("id,name,folder_id,mime_type,metadata_json,updated_at")
         .eq("user_id", userId)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(PRODUCT_LIMIT * 2),
       client

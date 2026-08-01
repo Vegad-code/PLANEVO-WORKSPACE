@@ -40,6 +40,7 @@ export async function loadProductFiles(
     }
   }
   const { data, error } = await query
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     // ponytail: newest 200 files; add paging when a library outgrows this.
     .limit(200);

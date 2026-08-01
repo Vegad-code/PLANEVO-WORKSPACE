@@ -18,9 +18,8 @@ import {
 } from "lucide-react";
 
 /**
- * Review surface for the Files document editor. Everything here is static markup mirroring the
- * real components — the point is to see every state side by side (all layouts, all three views,
- * the bubble above / flipped / clamped, glass and solid) without opening a file.
+ * Review surface for the Files document editor. Static markup mirroring production
+ * components — every layout, glass state, and theme side by side without opening a file.
  */
 
 function BubbleToolbar({ className = "" }: { className?: string }) {
@@ -64,12 +63,11 @@ function BubbleToolbar({ className = "" }: { className?: string }) {
   );
 }
 
-/** The two chrome rows: a tab for identity, a breadcrumb for place. Nothing else. */
 function EditorChrome({ dirty = false }: { dirty?: boolean }) {
   return (
     <>
       <div className="flex items-stretch gap-2 border-b border-files-border pr-2">
-        <div className="flex min-w-0 items-center gap-2 border-t-2 border-files-cta bg-files-editor-solid px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2 border-t-2 border-files-cta bg-transparent px-3 py-2">
           <FileText aria-hidden="true" className="size-3.5 text-files-cta" />
           <span className="truncate text-product-title text-files-text">
             005-caching-and-invalidation.md
@@ -114,20 +112,31 @@ function EditorChrome({ dirty = false }: { dirty?: boolean }) {
   );
 }
 
-/** Prose painted by the same decoration classes the real editor applies. */
-function DocumentBody() {
+function DocumentBody({ scrollable = false }: { scrollable?: boolean }) {
+  const paragraphs = [
+    "Planevo mixes App Router caching, client fetches, and Postgres as source of truth.",
+    "Integration secrets must never be cached in the browser.",
+    "Never store plaintext tokens in local storage.",
+    "Revalidate tags on every mutation that touches the cached row.",
+    "Prefer server actions for writes that need immediate UI consistency.",
+    "The editor canvas is always paper-toned so prose stays readable in dark mode.",
+  ];
+
   return (
-    <div className="files-doc-prose h-full overflow-hidden">
+    <div
+      className={`files-doc-page-host h-full ${scrollable ? "overflow-y-auto" : "overflow-hidden"}`}
+    >
+      <div className="files-doc-prose">
       <div className="cm-content">
         <p className="md-h1">ADR-005: Caching and invalidation</p>
         <p className="md-h2 mt-6">Status</p>
         <p className="mt-2">Accepted</p>
         <p className="md-h2 mt-6">Context</p>
-        <p className="mt-2">
-          Planevo mixes App Router caching, client fetches, and Postgres as
-          source of truth. Integration secrets must never be cached in the
-          browser.
-        </p>
+        {paragraphs.map((text) => (
+          <p key={text} className="mt-2">
+            {text}
+          </p>
+        ))}
         <p className="mt-3">
           <span className="md-strong">Integration tokens:</span>{" "}
           <span className="md-code-inline">cache: no-store</span> on every
@@ -136,6 +145,7 @@ function DocumentBody() {
         <blockquote className="md-quote mt-3 border-l-2 border-files-doc-rule pl-4">
           Never store plaintext tokens in local storage.
         </blockquote>
+      </div>
       </div>
     </div>
   );
@@ -160,28 +170,56 @@ function SourceBody() {
   );
 }
 
+type EditorLayout = "bottom" | "side" | "full" | "bleed";
+
+function shellLayoutClass(layout: EditorLayout): string {
+  switch (layout) {
+    case "bottom":
+      return "files-editor-shell--bottom absolute h-72";
+    case "side":
+      return "files-editor-shell--side absolute right-0 w-2/3";
+    case "bleed":
+      return "files-editor-shell--full files-editor-shell--bleed inset-0";
+    case "full":
+      return "files-editor-shell--full absolute";
+    default: {
+      const _exhaustive: never = layout;
+      return _exhaustive;
+    }
+  }
+}
+
 function EditorSurface({
   label,
   layout,
+  theme = "light",
   solid = false,
   view = "document",
   bubble,
+  scrollable = false,
 }: {
   label: string;
-  layout: "bottom" | "side" | "full";
+  layout: EditorLayout;
+  theme?: "light" | "dark";
   solid?: boolean;
   view?: "document" | "markdown" | "split";
-  /** Exercises the flip and clamp rules from lib/files/bubble-position.ts. */
   bubble?: "above" | "below" | "clamped";
+  scrollable?: boolean;
 }) {
+  const showBackdrop = layout !== "bleed";
+
   return (
-    <figure className="flex flex-col gap-2">
-      <div
-        data-liquid-glass={solid ? "off" : "on"}
-        className="relative h-96 overflow-hidden rounded-card border border-files-border bg-files-bg p-3"
-      >
-        {/* Cards behind, to confirm nothing bleeds through in the docked layouts. */}
-        {layout !== "full" ? (
+    <figure
+      data-product="files"
+      data-theme={theme === "dark" ? "dark" : undefined}
+      data-liquid-glass={solid ? "off" : "on"}
+      className="files-product-ui flex flex-col gap-2"
+    >
+      <figcaption className="text-label uppercase text-files-text-muted">
+        {label} · {theme} · {solid ? "solid" : "frost"}
+      </figcaption>
+      <div className="relative h-96 overflow-hidden rounded-card border border-files-border bg-files-bg p-3">
+        {showBackdrop ? (
           <div className="grid grid-cols-3 gap-2">
             {["Research", "Notes", "Draft"].map((name) => (
               <div
@@ -195,16 +233,10 @@ function EditorSurface({
           </div>
         ) : null}
         <div
-          className={`files-editor-shell absolute flex flex-col overflow-hidden ${
-            layout === "bottom"
-              ? "inset-x-3 bottom-3 h-72 rounded-files-editor"
-              : layout === "side"
-                ? "inset-y-3 right-3 w-2/3 rounded-l-files-editor"
-                : "inset-0"
-          }`}
+          className={`files-editor-shell absolute flex flex-col overflow-hidden ${shellLayoutClass(layout)}`}
         >
           <EditorChrome dirty={bubble === "below"} />
-          <div className="relative min-h-0 flex-1 overflow-hidden bg-files-editor-solid">
+          <div className="files-editor-canvas relative min-h-0 flex-1 overflow-hidden">
             {view === "split" ? (
               <div className="flex h-full">
                 <div className="w-1/2 border-r border-files-border">
@@ -218,7 +250,7 @@ function EditorSurface({
             ) : view === "markdown" ? (
               <SourceBody />
             ) : (
-              <DocumentBody />
+              <DocumentBody scrollable={scrollable} />
             )}
             {bubble === "above" ? (
               <BubbleToolbar className="absolute left-1/2 top-24 -translate-x-1/2" />
@@ -232,53 +264,87 @@ function EditorSurface({
           </div>
         </div>
       </div>
-      <figcaption className="text-product-meta text-files-text-muted">
-        {label}
-      </figcaption>
     </figure>
   );
 }
 
+const CRAFT_MATRIX: Array<{
+  label: string;
+  layout: EditorLayout;
+  solid?: boolean;
+  scrollable?: boolean;
+  bubble?: "above" | "below" | "clamped";
+  view?: "document" | "markdown" | "split";
+}> = [
+  {
+    label: "Full · frost · scrollbars",
+    layout: "full",
+    scrollable: true,
+    bubble: "above",
+  },
+  {
+    label: "Full · solid",
+    layout: "full",
+    solid: true,
+    bubble: "above",
+  },
+  {
+    label: "Full bleed · inset sheet",
+    layout: "bleed",
+    bubble: "above",
+  },
+  {
+    label: "Side dock",
+    layout: "side",
+    bubble: "above",
+  },
+  {
+    label: "Bottom dock",
+    layout: "bottom",
+    bubble: "above",
+  },
+  {
+    label: "Full · markdown gutter",
+    layout: "full",
+    view: "markdown",
+  },
+  {
+    label: "Full · split view",
+    layout: "full",
+    view: "split",
+  },
+  {
+    label: "Full · bubble clamped",
+    layout: "full",
+    bubble: "clamped",
+  },
+];
+
 export function FilesEditorPreview() {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <EditorSurface
-        label="Full · document view · bubble above the selection"
-        layout="full"
-        bubble="above"
-      />
-      <EditorSurface
-        label="Full · document view · bubble flipped below (selection near top), unsaved tab"
-        layout="full"
-        bubble="below"
-      />
-      <EditorSurface
-        label="Full · document view · bubble clamped to the right edge"
-        layout="full"
-        bubble="clamped"
-      />
-      <EditorSurface
-        label="Full · markdown source view — the only place the gutter appears"
-        layout="full"
-        view="markdown"
-      />
-      <EditorSurface label="Full · split view" layout="full" view="split" />
-      <EditorSurface
-        label="Side · document view"
-        layout="side"
-        bubble="above"
-      />
-      <EditorSurface
-        label="Bottom · document view"
-        layout="bottom"
-        bubble="above"
-      />
-      <EditorSurface
-        label="Full · solid surfaces (glass off)"
-        layout="full"
-        bubble="above"
-        solid
-      />
+    <div className="flex flex-col gap-8">
+      <div>
+        <p className="mb-4 text-product-body text-text-secondary">
+          Frost vs solid, light and dark. Cards behind docked layouts confirm
+          backdrop-filter blur — not an opaque slab.
+        </p>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {CRAFT_MATRIX.flatMap((surface) =>
+            (["light", "dark"] as const).map((theme) => (
+              <EditorSurface
+                key={`${surface.label}-${theme}`}
+                label={surface.label}
+                layout={surface.layout}
+                theme={theme}
+                solid={surface.solid}
+                view={surface.view}
+                bubble={surface.bubble}
+                scrollable={surface.scrollable}
+              />
+            )),
+          )}
+        </div>
+      </div>
     </div>
   );
 }

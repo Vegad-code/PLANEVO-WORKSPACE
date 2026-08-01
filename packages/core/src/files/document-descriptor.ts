@@ -65,12 +65,31 @@ export function documentFormatForFile(input: {
   return "binary";
 }
 
+/**
+ * Static editability for list UI and API guards. PDF is intentionally excluded:
+ * text vs scanned is decided at open time via `openPdfDocument` (runtime probe).
+ * The Files panel still opens PDFs — see `requiresRuntimeEditProbe`.
+ */
 export function isEditableDocumentFormat(
   format: DocumentFormat,
 ): boolean {
   return (
     format === "planevo" ||
     format === "markdown" ||
-    format === "text"
+    format === "text" ||
+    format === "docx"
   );
+}
+
+/** Formats that open the editor panel but may fall back to preview-only after probe. */
+export function requiresRuntimeEditProbe(
+  format: DocumentFormat,
+): boolean {
+  return format === "pdf";
+}
+
+export function opensInDocumentEditorPanel(
+  format: DocumentFormat,
+): boolean {
+  return isEditableDocumentFormat(format) || requiresRuntimeEditProbe(format);
 }
